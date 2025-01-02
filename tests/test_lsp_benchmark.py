@@ -29,19 +29,34 @@ class TestLanguageServer(unittest.TestCase):
     def tearDown(self):
         self.lsp.close()
 
-    def test_bench_loading_files(self):
+    def test_bench_opening_files(self):
         path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
         files = find_lean_files_recursively(path)
-        files = sorted(files)
+        # files = sorted(files)
         # random.seed(3.14159)
-        # random.shuffle(files)
-        files = files[:16]
+        random.shuffle(files)
+        files = files[:10]
+
+        PROFILE = False
+        if PROFILE:
+            sys.setrecursionlimit(10000)
+            profiler = cProfile.Profile()
+            profiler.enable()
 
         t0 = time.time()
         self.lsp.sync_files(files)
         # for file in files:
         #     self.lsp.sync_file(file)
         duration = time.time() - t0
+
+        # Layout profile using dot and gprof2dot
+        if PROFILE:
+            profiler.disable()
+            profiler.dump_stats("profile.prof")
+            os.system(
+                "gprof2dot -f pstats profile.prof -n 0.01 -e 0.002 | dot -Tpng -o profile_load.png"
+            )
+            os.remove("profile.prof")
 
         # Open all files and count number of lines and total number of characters
         lines = 0
@@ -69,7 +84,7 @@ class TestLanguageServer(unittest.TestCase):
 
         self.lsp.sync_file(file)
 
-        PROFILE = True
+        PROFILE = False
         NUM_REPEATS = 50
 
         if PROFILE:
