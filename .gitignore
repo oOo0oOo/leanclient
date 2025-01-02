@@ -1,0 +1,12 @@
+venv/
+
+dist/
+build/
+*.egg-info/
+
+__pycache__/
+
+.lake_env/
+
+examples/
+profile.png
