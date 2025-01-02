@@ -1,4 +1,5 @@
 import os
+import collections
 from pprint import pprint
 import subprocess
 import threading
@@ -38,7 +39,7 @@ class LeanLanguageServer:
         self.lake_dir = os.path.abspath(LAKE_ENV_DIR) + "/"
         self.print_lake_errors = print_lake_errors
         self.request_id = 0
-        self.synced_uris = []
+        self.synced_files = collections.OrderedDict()
 
         self.setup_env(use_mathlib, starting_file_path)
 
@@ -134,10 +135,10 @@ class LeanLanguageServer:
     def _send_request(self, method: str, params: dict) -> list[dict]:
         """Send a request to the language server.
 
-        This includes and id, and waits for a response.
+        This includes an id in the rpc, and waits for a response with the same id.
 
         Returns:
-            list[dict] | None: List of responses, the last one being the final response, if not notification
+            list[dict]: List of responses, the last one being the final response
         """
         self._send_raw_request(method, params, is_notification=False)
         rid = self.request_id - 1
@@ -222,6 +223,8 @@ class LeanLanguageServer:
         """Close files in the language server.
 
         This function blocks until publishDiagnostics is received for all files."""
+        # Only close if file is open
+        uris = [uri for uri in uris if uri in self.synced_files]
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
@@ -233,33 +236,36 @@ class LeanLanguageServer:
             if resp and resp.get("method") == "textDocument/publishDiagnostics":
                 waiting_uris.discard(resp["params"]["uri"])
 
-    def sync_files(self, uris: list[str]) -> list[list | None]:
+    def sync_files(self, uris: list[str]) -> list[list]:
         """Make files available to the language server if not already.
 
         Args:
             uris (list[str]): List of URIs to sync.
 
         Returns:
-            list[list | None]: List of diagnostics for each file or None
+            list[list]: List of diagnostics for each file
         """
-        uris_to_add = [u for u in uris if u not in self.synced_uris]
-        if not uris_to_add:
-            return [None] * len(uris)
-        diags = {u: [] for u in uris}
+        if len(uris) > MAX_SYNCED_FILES:
+            print(
+                f"Warning! Should not sync more than {MAX_SYNCED_FILES} files at once."
+            )
 
-        # Remove oldest synced files which are not in uris
-        removable_uris = [u for u in self.synced_uris if u not in uris_to_add]
-        to_remove = min(len(removable_uris), len(self.synced_uris) - MAX_SYNCED_FILES)
-        if to_remove:
-            remove_uris = removable_uris[:to_remove]
-            self._close_files(remove_uris)
-            self.synced_uris = [u for u in self.synced_uris if u not in remove_uris]
+        # Open new files
+        new_uris = [uri for uri in uris if uri not in self.synced_files]
+        if new_uris:
+            diagnostics = self._open_files(new_uris)
+            self.synced_files.update(zip(new_uris, diagnostics))
 
-        diagnostics = self._open_files(uris_to_add)
-        self.synced_uris += uris_to_add
-        for uri, diag in zip(uris_to_add, diagnostics):
-            diags[uri] = diag
-        return [diags[u] for u in uris]
+        # Remove files if over limit
+        remove_count = max(0, len(self.synced_files) - MAX_SYNCED_FILES)
+        if remove_count > 0:
+            removable_uris = [uri for uri in self.synced_files if uri not in uris]
+            removable_uris = removable_uris[:remove_count]
+            self._close_files(removable_uris)
+            for uri in removable_uris:
+                del self.synced_files[uri]
+
+        return [self.synced_files[uri] for uri in uris]
 
     def sync_file(self, uri: str) -> list:
         """Make a file available to the language server if not already."""

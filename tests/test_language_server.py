@@ -4,6 +4,7 @@ import unittest
 
 from leanclient.language_server import LeanLanguageServer
 from leanclient.config import LEAN_FILE_PATH
+from leanclient.utils import find_lean_files_recursively
 
 
 class TestLanguageServer(unittest.TestCase):
@@ -116,3 +117,17 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
             ["unexpected end of input; expected ':'"],
         ]
         self.assertEqual(diagnostics, exp)
+
+    def test_sync_files(self):
+        path = self.lsp.lake_dir
+        path += ".lake/packages/mathlib/Mathlib"
+        all_files = find_lean_files_recursively(path)
+        N = random.randint(0, len(all_files) - 3)
+        diag = self.lsp.sync_file(all_files[N])
+        diag2 = self.lsp.sync_file(all_files[N])  # One file overlap
+        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two file overlap
+        diags2 = self.lsp.sync_files(all_files[N : N + 2])  # Cache
+
+        self.assertEqual(diag, diag2)
+        self.assertEqual(diag, diags[0])
+        self.assertEqual(diags, diags2)
