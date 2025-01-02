@@ -33,6 +33,7 @@ class TestLanguageServer(unittest.TestCase):
         val = result["contents"]["value"]
         self.assertTrue(val.startswith("`rw`"))
 
+    # Test lsp requests
     def test_completion(self):
         result = self.lsp.request_completion(self.uri, 9, 15)
         assert "isIncomplete" in result
@@ -92,6 +93,26 @@ class TestLanguageServer(unittest.TestCase):
         res = self.lsp.request_plain_term_goal(self.uri, 9, 15)
         assert "⊢" in res["goal"]
 
+    # Test custom methods
     def test_get_sorries(self):
         res = self.lsp.get_sorries(self.uri)
-        self.assertEqual(res, [[11, 53, 5]])
+        self.assertEqual(res, [[12, 47, 5], [13, 52, 5]])
+
+
+class TestLanguageServerDiagnostics(unittest.TestCase):
+    def setUp(self):
+        self.lsp = LeanLanguageServer(
+            use_mathlib=True, starting_file_path="tests/tests.lean"
+        )
+        self.uri = self.lsp.local_to_uri(LEAN_FILE_PATH)
+
+    def tearDown(self):
+        self.lsp.close()
+
+    def test_get_diagnostics(self):
+        diagnostics = self.lsp.sync_file(self.uri)
+        exp = [
+            ["declaration uses 'sorry'", "declaration uses 'sorry'"],
+            ["unexpected end of input; expected ':'"],
+        ]
+        self.assertEqual(diagnostics, exp)

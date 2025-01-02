@@ -32,10 +32,13 @@ class TestLanguageServer(unittest.TestCase):
     def test_bench_opening_files(self):
         path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
         files = find_lean_files_recursively(path)
-        # files = sorted(files)
-        # random.seed(3.14159)
+        files = sorted(files)
+        random.seed(3.14)
         random.shuffle(files)
-        files = files[:10]
+
+        NUM_FILES = 8
+
+        files = files[:NUM_FILES]
 
         PROFILE = False
         if PROFILE:
@@ -44,10 +47,12 @@ class TestLanguageServer(unittest.TestCase):
             profiler.enable()
 
         t0 = time.time()
-        self.lsp.sync_files(files)
+        diagnostics = self.lsp.sync_files(files)
         # for file in files:
         #     self.lsp.sync_file(file)
         duration = time.time() - t0
+
+        self.assertEqual(len(diagnostics), NUM_FILES)
 
         # Layout profile using dot and gprof2dot
         if PROFILE:
@@ -85,7 +90,7 @@ class TestLanguageServer(unittest.TestCase):
         self.lsp.sync_file(file)
 
         PROFILE = False
-        NUM_REPEATS = 50
+        NUM_REPEATS = 32
 
         if PROFILE:
             sys.setrecursionlimit(10000)
@@ -96,6 +101,12 @@ class TestLanguageServer(unittest.TestCase):
         COL = 4
 
         requests = [
+            ("plain_goal", self.lsp.request_plain_goal, (file, LINE, COL)),
+            (
+                "plain_term_goal",
+                self.lsp.request_plain_term_goal,
+                (file, LINE, COL + 20),
+            ),
             ("completion", self.lsp.request_completion, (file, LINE, COL + 20)),
             ("definition", self.lsp.request_definition, (file, LINE, COL)),
             ("hover", self.lsp.request_hover, (file, LINE, COL)),
@@ -118,15 +129,9 @@ class TestLanguageServer(unittest.TestCase):
                 (file, 0, 0, LINE, COL),
             ),
             ("folding_range", self.lsp.request_folding_range, (file,)),
-            ("plain_goal", self.lsp.request_plain_goal, (file, LINE, COL)),
-            (
-                "plain_term_goal",
-                self.lsp.request_plain_term_goal,
-                (file, LINE, COL + 20),
-            ),
         ]
 
-        print(f"Running {NUM_REPEATS} repeats of each request:")
+        print(f"Requesting {NUM_REPEATS} each:")
         for name, func, args in requests:
             start_time = time.time()
             for _ in range(NUM_REPEATS):

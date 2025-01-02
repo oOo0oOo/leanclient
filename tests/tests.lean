@@ -9,4 +9,9 @@ theorem add_zero_custom (n : Nat) : n + 0 = n := by
     -- Inductive step: assume n' + 0 = n', prove (n' + 1) + 0 = (n' + 1)
     rw [Nat.add_succ, ih]
 
-theorem add_zero_custom' (n : Nat) : n + 0 = n := by sorry
+-- Trigger warnings using incomplete proofs
+theorem incomplete (n : Nat) : n + 0 = n := by sorry
+theorem incomplete' (n : Nat) : n + 1 = n + 1 := by admit
+
+-- Trigger error using syntax errors
+theorem add_zero_custom''

@@ -51,10 +51,12 @@ class LeanLanguageServer:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE if print_lake_errors else subprocess.DEVNULL,
         )
+        self.stdin = self.process.stdin
+        self.stdout = self.process.stdout
 
         # Use selectors to read stdout and stderr non-blocking
         self.stdout_selector = selectors.DefaultSelector()
-        self.stdout_selector.register(self.process.stdout, selectors.EVENT_READ)
+        self.stdout_selector.register(self.stdout, selectors.EVENT_READ)
 
         # Read stderr in a separate thread
         if print_lake_errors:
@@ -70,14 +72,14 @@ class LeanLanguageServer:
             threading.Thread(target=loop).start()
 
         # Send initialization request, surprisingly no params required
-        res = self.send_request("initialize", {"processId": os.getpid()})
-        self.server_info = res["result"]
+        results = self._send_request("initialize", {"processId": os.getpid()})
+        self.server_info = results[-1]["result"]
         self.token_legend = self.server_info["capabilities"]["semanticTokensProvider"][
             "legend"
         ]
         self.num_token_modifiers = len(self.token_legend["tokenModifiers"])
 
-        self.send_request("initialized", {}, is_notification=True)
+        self._send_notification("initialized", {})
 
     def setup_env(self, use_mathlib: bool = False, starting_file_path: str = None):
         # Create new environment
@@ -94,25 +96,25 @@ class LeanLanguageServer:
     def close(self):
         """Close the language server and all associated resources."""
         self.process.terminate()
-        self.stdout_selector.unregister(self.process.stdout)
+        self.stdout_selector.unregister(self.stdout)
         if self.print_lake_errors:
             self.stderr_selector.unregister(self.process.stderr)
             self.process.stderr.close()
-        self.process.stdout.close()
-        self.process.stdin.close()
+        self.stdout.close()
+        self.stdin.close()
         self.process.wait()
 
-    # LANGUAGE SERVER INTERACTIONS
-    def local_to_uri(self, file_name: str):
+    def local_to_uri(self, file_name: str) -> str:
         return f"file://{self.lake_dir}{file_name}"
 
-    def _read_stdout(self):
+    # LANGUAGE SERVER INTERACTIONS
+    def _read_stdout(self) -> dict:
         """Read the next message from the language server."""
-        header = self.process.stdout.readline().decode("ascii")
+        header = self.stdout.readline().decode("ascii")
         if header:
             content_length = int(header.split(":")[1])
-            next(self.process.stdout)
-            resp = orjson.loads(self.process.stdout.read(content_length))
+            next(self.stdout)
+            resp = orjson.loads(self.stdout.read(content_length))
         else:
             resp = {}
 
@@ -120,18 +122,40 @@ class LeanLanguageServer:
             print("Error Message:", resp)
         return resp
 
-    def _read_stdout_non_blocking(self, timeout: float = 0.001):
+    def _read_stdout_non_blocking(self, timeout: float = 0.001) -> dict | None:
+        """Currently not required"""
         events = self.stdout_selector.select(timeout=timeout)
         return self._read_stdout() if events else None
 
-    def _read_stderr_non_blocking(self, timeout: float = 0.025):
+    def _read_stderr_non_blocking(self, timeout: float = 0.025) -> dict | None:
         events = self.stderr_selector.select(timeout=timeout)
         return self.process.stderr.readline().decode("utf-8") if events else None
 
-    def send_request(self, method: str, params: dict, is_notification: bool = False):
-        """Send a JSON rpc request to the language server. Return the response.
-        This is only blocking for requests, and not for notifications.
+    def _send_request(self, method: str, params: dict) -> list[dict]:
+        """Send a request to the language server.
+
+        This includes and id, and waits for a response.
+
+        Returns:
+            list[dict] | None: List of responses, the last one being the final response, if not notification
         """
+        self._send_raw_request(method, params, is_notification=False)
+        rid = self.request_id - 1
+
+        result = self._read_stdout()
+        results = [result]
+        while result.get("id") != rid:
+            result = self._read_stdout()
+            results.append(result)
+
+        return results
+
+    def _send_notification(self, method: str, params: dict):
+        """Send a notification to the  language server."""
+        self._send_raw_request(method, params, is_notification=True)
+
+    def _send_raw_request(self, method: str, params: dict, is_notification: bool):
+        """Send a JSON rpc request to the language server."""
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -143,129 +167,151 @@ class LeanLanguageServer:
 
         body = orjson.dumps(request)
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self.process.stdin.write(header + body)
-        self.process.stdin.flush()
+        self.stdin.write(header + body)
+        self.stdin.flush()
 
-        if is_notification:
-            return self._read_stdout_non_blocking()
-
-        result = self._read_stdout()
-        while result.get("id") != request.get("id"):
-            result = self._read_stdout()
-
-        return result
-
-    def _open_files(self, uris: list[str]):
+    def _open_files(self, uris: list[str]) -> list:
         """Open files in the language server.
-        This function blocks until the file waitForDiagnostics returns."""
+
+        This function blocks until the file waitForDiagnostics returns.
+
+        Args:
+            uris (list[str]): List of URIs to open.
+            return_diagnostics (bool): Whether to return diagnostics for each file.
+
+        Returns:
+            list: List of diagnostics for each file.
+        """
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             with open(uri[7:], "r") as f:  # Remove "file://" prefix
                 params["textDocument"]["text"] = f.read()
             params["textDocument"]["languageId"] = "lean"
             params["textDocument"]["version"] = 1
-            self.send_request("textDocument/didOpen", params, is_notification=True)
+            self._send_notification("textDocument/didOpen", params)
 
-        # waitForDiagnostics
-        # Also tried parallel, sending all requests at once, but it got confused.
+        # waitForDiagnostics in series; Parallel requests are not reliable?
+        responses = []
         for uri in uris:
-            result = self.send_request(
+            responses += self._send_request(
                 "textDocument/waitForDiagnostics", {"uri": uri, "version": 1}
             )
-            r_id = self.request_id - 1
+            result = responses[-1]
             while True:
-                if result.get("id") == r_id and result.get("result", True) == {}:
+                # Could also require: result.get("id") == self.request_id - 1
+                if result.get("result", True) == {}:
                     break
                 result = self._read_stdout()
+                responses.append(result)
+
+        diagnostics = {
+            resp["params"]["uri"]: resp["params"]["diagnostics"]
+            for resp in responses
+            if resp.get("method") == "textDocument/publishDiagnostics"
+        }
+
+        for uri, diags in diagnostics.items():
+            if diags:
+                warnings = [diag["message"] for diag in diags if diag["severity"] == 2]
+                errors = [diag["message"] for diag in diags if diag["severity"] == 1]
+                diagnostics[uri] = [warnings, errors]
+
+        return [diagnostics.get(uri, []) for uri in uris]
 
     def _close_files(self, uris: list[str]):
         """Close files in the language server.
-        This function blocks until publishDiagnostics is received for all files."""
 
-        init_responses = []
+        This function blocks until publishDiagnostics is received for all files."""
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
-            resp = self.send_request(
-                "textDocument/didClose", params, is_notification=True
-            )
-            init_responses.append(resp)
+            self._send_notification("textDocument/didClose", params)
 
-        # Look for published diagnostics (closed files?)
+        # Wait for published diagnostics
         waiting_uris = set(uris)
         while waiting_uris:
-            resp = init_responses.pop(0) if init_responses else self._read_stdout()
+            resp = self._read_stdout()
             if resp and resp.get("method") == "textDocument/publishDiagnostics":
                 waiting_uris.discard(resp["params"]["uri"])
 
-    def sync_files(self, uris: list[str]):
-        """Make a file available to the language server if not already."""
-        uris = [u for u in uris if u not in self.synced_uris]
-        if not uris:
-            return
+    def sync_files(self, uris: list[str]) -> list[list | None]:
+        """Make files available to the language server if not already.
+
+        Args:
+            uris (list[str]): List of URIs to sync.
+
+        Returns:
+            list[list | None]: List of diagnostics for each file or None
+        """
+        uris_to_add = [u for u in uris if u not in self.synced_uris]
+        if not uris_to_add:
+            return [None] * len(uris)
+        diags = {u: [] for u in uris}
 
         # Remove oldest synced files which are not in uris
-        removable_uris = [u for u in self.synced_uris if u not in uris]
+        removable_uris = [u for u in self.synced_uris if u not in uris_to_add]
         to_remove = min(len(removable_uris), len(self.synced_uris) - MAX_SYNCED_FILES)
         if to_remove:
             remove_uris = removable_uris[:to_remove]
             self._close_files(remove_uris)
             self.synced_uris = [u for u in self.synced_uris if u not in remove_uris]
 
-        self._open_files(uris)
-        self.synced_uris += uris
+        diagnostics = self._open_files(uris_to_add)
+        self.synced_uris += uris_to_add
+        for uri, diag in zip(uris_to_add, diagnostics):
+            diags[uri] = diag
+        return [diags[u] for u in uris]
 
-    def sync_file(self, uri: str):
+    def sync_file(self, uri: str) -> list:
         """Make a file available to the language server if not already."""
-        self.sync_files([uri])
+        return self.sync_files([uri])[0]
 
-    def send_request_document(self, uri: str, method: str, params: dict = None):
+    def send_request_document(self, uri: str, method: str, params: dict) -> dict:
         """Send request regarding a document.
         Mainly used by other methods in this class."""
         self.sync_file(uri)
-        params = params or {}
         params["textDocument"] = {"uri": uri}
-        result = self.send_request(method, params)
-        return result["result"]
+        results = self._send_request(method, params)
+        return results[-1]["result"]
 
     # LANGUAGE SERVER API
     # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
 
-    def request_completion(self, uri: str, line: int, character: int):
+    def request_completion(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_completion_item_resolve(self, uri: str, item: dict):
+    def request_completion_item_resolve(self, uri: str, item: dict) -> dict:
         return self.send_request_document(
             uri,
             "completionItem/resolve",
             item,
         )
 
-    def request_hover(self, uri: str, line: int, character: int):
+    def request_hover(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_declaration(self, uri: str, line: int, character: int):
+    def request_declaration(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_definition(self, uri: str, line: int, character: int):
+    def request_definition(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_references(self, uri: str, line: int, character: int):
+    def request_references(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/references",
@@ -275,24 +321,24 @@ class LeanLanguageServer:
             },
         )
 
-    def request_type_definition(self, uri: str, line: int, character: int):
+    def request_type_definition(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_document_highlight(self, uri: str, line: int, character: int):
+    def request_document_highlight(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_document_symbol(self, uri: str):
+    def request_document_symbol(self, uri: str) -> dict:
         return self.send_request_document(uri, "textDocument/documentSymbol", {})
 
-    def request_semantic_tokens_full(self, uri: str):
+    def request_semantic_tokens_full(self, uri: str) -> list:
         res = self.send_request_document(uri, "textDocument/semanticTokens/full", {})
         return self._process_semantic_tokens(res["data"])
 
@@ -303,7 +349,7 @@ class LeanLanguageServer:
         start_character: int,
         end_line: int,
         end_character: int,
-    ):
+    ) -> list:
         res = self.send_request_document(
             uri,
             "textDocument/semanticTokens/range",
@@ -316,7 +362,7 @@ class LeanLanguageServer:
         )
         return self._process_semantic_tokens(res["data"])
 
-    def _process_semantic_tokens(self, raw_response: list[int]):
+    def _process_semantic_tokens(self, raw_response: list[int]) -> list:
         """Semantic token response is "compressed". This function is a reverse translation of:
         https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest
         """
@@ -358,25 +404,25 @@ class LeanLanguageServer:
 
         return tokens
 
-    def request_folding_range(self, uri: str):
-        return self.send_request_document(uri, "textDocument/foldingRange")
+    def request_folding_range(self, uri: str) -> dict:
+        return self.send_request_document(uri, "textDocument/foldingRange", {})
 
-    def request_plain_goal(self, uri: str, line: int, character: int):
+    def request_plain_goal(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_plain_term_goal(self, uri: str, line: int, character: int):
+    def request_plain_term_goal(self, uri: str, line: int, character: int) -> dict:
         return self.send_request_document(
             uri,
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    # EXTRA FUNCTIONALITY
-    def get_sorries(self, uri: str):
+    # CUSTOM METHODS
+    def get_sorries(self, uri: str) -> list[list]:
         """Currently only detects sorries in tactics (limitation by language server)."""
         semantic = self.request_semantic_tokens_full(uri)
         return [t[:3] for t in semantic if t[3] == "leanSorryLike"]
