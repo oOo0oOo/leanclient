@@ -219,10 +219,15 @@ class LeanLanguageServer:
 
         return [diagnostics.get(uri, []) for uri in uris]
 
-    def _close_files(self, uris: list[str]):
+    def _close_files(self, uris: list[str], blocking: bool = False):
         """Close files in the language server.
 
-        This function blocks until publishDiagnostics is received for all files."""
+        This function blocks until publishDiagnostics is received for all files.
+
+        Args:
+            uris (list[str]): List of URIs to close.
+            blocking (bool): Not blocking is a bit risky
+        """
         # Only close if file is open
         uris = [uri for uri in uris if uri in self.synced_files]
         for uri in uris:
@@ -230,11 +235,12 @@ class LeanLanguageServer:
             self._send_notification("textDocument/didClose", params)
 
         # Wait for published diagnostics
-        waiting_uris = set(uris)
-        while waiting_uris:
-            resp = self._read_stdout()
-            if resp and resp.get("method") == "textDocument/publishDiagnostics":
-                waiting_uris.discard(resp["params"]["uri"])
+        if blocking:
+            waiting_uris = set(uris)
+            while waiting_uris:
+                resp = self._read_stdout()
+                if resp and resp.get("method") == "textDocument/publishDiagnostics":
+                    waiting_uris.discard(resp["params"]["uri"])
 
     def sync_files(self, uris: list[str]) -> list[list]:
         """Make files available to the language server if not already.

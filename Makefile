@@ -8,4 +8,7 @@ install:
 	pip install -e .[dev]
 
 test:
-	python -m unittest discover -s tests
+	python tests/run_tests.py
+
+test-profile:
+	python tests/run_tests.py --profile

@@ -9,5 +9,4 @@ __pycache__/
 .lake_env/
 
 examples/
-profile.png
-profile_load.png
+tests/profile*.png

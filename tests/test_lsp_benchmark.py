@@ -1,13 +1,11 @@
-import cProfile
-import os
 import random
 from pprint import pprint
 import time
-import sys
 import unittest
 
 from leanclient.language_server import LeanLanguageServer
-from leanclient.utils import find_lean_files_recursively
+from leanclient.utils import find_lean_files_recursively, start_profiler, stop_profiler
+from leanclient.config import MAX_SYNCED_FILES
 
 BENCH_MATHLIB_ROOT_FOLDERS = [
     ".lake/packages/mathlib/Mathlib",
@@ -31,20 +29,17 @@ class TestLanguageServer(unittest.TestCase):
 
     def test_bench_opening_files(self):
         path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
-        files = find_lean_files_recursively(path)
-        files = sorted(files)
-        random.seed(3.14)
-        random.shuffle(files)
+        all_files = find_lean_files_recursively(path)
+        all_files = sorted(all_files)
+        random.seed(3.142)
+        random.shuffle(all_files)
 
         NUM_FILES = 8
+        files = all_files[:NUM_FILES]
 
-        files = files[:NUM_FILES]
-
-        PROFILE = False
-        if PROFILE:
-            sys.setrecursionlimit(10000)
-            profiler = cProfile.Profile()
-            profiler.enable()
+        LOCAL_PROFILE = False
+        if LOCAL_PROFILE:
+            profiler = start_profiler()
 
         t0 = time.time()
         diagnostics = self.lsp.sync_files(files)
@@ -53,15 +48,6 @@ class TestLanguageServer(unittest.TestCase):
         duration = time.time() - t0
 
         self.assertEqual(len(diagnostics), NUM_FILES)
-
-        # Layout profile using dot and gprof2dot
-        if PROFILE:
-            profiler.disable()
-            profiler.dump_stats("profile.prof")
-            os.system(
-                "gprof2dot -f pstats profile.prof -n 0.01 -e 0.002 | dot -Tpng -o profile_load.png"
-            )
-            os.remove("profile.prof")
 
         # Open all files and count number of lines and total number of characters
         lines = 0
@@ -75,12 +61,27 @@ class TestLanguageServer(unittest.TestCase):
         fps = len(files) / duration
         lps = lines / duration
         cps = chars / duration
+        msg = f"Loaded {len(files)} files: {fps:.2f} files/s, {lps:.2f} lines/s, {cps:.2f} chars/s"
+        print(msg)
 
-        print(
-            f"Loaded {len(files)} files: {fps:.2f} files/s, {lps:.2f} lines/s, {cps:.2f} chars/s"
-        )
+        # Load overlapping files
+        EXTRA_FILES = 2
+        if MAX_SYNCED_FILES > NUM_FILES:
+            msg = f"TEST WARNING: Decrease MAX_SYNCED_FILES to {NUM_FILES} to test overlapping files."
+            print(msg)
+        new_files = all_files[NUM_FILES - EXTRA_FILES : NUM_FILES + EXTRA_FILES]
+        t0 = time.time()
+        diagnostics2 = self.lsp.sync_files(new_files)
+        extra_duration = time.time() - t0
+        self.assertEqual(diagnostics[-EXTRA_FILES:], diagnostics2[:EXTRA_FILES])
+        msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"
+        print(msg)
 
         self.lsp._close_files(files)
+
+        # Layout profile using dot and gprof2dot
+        if LOCAL_PROFILE:
+            stop_profiler(profiler, "tests/profile_load.png")
 
     def test_bench_all_functions(self):
         file = self.lsp.local_to_uri(
@@ -89,13 +90,11 @@ class TestLanguageServer(unittest.TestCase):
 
         self.lsp.sync_file(file)
 
-        PROFILE = False
+        LOCAL_PROFILE = False
         NUM_REPEATS = 32
 
-        if PROFILE:
-            sys.setrecursionlimit(10000)
-            profiler = cProfile.Profile()
-            profiler.enable()
+        if LOCAL_PROFILE:
+            profiler = start_profiler()
 
         LINE = 380
         COL = 4
@@ -140,10 +139,5 @@ class TestLanguageServer(unittest.TestCase):
             print(f"{name}: {NUM_REPEATS / (1e-9 + total_time):.2f} requests/s")
 
         # Layout profile using dot and gprof2dot
-        if PROFILE:
-            profiler.disable()
-            profiler.dump_stats("profile.prof")
-            os.system(
-                "gprof2dot -f pstats profile.prof -n 0.01 -e 0.002 | dot -Tpng -o profile.png"
-            )
-            os.remove("profile.prof")
+        if LOCAL_PROFILE:
+            stop_profiler(profiler, "test/profile_requests.png")

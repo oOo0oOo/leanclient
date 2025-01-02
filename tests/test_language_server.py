@@ -94,6 +94,20 @@ class TestLanguageServer(unittest.TestCase):
         res = self.lsp.request_plain_term_goal(self.uri, 9, 15)
         assert "⊢" in res["goal"]
 
+    def test_sync_files(self):
+        path = self.lsp.lake_dir
+        path += ".lake/packages/mathlib/Mathlib/Topology/"
+        all_files = find_lean_files_recursively(path)
+        N = 3  # randint(0, len(all_files) - 3)  ?
+        diag = self.lsp.sync_file(all_files[N])
+        diag2 = self.lsp.sync_file(all_files[N])  # One file overlap
+        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two file overlap
+        diags2 = self.lsp.sync_files(all_files[N : N + 2])  # Cache
+
+        self.assertEqual(diag, diag2)
+        self.assertEqual(diag, diags[0])
+        self.assertEqual(diags, diags2)
+
     # Test custom methods
     def test_get_sorries(self):
         res = self.lsp.get_sorries(self.uri)
@@ -117,17 +131,3 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
             ["unexpected end of input; expected ':'"],
         ]
         self.assertEqual(diagnostics, exp)
-
-    def test_sync_files(self):
-        path = self.lsp.lake_dir
-        path += ".lake/packages/mathlib/Mathlib"
-        all_files = find_lean_files_recursively(path)
-        N = random.randint(0, len(all_files) - 3)
-        diag = self.lsp.sync_file(all_files[N])
-        diag2 = self.lsp.sync_file(all_files[N])  # One file overlap
-        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two file overlap
-        diags2 = self.lsp.sync_files(all_files[N : N + 2])  # Cache
-
-        self.assertEqual(diag, diag2)
-        self.assertEqual(diag, diags[0])
-        self.assertEqual(diags, diags2)
