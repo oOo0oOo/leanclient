@@ -45,7 +45,7 @@ class TestLanguageServer(unittest.TestCase):
     def test_completion_item_resolve(self):
         result = self.lsp.request_completion(self.uri, 9, 15)
         item = random.choice(result["items"])
-        result = self.lsp.request_completion_item_resolve(self.uri, item)
+        result = self.lsp.request_completion_item_resolve(item)
         result["data"]["id"]["const"]["declName"]
 
     def test_hover(self):
@@ -59,6 +59,10 @@ class TestLanguageServer(unittest.TestCase):
     def test_request_definition(self):
         res = self.lsp.request_definition(self.uri, 1, 29)
         self.assertTrue(res[0]["targetUri"].endswith("Prelude.lean"))
+
+    def test_references(self):
+        res = self.lsp.request_references(self.uri, 1, 29)
+        assert len(res) > 1000
 
     def test_type_definition(self):
         res = self.lsp.request_type_definition(self.uri, 1, 36)

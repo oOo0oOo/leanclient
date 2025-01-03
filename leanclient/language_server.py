@@ -301,9 +301,9 @@ class LeanLanguageServer:
             {"position": {"line": line, "character": character}},
         )
 
-    def request_completion_item_resolve(self, uri: str, item: dict) -> dict:
+    def request_completion_item_resolve(self, item: dict) -> dict:
         return self._send_request_document(
-            uri,
+            item["data"]["params"]["textDocument"]["uri"],
             "completionItem/resolve",
             item,
         )

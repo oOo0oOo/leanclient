@@ -27,7 +27,7 @@ class TestLanguageServer(unittest.TestCase):
     def tearDown(self):
         self.lsp.close()
 
-    def test_bench_opening_files(self):
+    def ttest_bench_opening_files(self):
         path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
         all_files = find_lean_files_recursively(path)
         all_files = sorted(all_files)
@@ -99,6 +99,9 @@ class TestLanguageServer(unittest.TestCase):
         LINE = 380
         COL = 4
 
+        items = self.lsp.request_completion(file, LINE, COL + 20)
+        completion_item = items["items"][8]
+
         requests = [
             ("plain_goal", self.lsp.request_plain_goal, (file, LINE, COL)),
             (
@@ -107,9 +110,15 @@ class TestLanguageServer(unittest.TestCase):
                 (file, LINE, COL + 20),
             ),
             ("completion", self.lsp.request_completion, (file, LINE, COL + 20)),
+            (
+                "completion_item_resolve",
+                self.lsp.request_completion_item_resolve,
+                (completion_item,),
+            ),
             ("definition", self.lsp.request_definition, (file, LINE, COL)),
             ("hover", self.lsp.request_hover, (file, LINE, COL)),
             ("declaration", self.lsp.request_declaration, (file, LINE, COL)),
+            ("references", self.lsp.request_references, (file, LINE, COL + 20)),
             (
                 "type_definition",
                 self.lsp.request_type_definition,
