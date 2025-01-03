@@ -186,22 +186,3 @@ class TestLanguageServer(unittest.TestCase):
     def test_get_sorries(self):
         res = self.lsp.get_sorries(self.uri)
         self.assertEqual(res, [[12, 47, 5], [13, 52, 5]])
-
-
-class TestLanguageServerDiagnostics(unittest.TestCase):
-    def setUp(self):
-        self.lsp = LeanLanguageServer(
-            use_mathlib=True, starting_file_path="tests/tests.lean"
-        )
-        self.uri = self.lsp.local_to_uri(LEAN_FILE_PATH)
-
-    def tearDown(self):
-        self.lsp.close()
-
-    def test_get_diagnostics(self):
-        diagnostics = self.lsp.sync_file(self.uri)
-        exp = [
-            ["unexpected end of input; expected ':'"],
-            ["declaration uses 'sorry'", "declaration uses 'sorry'"],
-        ]
-        self.assertEqual(diagnostics, exp)

@@ -63,11 +63,6 @@ class LeanLanguageServer:
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
-        self.stderr = self.process.stderr
-
-        # Use selectors to read stderr non-blocking
-        self.stderr_selector = selectors.DefaultSelector()
-        self.stderr_selector.register(self.stderr, selectors.EVENT_READ)
 
         # Send initialization request, surprisingly no params required
         results = self._send_request("initialize", {"processId": os.getpid()})
@@ -92,8 +87,7 @@ class LeanLanguageServer:
     def close(self):
         """Close the language server and all associated resources."""
         self.process.terminate()
-        self.stderr_selector.unregister(self.stderr)
-        self.stderr.close()
+        self.process.stderr.close()
         self.stdout.close()
         self.stdin.close()
         self.process.wait()
@@ -106,21 +100,25 @@ class LeanLanguageServer:
         """Read the next message from the language server."""
         header = self.stdout.readline().decode("ascii")
 
-        # Handle EOF: Return contents of stderr
+        # Handle EOF: Return contents of stderr (non-blocking using selectors)
         if not header:
-            line = ""
-            if self.stderr_selector.select(timeout=0.05):
-                line = self.stderr.readline().decode("utf-8")
-            raise EOFError(f"Language server has closed. Lake error message:\n{line}")
+            stderr = self.process.stderr
+            stderr_sel = selectors.DefaultSelector()
+            stderr_sel.register(stderr, selectors.EVENT_READ)
+            line = "No lake stderr message."
+            if stderr_sel.select(timeout=0.05):
+                line = "lake stderr message:\n" + stderr.readline().decode("utf-8")
+            self.close()
+            raise EOFError(f"Language server has closed. {line}")
 
         # Parse message
         content_length = int(header.split(":")[1])
         next(self.stdout)
         resp = orjson.loads(self.stdout.read(content_length))
 
-        # Display error messages from language server
+        # Display RPC error messages (from language server)
         if "error" in resp:
-            print("RPC Error Message:\n", resp["error"], flush=True)
+            print("RPC Error Message:\n", resp)
 
         return resp
 
@@ -137,14 +135,14 @@ class LeanLanguageServer:
 
         result = self._read_stdout()
         results = [result]
-        while result.get("id") != rid:
+        while result.get("id") != rid and "error" not in result:
             result = self._read_stdout()
             results.append(result)
 
         return results
 
     def _send_notification(self, method: str, params: dict):
-        """Send a notification to the  language server."""
+        """Send a notification to the language server."""
         self._send_raw_request(method, params, is_notification=True)
 
     def _send_raw_request(self, method: str, params: dict, is_notification: bool):
@@ -176,6 +174,8 @@ class LeanLanguageServer:
                 # Currently works bc the return value of waitForDiagnostics is `{}` (a bit unusual and therefore unique?)
                 if result.get("result", True) == {}:
                     break
+                elif "error" in result:
+                    return responses + [result]
                 result = self._read_stdout()
                 responses.append(result)
 

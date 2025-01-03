@@ -27,7 +27,7 @@ class TestLanguageServer(unittest.TestCase):
     def tearDown(self):
         self.lsp.close()
 
-    def ttest_bench_opening_files(self):
+    def test_bench_opening_files(self):
         path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
         all_files = find_lean_files_recursively(path)
         all_files = sorted(all_files)
