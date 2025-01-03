@@ -45,11 +45,7 @@ class LeanLanguageServer:
             starting_file_path (str): If not None, copies the contents of this file to the base lean path.
     """
 
-    def __init__(
-        self,
-        use_mathlib: bool = False,
-        starting_file_path: str = None
-    ):
+    def __init__(self, use_mathlib: bool = False, starting_file_path: str = None):
         self.lake_dir = os.path.abspath(LAKE_ENV_DIR) + "/"
         self.request_id = 0
         self.synced_files = collections.OrderedDict()
@@ -63,7 +59,7 @@ class LeanLanguageServer:
             cwd=self.lake_dir,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
@@ -77,7 +73,7 @@ class LeanLanguageServer:
         results = self._send_request("initialize", {"processId": os.getpid()})
         server_info = results[-1]["result"]
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
-        self.token_processor = SemanticTokenProcessor(legend)
+        self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
         self._send_notification("initialized", {})
 

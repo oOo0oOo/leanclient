@@ -74,11 +74,25 @@ class TestLanguageServer(unittest.TestCase):
 
     def test_semantic_tokens_full(self):
         res = self.lsp.request_semantic_tokens_full(self.uri)
-        assert res[0][0] < 30
+        exp = [
+            [1, 0, 7, "keyword"],
+            [1, 25, 1, "variable"],
+            [1, 36, 1, "variable"],
+            [1, 44, 1, "variable"],
+            [1, 49, 2, "keyword"],
+        ]
+        self.assertEqual(res[:5], exp)
 
     def test_semantic_tokens_range(self):
-        res = self.lsp.request_semantic_tokens_range(self.uri, 0, 0, 6, 6)
-        assert res[0][0] < 30
+        res = self.lsp.request_semantic_tokens_range(self.uri, 0, 0, 2, 0)
+        exp = [
+            [1, 0, 7, "keyword"],
+            [1, 25, 1, "variable"],
+            [1, 36, 1, "variable"],
+            [1, 44, 1, "variable"],
+            [1, 49, 2, "keyword"],
+        ]
+        self.assertEqual(res, exp)
 
     def test_folding_range(self):
         res = self.lsp.request_folding_range(self.uri)

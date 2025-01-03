@@ -13,10 +13,8 @@ def find_lean_files_recursively(abs_path: str) -> list[str]:
 
 
 class SemanticTokenProcessor:
-    def __init__(self, token_legend: dict):
-        self.token_types = token_legend["tokenTypes"]
-        self.token_modifiers = token_legend["tokenModifiers"]
-        self.num_token_modifiers = len(token_legend["tokenModifiers"])
+    def __init__(self, token_types: list[str]):
+        self.token_types = token_types
 
     def __call__(self, raw_response: list[int]) -> list:
         return self._process_semantic_tokens(raw_response)
@@ -26,43 +24,18 @@ class SemanticTokenProcessor:
 
         This function is a reverse translation of:
         https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest
+
+        NOTE: Token modifiers are currently ignored (speed gains), as they are not used in lean core. See here:
+        https://github.com/leanprover/lean4/blob/10b2f6b27e79e2c38d4d613f18ead3323a58ba4b/src/Lean/Data/Lsp/LanguageFeatures.lean#L360
         """
         tokens = []
-        prev_line = 0
-        prev_start_char = 0
-        for i in range(0, len(raw_response), 5):
-            delta_line = raw_response[i]
-            delta_start_char = raw_response[i + 1]
-            length = raw_response[i + 2]
-            token_type = raw_response[i + 3]
-            token_modifiers = raw_response[i + 4]
-
-            line = prev_line + delta_line
-            start_char = (
-                prev_start_char + delta_start_char
-                if delta_line == 0
-                else delta_start_char
-            )
-
-            token_modifiers_list = [
-                self.token_modifiers[j]
-                for j in range(self.num_token_modifiers)
-                if token_modifiers & (1 << j)
-            ]
-
-            tokens.append(
-                [
-                    line,
-                    start_char,
-                    length,
-                    self.token_types[token_type],
-                    token_modifiers_list,
-                ]
-            )
-
-            prev_line = line
-            prev_start_char = start_char
-
+        line = char = 0
+        it = iter(raw_response)
+        types = self.token_types
+        for d_line, d_char, length, token, __ in zip(it, it, it, it, it):
+            line += d_line
+            char = char + d_char if d_line == 0 else d_char
+            tokens.append([line, char, length, types[token]])
         return tokens
 
 
