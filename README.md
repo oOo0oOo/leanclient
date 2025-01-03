@@ -6,18 +6,29 @@ Python client to interact with the Lean theorem prover language server.
 
 Not tasty for consumption yet.
 
-### Expect Changes
+### Planned Features
 
 - Broad architecture, API and config changes
 - Proper documentation
 - Allow use in custom lean projects
 - Publishing on pipy -> Installation via pip
 
-### Maybe
+### Potential Features
 
 - Automatic lean env setup for non Debian-based systems
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Allow interaction before `waitForDiagnostics` returns
+
+### Missing LSP Features
+
+Might be implemented in the future:
+- `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
+- `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls`, ...
+- `textDocument/prepareRename`, `textDocument/rename`
+
+Not even sure if these methods are exposed via the Lean language server:
+- `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
+- `$/lean/ileanInfoUpdate`, `$/lean/ileanInfoFinal`, `$/lean/importClosure`, `$/lean/staleDependency`
 
 ## Features
 
