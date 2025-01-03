@@ -2,7 +2,7 @@ import os
 import collections
 from pprint import pprint
 import subprocess
-import threading
+from typing import NamedTuple
 
 import selectors
 import orjson
@@ -14,6 +14,21 @@ from leanclient.config import (
 )
 from leanclient.env_setup import install_env
 from leanclient.utils import SemanticTokenProcessor
+
+
+class DocumentContentChange(NamedTuple):
+    text: str
+    start: list[int]
+    end: list[int]
+
+    def get_dict(self) -> dict:
+        return {
+            "text": self.text,
+            "range": {
+                "start": {"line": self.start[0], "character": self.start[1]},
+                "end": {"line": self.end[0], "character": self.end[1]},
+            },
+        }
 
 
 class LeanLanguageServer:
@@ -28,21 +43,18 @@ class LeanLanguageServer:
     Args:
             use_mathlib (bool): Whether to include mathlib in the environment.
             starting_file_path (str): If not None, copies the contents of this file to the base lean path.
-            print_lake_errors (bool): Print lake errors to the stdout. This runs in a separate thread.
     """
 
     def __init__(
         self,
         use_mathlib: bool = False,
-        starting_file_path: str = None,
-        print_lake_errors: bool = False,
+        starting_file_path: str = None
     ):
         self.lake_dir = os.path.abspath(LAKE_ENV_DIR) + "/"
-        self.print_lake_errors = print_lake_errors
         self.request_id = 0
         self.synced_files = collections.OrderedDict()
 
-        self.setup_env(use_mathlib, starting_file_path)
+        self._setup_env(use_mathlib, starting_file_path)
 
         # Run language server in a process
         self.process = subprocess.Popen(
@@ -51,27 +63,15 @@ class LeanLanguageServer:
             cwd=self.lake_dir,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE if print_lake_errors else subprocess.DEVNULL,
+            stderr=subprocess.PIPE
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
+        self.stderr = self.process.stderr
 
-        # Use selectors to read stdout and stderr non-blocking
-        self.stdout_selector = selectors.DefaultSelector()
-        self.stdout_selector.register(self.stdout, selectors.EVENT_READ)
-
-        # Read stderr in a separate thread
-        if print_lake_errors:
-            self.stderr_selector = selectors.DefaultSelector()
-            self.stderr_selector.register(self.process.stderr, selectors.EVENT_READ)
-
-            def loop():
-                while self.process.poll() is None:
-                    line = self._read_stderr_non_blocking()
-                    if line:
-                        print(line)
-
-            threading.Thread(target=loop).start()
+        # Use selectors to read stderr non-blocking
+        self.stderr_selector = selectors.DefaultSelector()
+        self.stderr_selector.register(self.stderr, selectors.EVENT_READ)
 
         # Send initialization request, surprisingly no params required
         results = self._send_request("initialize", {"processId": os.getpid()})
@@ -81,7 +81,7 @@ class LeanLanguageServer:
 
         self._send_notification("initialized", {})
 
-    def setup_env(self, use_mathlib: bool = False, starting_file_path: str = None):
+    def _setup_env(self, use_mathlib: bool = False, starting_file_path: str = None):
         # Create new environment
         if not os.path.exists(self.lake_dir):
             install_env(self.lake_dir, use_mathlib=use_mathlib)
@@ -96,10 +96,8 @@ class LeanLanguageServer:
     def close(self):
         """Close the language server and all associated resources."""
         self.process.terminate()
-        self.stdout_selector.unregister(self.stdout)
-        if self.print_lake_errors:
-            self.stderr_selector.unregister(self.process.stderr)
-            self.process.stderr.close()
+        self.stderr_selector.unregister(self.stderr)
+        self.stderr.close()
         self.stdout.close()
         self.stdin.close()
         self.process.wait()
@@ -111,25 +109,24 @@ class LeanLanguageServer:
     def _read_stdout(self) -> dict:
         """Read the next message from the language server."""
         header = self.stdout.readline().decode("ascii")
-        if header:
-            content_length = int(header.split(":")[1])
-            next(self.stdout)
-            resp = orjson.loads(self.stdout.read(content_length))
-        else:
-            resp = {}
 
-        if resp.get("error", ""):
-            print("Error Message:", resp)
+        # Handle EOF: Return contents of stderr
+        if not header:
+            line = ""
+            if self.stderr_selector.select(timeout=0.05):
+                line = self.stderr.readline().decode("utf-8")
+            raise EOFError(f"Language server has closed. Lake error message:\n{line}")
+
+        # Parse message
+        content_length = int(header.split(":")[1])
+        next(self.stdout)
+        resp = orjson.loads(self.stdout.read(content_length))
+
+        # Display error messages from language server
+        if "error" in resp:
+            print("RPC Error Message:\n", resp["error"], flush=True)
+
         return resp
-
-    def _read_stdout_non_blocking(self, timeout: float = 0.001) -> dict | None:
-        """Currently not required"""
-        events = self.stdout_selector.select(timeout=timeout)
-        return self._read_stdout() if events else None
-
-    def _read_stderr_non_blocking(self, timeout: float = 0.025) -> dict | None:
-        events = self.stderr_selector.select(timeout=timeout)
-        return self.process.stderr.readline().decode("utf-8") if events else None
 
     def _send_request(self, method: str, params: dict) -> list[dict]:
         """Send a request to the language server.
@@ -170,6 +167,33 @@ class LeanLanguageServer:
         self.stdin.write(header + body)
         self.stdin.flush()
 
+    def _wait_for_diagnostics(self, uris: list[str]) -> dict:
+        # waitForDiagnostics in series; Parallel requests are not reliable?
+        responses = []
+        for uri in uris:
+            responses += self._send_request(
+                "textDocument/waitForDiagnostics", {"uri": uri, "version": 1}
+            )
+            result = responses[-1]
+            while True:
+                # Could also require: result.get("id") == self.request_id - 1
+                # Currently works bc the return value of waitForDiagnostics is `{}` (a bit unusual and therefore unique?)
+                if result.get("result", True) == {}:
+                    break
+                result = self._read_stdout()
+                responses.append(result)
+
+        diagnostics = {
+            resp["params"]["uri"]: resp["params"]["diagnostics"]
+            for resp in responses
+            if resp.get("method") == "textDocument/publishDiagnostics"
+        }
+        for uri, diags in diagnostics.items():
+            errors = [diag["message"] for diag in diags if diag["severity"] == 1]
+            warnings = [diag["message"] for diag in diags if diag["severity"] == 2]
+            diagnostics[uri] = [errors, warnings]
+        return [diagnostics[uri] for uri in uris]
+
     def _open_files(self, uris: list[str]) -> list:
         """Open files in the language server.
 
@@ -190,33 +214,20 @@ class LeanLanguageServer:
             params["textDocument"]["version"] = 1
             self._send_notification("textDocument/didOpen", params)
 
-        # waitForDiagnostics in series; Parallel requests are not reliable?
-        responses = []
-        for uri in uris:
-            responses += self._send_request(
-                "textDocument/waitForDiagnostics", {"uri": uri, "version": 1}
-            )
-            result = responses[-1]
-            while True:
-                # Could also require: result.get("id") == self.request_id - 1
-                if result.get("result", True) == {}:
-                    break
-                result = self._read_stdout()
-                responses.append(result)
+        return self._wait_for_diagnostics(uris)
 
-        diagnostics = {
-            resp["params"]["uri"]: resp["params"]["diagnostics"]
-            for resp in responses
-            if resp.get("method") == "textDocument/publishDiagnostics"
-        }
+    def update_file(self, uri: str, changes: list[DocumentContentChange]) -> list:
+        """Update a file in the language server.
 
-        for uri, diags in diagnostics.items():
-            if diags:
-                warnings = [diag["message"] for diag in diags if diag["severity"] == 2]
-                errors = [diag["message"] for diag in diags if diag["severity"] == 1]
-                diagnostics[uri] = [warnings, errors]
+        This function blocks until the file waitForDiagnostics returns.
+        """
+        params = {"textDocument": {"uri": uri}}
+        params["textDocument"]["languageId"] = "lean"
+        params["textDocument"]["version"] = 1
+        params["contentChanges"] = [c.get_dict() for c in changes]
+        self._send_notification("textDocument/didChange", params)
 
-        return [diagnostics.get(uri, []) for uri in uris]
+        return self._wait_for_diagnostics([uri])[0]
 
     def _close_files(self, uris: list[str], blocking: bool = False):
         """Close files in the language server.
@@ -276,7 +287,7 @@ class LeanLanguageServer:
         """Make a file available to the language server if not already."""
         return self.sync_files([uri])[0]
 
-    def send_request_document(self, uri: str, method: str, params: dict) -> dict:
+    def _send_request_document(self, uri: str, method: str, params: dict) -> dict:
         """Send request regarding a document.
         Mainly used by other methods in this class."""
         self.sync_file(uri)
@@ -288,42 +299,42 @@ class LeanLanguageServer:
     # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
 
     def request_completion(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
 
     def request_completion_item_resolve(self, uri: str, item: dict) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "completionItem/resolve",
             item,
         )
 
     def request_hover(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
         )
 
     def request_declaration(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
         )
 
     def request_definition(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
         )
 
     def request_references(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/references",
             {
@@ -333,24 +344,24 @@ class LeanLanguageServer:
         )
 
     def request_type_definition(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
         )
 
     def request_document_highlight(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
         )
 
     def request_document_symbol(self, uri: str) -> dict:
-        return self.send_request_document(uri, "textDocument/documentSymbol", {})
+        return self._send_request_document(uri, "textDocument/documentSymbol", {})
 
     def request_semantic_tokens_full(self, uri: str) -> list:
-        res = self.send_request_document(uri, "textDocument/semanticTokens/full", {})
+        res = self._send_request_document(uri, "textDocument/semanticTokens/full", {})
         return self.token_processor(res["data"])
 
     def request_semantic_tokens_range(
@@ -361,7 +372,7 @@ class LeanLanguageServer:
         end_line: int,
         end_character: int,
     ) -> list:
-        res = self.send_request_document(
+        res = self._send_request_document(
             uri,
             "textDocument/semanticTokens/range",
             {
@@ -374,17 +385,17 @@ class LeanLanguageServer:
         return self.token_processor(res["data"])
 
     def request_folding_range(self, uri: str) -> dict:
-        return self.send_request_document(uri, "textDocument/foldingRange", {})
+        return self._send_request_document(uri, "textDocument/foldingRange", {})
 
     def request_plain_goal(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
     def request_plain_term_goal(self, uri: str, line: int, character: int) -> dict:
-        return self.send_request_document(
+        return self._send_request_document(
             uri,
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},

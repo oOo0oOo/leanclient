@@ -35,6 +35,11 @@ def install_env(lake_dir: str, use_mathlib: bool = False):
     )
 
     if reply.returncode != 0:
+        print("Installing lean and lake")
+        # Install lean/lake
+        cmd = "wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh && bash install_debian.sh ; rm -f install_debian.sh && source ~/.profile"
+        subprocess.run(cmd, shell=True, cwd=lake_dir)
+
         print("Installing elan (Lean version manager)")
         subprocess.run(
             "curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y",
@@ -43,10 +48,6 @@ def install_env(lake_dir: str, use_mathlib: bool = False):
         )
         subprocess.run(". $HOME/.elan/env", shell=True)
         subprocess.run("elan self update", shell=True, cwd=lake_dir)
-
-    # Install lean/lake
-    cmd = "wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh && bash install_debian.sh ; rm -f install_debian.sh && source ~/.profile"
-    subprocess.run(cmd, shell=True, cwd=lake_dir)
 
     # Install lean
     subprocess.run(

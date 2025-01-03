@@ -10,20 +10,30 @@ Not tasty for consumption yet.
 
 - Broad architecture, API and config changes
 - Proper documentation
-- Refactor environment setup, now only runs on Debian-based systems
+- Allow use in custom lean projects
 - Publishing on pipy -> Installation via pip
 
-### Planned Features
+### Maybe
 
-- Incremental file sync, currently only full files can be synced
-- Capture file diagnostics on load
-- Handle lake errors on requests, currently they are only printed in a separate thread
+- Automatic lean env setup for non Debian-based systems
+- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
+- Allow interaction before `waitForDiagnostics` returns
+
+## Features
+
+- **Interact** with a Lean language server instance running in a subprocess.
+- Automatically **sync files** (open/close) with the language server.
+- **Incremental** file changes using `textDocument/didChange`.
+- Receive file **diagnostics** upon changes.
+- **Thin wrapper**: During (`make test-profile`) less than 1% of 38s is spent in this package.
 
 ## Use
 
 ```bash
-make install        # Installs python package and dev dependencies
-make test           # Run all tests, also installs fresh lake env if not found
+# python3 -m venv venv  # Or similar: Create environment
+make install            # Installs python package and dev dependencies
+make test               # Run all tests, also installs fresh lean env if not found
+make test-profile       # Run all tests with cProfile
 ```
 
 ## License

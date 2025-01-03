@@ -1,8 +1,10 @@
+import os
 import random
 from pprint import pprint
+import time
 import unittest
 
-from leanclient.language_server import LeanLanguageServer
+from leanclient.language_server import LeanLanguageServer, DocumentContentChange
 from leanclient.config import LEAN_FILE_PATH
 from leanclient.utils import find_lean_files_recursively
 
@@ -26,7 +28,7 @@ class TestLanguageServer(unittest.TestCase):
         exp = f"file://{self.lsp.lake_dir}{LEAN_FILE_PATH}"
         self.assertEqual(self.uri, exp)
 
-        result = self.lsp.send_request_document(
+        result = self.lsp._send_request_document(
             self.uri,
             "textDocument/hover",
             {"position": {"line": 9, "character": 4}},
@@ -101,12 +103,66 @@ class TestLanguageServer(unittest.TestCase):
         N = 3  # randint(0, len(all_files) - 3)  ?
         diag = self.lsp.sync_file(all_files[N])
         diag2 = self.lsp.sync_file(all_files[N])  # One file overlap
-        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two file overlap
+        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two files, 1 overlap
         diags2 = self.lsp.sync_files(all_files[N : N + 2])  # Cache
 
         self.assertEqual(diag, diag2)
         self.assertEqual(diag, diags[0])
         self.assertEqual(diags, diags2)
+
+    def test_sync_update(self):
+        path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
+        path = self.lsp.local_to_uri(path)
+        errors, __ = self.lsp.sync_file(path)
+        self.assertEqual(len(errors), 0)
+
+        # Make some random changes
+        random.seed(6.28)
+        changes = []
+        t0 = time.time()
+        for _ in range(8):
+            line = random.randint(10, 200)
+            d = DocumentContentChange(
+                "inv#lid", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
+            )
+            changes.append(d)
+        errors, __ = self.lsp.update_file(path, changes)
+        self.assertTrue(len(errors) > 0)
+        print(
+            f"Updated {len(changes)} changes in one call: {len(changes) / (time.time() - t0):.2f} changes/s"
+        )
+
+    def test_sync_line_by_line(self):
+        path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
+        path = self.lsp.local_to_uri(path)
+
+        with open(path[7:], "r") as f:
+            lines = f.readlines()
+
+        fantasy = self.lsp.local_to_uri("Fantasy.lean")
+        start = len(lines) - 32
+        text = "".join(lines[:start])
+        with open(fantasy[7:], "w") as f:
+            f.write(text)
+
+        self.lsp.sync_file(fantasy)
+
+        count = 0
+        lines = lines[start:]
+        t0 = time.time()
+        for i, line in enumerate(lines):
+            text += line
+            reply = self.lsp.update_file(
+                fantasy,
+                [DocumentContentChange(line, [i + start, 0], [i + start, len(line)])],
+            )
+            errors, warnings = reply
+            count += len(errors) + len(warnings)
+        self.assertTrue(count > 25)
+        self.assertEqual(len(errors), 0)
+        speed = len(lines) / (time.time() - t0)
+        os.remove(fantasy[7:])
+        print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")
 
     # Test custom methods
     def test_get_sorries(self):
@@ -127,7 +183,7 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
     def test_get_diagnostics(self):
         diagnostics = self.lsp.sync_file(self.uri)
         exp = [
-            ["declaration uses 'sorry'", "declaration uses 'sorry'"],
             ["unexpected end of input; expected ':'"],
+            ["declaration uses 'sorry'", "declaration uses 'sorry'"],
         ]
         self.assertEqual(diagnostics, exp)
