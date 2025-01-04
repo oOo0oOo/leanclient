@@ -108,16 +108,16 @@ class TestLSPClientRequests(unittest.TestCase):
         assert len(res["goals"]) == 0
 
     def test_plain_term_goal(self):
-        res = self.lsp.get_goal_term(TEST_FILE_PATH, 9, 12)
+        res = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 12)
         assert type(res) == dict
         assert "⊢" in res["goal"]
-        res2 = self.lsp.get_goal_term(TEST_FILE_PATH, 9, 15)
+        res2 = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 15)
         self.assertEqual(res, res2)
 
     def test_empty_response(self):
         res = self.lsp.get_goal(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)
-        res = self.lsp.get_goal_term(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_term_goal(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)
         res = self.lsp.get_hover(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)

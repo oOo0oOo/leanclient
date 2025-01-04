@@ -4,21 +4,22 @@ Python client to interact with the Lean theorem prover language server.
 
 ## WIP!
 
-Not tasty for consumption yet.
+Ready for use soon.
 
 ### Planned Features
 
-- Broad architecture, API and config changes
-- Proper documentation
+- Smaller architecture, API and config changes
+- Proper documentation & examples
 - Publishing on pipy -> Installation via pip
 
 ### Potential Features
 
-- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
-- Allow interaction before `waitForDiagnostics` returns
 - Virtual files (no actual file on disk), only in-memory in lsp and client
+- Simple pool of parallel clients for faster scraping
 - Use document versions to handle evolving file states
 - Automatic lean env setup for non Debian-based systems
+- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
+- Allow interaction before `waitForDiagnostics` returns
 
 ### Missing LSP Features
 

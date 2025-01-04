@@ -13,7 +13,7 @@ class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
     It interacts with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
-    It is blocking/synchronous.
+    This wrapper is blocking, it spends 99% of its time waiting for a response from the language server.
 
     NOTE:
         Your **project_path** is the root folder of a Lean project where `lakefile.toml` is located.
@@ -26,16 +26,20 @@ class LeanLSPClient:
     Args:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once.
+        initial_build (bool): Whether to run `lake build` on initialization.
     """
 
-    def __init__(self, project_path: str, max_opened_files: int = 8):
+    def __init__(
+        self, project_path: str, max_opened_files: int = 8, initial_build: bool = True
+    ):
         self.project_path = os.path.abspath(project_path) + "/"
         self.len_project_uri = len(self.project_path) + 7
         self.max_opened_files = max_opened_files
         self.request_id = 0
         self.opened_files = collections.OrderedDict()
 
-        subprocess.run("lake build", shell=True, cwd=self.project_path)
+        if initial_build:
+            subprocess.run("lake build", shell=True, cwd=self.project_path)
 
         # Run language server in a process
         self.process = subprocess.Popen(
@@ -99,7 +103,10 @@ class LeanLSPClient:
 
     # LANGUAGE SERVER RPC INTERACTION
     def _read_stdout(self) -> dict:
-        """Read the next message from the language server. Blocking.
+        """Read the next message from the language server.
+
+        This is the main blocking function in this synchronous client:
+
 
         Returns:
             dict: JSON response from the language server.
@@ -172,7 +179,7 @@ class LeanLSPClient:
     def _send_request_document(self, path: str, method: str, params: dict) -> dict:
         """Send request about a document and return the final response.
 
-        NOTE: This function drops all intermediate responses since we typically don't need them.
+        This function drops all intermediate responses since we typically don't need them.
 
         Args:
             path (str): Relative file path.
@@ -343,7 +350,7 @@ class LeanLSPClient:
     # LEAN LANGUAGE SERVER API
 
     def get_completion(self, path: str, line: int, character: int) -> list:
-        """Get completion items at a position.
+        """Get completion items at a file position.
 
         The :guilabel:`textDocument/completion` method in LSP provides context-aware code completion suggestions at a specified cursor position.
         It returns a list of possible completions for partially typed code, suggesting continuations.
@@ -421,9 +428,9 @@ class LeanLSPClient:
         )["detail"]
 
     def get_hover(self, path: str, line: int, character: int) -> dict | None:
-        """Get hover information at a given position.
+        """Get hover information at a cursor position.
 
-        The :guilabel:`textDocument/hover` method in LSP retrieves hover information at a specified cursor position,
+        The :guilabel:`textDocument/hover` method in LSP retrieves hover information,
         providing details such as type information, documentation, or other relevant data about the symbol under the cursor.
 
         More information:
@@ -452,7 +459,7 @@ class LeanLSPClient:
             character (int): Character number.
 
         Returns:
-            list: Items.
+            dict: Hover information or None if no hover information is available.
         """
         return self._send_request_document(
             path,
@@ -461,7 +468,7 @@ class LeanLSPClient:
         )
 
     def get_declaration(self, path: str, line: int, character: int) -> list:
-        """Get location of declaration at a given position.
+        """Get locations of declarations at a file position.
 
         The :guilabel:`textDocument/declaration` method in LSP retrieves the declaration location of a symbol at a specified cursor position.
 
@@ -505,7 +512,7 @@ class LeanLSPClient:
         )
 
     def get_definition(self, path: str, line: int, character: int) -> list:
-        """Get location of symbol definition at a given position.
+        """Get location of symbol definition at a file position.
 
         The :guilabel:`textDocument/definition` method in LSP retrieves the definition location of a symbol at a specified cursor position.
         Find implementations or definitions of variables, functions, or types within the codebase.
@@ -550,7 +557,7 @@ class LeanLSPClient:
         )
 
     def get_references(self, path: str, line: int, character: int) -> list:
-        """Get locations of references to a symbol at a given position.
+        """Get locations of references to a symbol at a file position.
 
         In LSP, the :guilabel:`textDocument/references` method provides the locations of all references to a symbol at a given cursor position.
 
@@ -592,7 +599,7 @@ class LeanLSPClient:
         )
 
     def get_type_definition(self, path: str, line: int, character: int) -> list:
-        """Get locations of type definition to a symbol at a given position.
+        """Get locations of type definition of a symbol at a file position.
 
         The :guilabel:`textDocument/typeDefinition` method in LSP returns the location of a symbol's type definition based on the cursor's position.
 
@@ -636,7 +643,7 @@ class LeanLSPClient:
         )
 
     def get_document_highlight(self, path: str, line: int, character: int) -> list:
-        """Get highlight range for a symbol at a given position.
+        """Get highlight range for a symbol at a file position.
 
         The :guilabel:`textDocument/documentHighlight` method in LSP returns the highlighted range at a specified cursor position.
 
@@ -673,7 +680,7 @@ class LeanLSPClient:
         )
 
     def get_document_symbol(self, path: str) -> list:
-        """Get all symbols in a document.
+        """Get all document symbols in a document.
 
         The :guilabel:`textDocument/documentSymbol` method in LSP retrieves all symbols within a document, providing their names, kinds, and locations.
 
@@ -715,6 +722,8 @@ class LeanLSPClient:
         The :guilabel:`textDocument/semanticTokens/full` method in LSP returns semantic tokens for the entire document.
 
         Tokens are formated as: [line, char, length, token_type]
+
+        See :meth:`get_semantic_tokens_range` for limiting to parts of a document.
 
         More information:
 
@@ -808,9 +817,13 @@ class LeanLSPClient:
         return self._send_request_document(path, "textDocument/foldingRange", {})
 
     def get_goal(self, path: str, line: int, character: int) -> dict | None:
-        """Get proof goals at a given position.
+        """Get proof goal at a file position.
 
-        :guilabel:`$/lean/plainGoal` is a custom lsp request that returns the proof goals at a specified cursor position.
+        :guilabel:`$/lean/plainGoal` is a custom lsp request that returns the proof goal at a specified cursor position.
+
+        In the VSCode `Lean Infoview`, this is shown as `Tactic state`.
+
+        Use :meth:`get_term_goal` to get term goal.
 
         More information:
 
@@ -846,10 +859,14 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_goal_term(self, path: str, line: int, character: int) -> dict | None:
-        """Get term goal at a given position.
+    def get_term_goal(self, path: str, line: int, character: int) -> dict | None:
+        """Get term goal at a file position.
 
         :guilabel:`$/lean/plainTermGoal` is a custom lsp request that returns the term goal at a specified cursor position.
+
+        In the VSCode Lean Infoview, this is shown as ``Expected type``.
+
+        Use :meth:`get_goal` for the full proof goal.
 
         More information:
 
@@ -857,7 +874,7 @@ class LeanLSPClient:
 
         Note:
 
-            Returns ``None`` if there are no goals at the position.
+            Returns ``None`` if there are is no term goal at the position.
 
         Example response:
 

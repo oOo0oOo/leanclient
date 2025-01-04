@@ -88,7 +88,7 @@ class TestLSPClientBenchmark(unittest.TestCase):
             ("plain_goal", self.lsp.get_goal, (file_path, LINE, COL)),
             (
                 "plain_term_goal",
-                self.lsp.get_goal_term,
+                self.lsp.get_term_goal,
                 (file_path, LINE, COL + 20),
             ),
             ("completion", self.lsp.get_completion, (file_path, LINE, COL + 20)),
