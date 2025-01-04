@@ -12,11 +12,19 @@ from .utils import SemanticTokenProcessor, DocumentContentChange
 class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
-    It interacts with a subprocess (`lake serve`) using the Language Server Protocol (LSP).
-    This wrapper is blocking and synchronous.
+    It interacts with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
+    It is blocking/synchronous.
+
+    NOTE:
+        Your **project_path** is the root folder of a Lean project where `lakefile.toml` is located.
+        This is where `lake build` and `lake serve` are run.
+
+        All file paths are **relative** to the project_path.
+
+        E.g. ".lake/packages/mathlib/Mathlib/Init.lean" can be a valid path.
 
     Args:
-        project_path (str): Path to the root of the Lean project.
+        project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once.
     """
 
@@ -58,20 +66,35 @@ class LeanLSPClient:
         self.process.wait()
 
     # URI HANDLING
-    # Users will use local file paths (relative to project path) but internally we use absolute URIs.
-    # E.g. ".lake/packages/LeanFile.lean" -> "file:///path/to/project/.lake/packages/LeanFile.lean" (URI)
     def _local_to_uri(self, local_path: str) -> str:
+        """Convert a local file path to a URI.
+
+        User API is based on local file paths (relative to project path) but internally we use URIs.
+        Example:
+
+        - local path:  MyProject/LeanFile.lean
+        - URI:         file:///abs/to/project_path/MyProject/LeanFile.lean
+
+        Args:
+            local_path (str): Relative file path.
+
+        Returns:
+            str: URI representation of the file.
+        """
         return "file://" + self.project_path + local_path
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
+        """See :meth:`_local_to_uri`"""
         return [
             "file://" + self.project_path + local_path for local_path in local_paths
         ]
 
     def _uri_to_abs(self, uri: str) -> str:
+        """See :meth:`_local_to_uri`"""
         return uri[7:]
 
     def _uri_to_local(self, uri: str) -> str:
+        """See :meth:`_local_to_uri`"""
         return uri[self.len_project_uri :]
 
     # LANGUAGE SERVER RPC INTERACTION
@@ -126,7 +149,7 @@ class LeanLSPClient:
         self.stdin.flush()
 
     def _send_request(self, method: str, params: dict) -> list[dict]:
-        """Send a request to the language server.
+        """Send a request to the language server and return all responses.
 
         Args:
             method (str): Method name.
@@ -147,9 +170,9 @@ class LeanLSPClient:
         return results
 
     def _send_request_document(self, path: str, method: str, params: dict) -> dict:
-        """Send request about a document.
+        """Send request about a document and return the final response.
 
-        NOTE: This function drops all intermediate responses and only returns the final response.
+        NOTE: This function drops all intermediate responses since we typically don't need them.
 
         Args:
             path (str): Relative file path.
@@ -173,8 +196,11 @@ class LeanLSPClient:
         """
         self._send_request_rpc(method, params, is_notification=True)
 
+    # OPEN/CLOSE FILES IN LANGUAGE SERVER
     def _wait_for_diagnostics(self, uris: list[str]) -> list[dict]:
         """Wait until `waitForDiagnostics` returns or an rpc error occurs.
+
+        This is typically used after opening or updating files to get diagnostics and ensure the file is processed.
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
@@ -210,15 +236,11 @@ class LeanLSPClient:
             diagnostics[uri] = [errors, warnings]
         return [diagnostics[uri] for uri in uris]
 
-    # OPEN/CLOSE FILES IN LANGUAGE SERVER
-    def _open_files_rpc(self, paths: list[str]) -> list:
-        """Open files in the language server.
-
-        This function blocks until the file waitForDiagnostics returns.
+    def _open_new_files(self, paths: list[str]) -> list:
+        """Open new files in the language server.
 
         Args:
             paths (list[str]): List of relative file paths.
-            return_diagnostics (bool): Whether to return diagnostics for each file.
 
         Returns:
             list: List of diagnostics for each file: [[errors, warnings]]
@@ -235,7 +257,7 @@ class LeanLSPClient:
         return self._wait_for_diagnostics(uris)
 
     def open_files(self, paths: list[str]) -> list[list]:
-        """Open files in the language server.
+        """Open files in the language server or retrieve diagnostics from cache.
 
         Args:
             paths (list[str]): List of relative file paths to open.
@@ -251,7 +273,7 @@ class LeanLSPClient:
         # Open new files
         new_files = [p for p in paths if p not in self.opened_files]
         if new_files:
-            diagnostics = self._open_files_rpc(new_files)
+            diagnostics = self._open_new_files(new_files)
             self.opened_files.update(zip(new_files, diagnostics))
 
         # Remove files if over limit
@@ -260,13 +282,11 @@ class LeanLSPClient:
             removable_paths = [p for p in self.opened_files if p not in paths]
             removable_paths = removable_paths[:remove_count]
             self.close_files(removable_paths)
-            for path in removable_paths:
-                del self.opened_files[path]
 
         return [self.opened_files[path] for path in paths]
 
     def open_file(self, path: str) -> list:
-        """Open a file in the language server if not already opened.
+        """Open a file in the language server or retrieve diagnostics from cache.
 
         Args:
             path (str): Relative file path to open.
@@ -278,8 +298,6 @@ class LeanLSPClient:
 
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
-
-        This function blocks until the file waitForDiagnostics returns.
 
         Args:
             path (str): Relative file path to update.
@@ -297,12 +315,12 @@ class LeanLSPClient:
 
         return self._wait_for_diagnostics([uri])[0]
 
-    def close_files(self, paths: list[str], blocking: bool = False):
+    def close_files(self, paths: list[str], blocking: bool = True):
         """Close files in the language server.
 
         Args:
             paths (list[str]): List of relative file paths to close.
-            blocking (bool): Not blocking can be risky if you close files frequently.
+            blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
         """
         # Only close if file is open
         paths = [p for p in paths if p in self.opened_files]
@@ -310,6 +328,9 @@ class LeanLSPClient:
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
+
+        for path in paths:
+            del self.opened_files[path]
 
         # Wait for published diagnostics
         if blocking:
@@ -319,23 +340,120 @@ class LeanLSPClient:
                 if resp and resp.get("method") == "textDocument/publishDiagnostics":
                     waiting_uris.discard(resp["params"]["uri"])
 
-    # LANGUAGE SERVER API
-    # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
+    # LEAN LANGUAGE SERVER API
 
-    def get_completion(self, path: str, line: int, character: int) -> dict | None:
-        return self._send_request_document(
+    def get_completion(self, path: str, line: int, character: int) -> list:
+        """Get completion items at a position.
+
+        The :guilabel:`textDocument/completion` method in LSP provides context-aware code completion suggestions at a specified cursor position.
+        It returns a list of possible completions for partially typed code, suggesting continuations.
+
+        More information:
+
+        - LSP Docs: `Completion Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion>`_
+        - Lean Source: `FileWorker.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker.lean#L616>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'data': {
+                        'id': {'const': {'declName': 'Nat.dvd_add'}},
+                        'params': {
+                            'position': {'character': 15, 'line': 9},
+                            'textDocument': {'uri': 'file://...'}
+                        }
+                    },
+                    'kind': 23,
+                    'label': 'dvd_add',
+                    'sortText': '001'
+                },
+                # ...
+            ]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Completion items.
+        """
+        resp = self._send_request_document(
             path,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
+        return resp["items"]  # NOTE: We discard `isIncomplete` for now
 
-    def get_completion_item_resolve(self, item: dict) -> dict | None:
+    def get_completion_item_resolve(self, item: dict) -> str:
+        """Resolve a completion item.
+
+        The :guilabel:`completionItem/resolve` method in LSP is used to resolve additional information for a completion item.
+
+        More information:
+
+        - LSP Docs: `Completion Item Resolve Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#completionItem_resolve>`_
+        - Lean Source: `ImportCompletion.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Completion/ImportCompletion.lean#L130>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            # Input item
+            {"label": "add_lt_of_lt_sub'", ...}
+
+            # Detail is:
+            "b < c - a → a + b < c"
+
+        Args:
+            item (dict): Completion item.
+
+        Returns:
+            str: Additional detail about the completion item.
+
+        """
         uri = item["data"]["params"]["textDocument"]["uri"]
         return self._send_request_document(
             self._uri_to_local(uri), "completionItem/resolve", item
-        )
+        )["detail"]
 
     def get_hover(self, path: str, line: int, character: int) -> dict | None:
+        """Get hover information at a given position.
+
+        The :guilabel:`textDocument/hover` method in LSP retrieves hover information at a specified cursor position,
+        providing details such as type information, documentation, or other relevant data about the symbol under the cursor.
+
+        More information:
+
+        - LSP Docs: `Hover Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover>`_
+        - Lean Source: `RequestHandling.lean\u200B\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L77₀>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            {
+                "range": {
+                    "start": {"line": 4, "character": 2},
+                    "end": {"line": 4, "character": 8}
+                },
+                "contents": {
+                    "value": "The left hand side of an induction arm, `| foo a b c` or `| @foo a b c`\\nwhere `foo` is a constructor of the inductive type and `a b c` are the arguments\\nto the constructor.\\n",
+                    "kind": "markdown"
+                }
+            }
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Items.
+        """
         return self._send_request_document(
             path,
             "textDocument/hover",
@@ -343,6 +461,43 @@ class LeanLSPClient:
         )
 
     def get_declaration(self, path: str, line: int, character: int) -> list:
+        """Get location of declaration at a given position.
+
+        The :guilabel:`textDocument/declaration` method in LSP retrieves the declaration location of a symbol at a specified cursor position.
+
+        More information:
+
+        - LSP Docs: `Goto Declaration Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration>`_
+        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+
+        Example response:
+
+        .. code-block:: python
+
+             [{
+                'originSelectionRange': {
+                    'end': {'character': 7, 'line': 6},
+                    'start': {'character': 4, 'line': 6}
+                },
+                'targetRange': {
+                    'end': {'character': 21, 'line': 370},
+                    'start': {'character': 0, 'line': 365}
+                },
+                'targetSelectionRange': {
+                    'end': {'character': 6, 'line': 370},
+                    'start': {'character': 0, 'line': 370}
+                },
+                'targetUri': 'file://...'
+            }]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Locations.
+        """
         return self._send_request_document(
             path,
             "textDocument/declaration",
@@ -350,6 +505,44 @@ class LeanLSPClient:
         )
 
     def get_definition(self, path: str, line: int, character: int) -> list:
+        """Get location of symbol definition at a given position.
+
+        The :guilabel:`textDocument/definition` method in LSP retrieves the definition location of a symbol at a specified cursor position.
+        Find implementations or definitions of variables, functions, or types within the codebase.
+
+        More information:
+
+        - LSP Docs: `Goto Definition Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition>`_
+        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+
+        Example response:
+
+        .. code-block:: python
+
+             [{
+                'originSelectionRange': {
+                    'end': {'character': 7, 'line': 6},
+                    'start': {'character': 4, 'line': 6}
+                },
+                'targetRange': {
+                    'end': {'character': 21, 'line': 370},
+                    'start': {'character': 0, 'line': 365}
+                },
+                'targetSelectionRange': {
+                    'end': {'character': 6, 'line': 370},
+                    'start': {'character': 0, 'line': 370}
+                },
+                'targetUri': 'file://...'
+            }]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Locations.
+        """
         return self._send_request_document(
             path,
             "textDocument/definition",
@@ -357,6 +550,38 @@ class LeanLSPClient:
         )
 
     def get_references(self, path: str, line: int, character: int) -> list:
+        """Get locations of references to a symbol at a given position.
+
+        In LSP, the :guilabel:`textDocument/references` method provides the locations of all references to a symbol at a given cursor position.
+
+        More information:
+
+        - LSP Docs: `Find References Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references>`_
+        - Lean Source: `Watchdog.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L528>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'range': {
+                        'end': {'character': 14, 'line': 7},
+                        'start': {'character': 12, 'line': 7}
+                    },
+                    'uri': 'file://...'
+                },
+                # ...
+            ]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Locations.
+        """
         return self._send_request_document(
             path,
             "textDocument/references",
@@ -367,6 +592,43 @@ class LeanLSPClient:
         )
 
     def get_type_definition(self, path: str, line: int, character: int) -> list:
+        """Get locations of type definition to a symbol at a given position.
+
+        The :guilabel:`textDocument/typeDefinition` method in LSP returns the location of a symbol's type definition based on the cursor's position.
+
+        More information:
+
+        - LSP Docs: `Goto Type Definition Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_typeDefinition>`_
+        - Lean Source: `RequestHandling.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L245>`_
+
+        Example response:
+
+        .. code-block:: python
+
+             [{
+                'originSelectionRange': {
+                    'end': {'character': 7, 'line': 6},
+                    'start': {'character': 4, 'line': 6}
+                },
+                'targetRange': {
+                    'end': {'character': 21, 'line': 370},
+                    'start': {'character': 0, 'line': 365}
+                },
+                'targetSelectionRange': {
+                    'end': {'character': 6, 'line': 370},
+                    'start': {'character': 0, 'line': 370}
+                },
+                'targetUri': 'file://...'
+            }]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Locations.
+        """
         return self._send_request_document(
             path,
             "textDocument/typeDefinition",
@@ -374,6 +636,36 @@ class LeanLSPClient:
         )
 
     def get_document_highlight(self, path: str, line: int, character: int) -> list:
+        """Get highlight range for a symbol at a given position.
+
+        The :guilabel:`textDocument/documentHighlight` method in LSP returns the highlighted range at a specified cursor position.
+
+        More information:
+
+        - LSP Docs: `Document Highlight Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight>`_
+        - Lean Source: `RequestHandling.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L324>`_
+
+        Example response:
+
+        .. code-block:: python
+
+                [{
+                    'range': {
+                        'start': {'line': 5, 'character': 10},
+                        'end': {'line': 5, 'character': 15}
+                    },
+                    'kind': 1
+                }]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Document highlights.
+        """
+
         return self._send_request_document(
             path,
             "textDocument/documentHighlight",
@@ -381,9 +673,71 @@ class LeanLSPClient:
         )
 
     def get_document_symbol(self, path: str) -> list:
+        """Get all symbols in a document.
+
+        The :guilabel:`textDocument/documentSymbol` method in LSP retrieves all symbols within a document, providing their names, kinds, and locations.
+
+        More information:
+
+        - LSP Docs: `Document Symbol Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol>`_
+        - Lean Source: `RequestHandling.lean\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'kind': 6,
+                    'name': 'add_zero_custom',
+                    'range': {
+                        'end': {'character': 25, 'line': 9},
+                        'start': {'character': 0, 'line': 1}
+                    },
+                    'selectionRange': {
+                        'end': {'character': 23, 'line': 1},
+                        'start': {'character': 8, 'line': 1}}
+                },
+                # ...
+            ]
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            list: Document symbols.
+        """
         return self._send_request_document(path, "textDocument/documentSymbol", {})
 
     def get_semantic_tokens_full(self, path: str) -> list:
+        """Get semantic tokens for the entire document.
+
+        The :guilabel:`textDocument/semanticTokens/full` method in LSP returns semantic tokens for the entire document.
+
+        Tokens are formated as: [line, char, length, token_type]
+
+        More information:
+
+        - LSP Docs: `Semantic Tokens Full Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest>`_
+        - Lean Source: `RequestHandling.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L573>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                [1, 0, 7, "keyword"],
+                [1, 25, 1, "variable"],
+                [1, 36, 1, "variable"],
+                # ...
+            ]
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            list: Semantic tokens.
+        """
         res = self._send_request_document(path, "textDocument/semanticTokens/full", {})
         return self.token_processor(res["data"])
 
@@ -395,6 +749,20 @@ class LeanLSPClient:
         end_line: int,
         end_character: int,
     ) -> list:
+        """Get semantic tokens for a range in a document.
+
+        See :meth:`get_semantic_tokens_full` for more information.
+
+        Args:
+            path (str): Relative file path.
+            start_line (int): Start line.
+            start_character (int): Start character.
+            end_line (int): End line.
+            end_character (int): End character.
+
+        Returns:
+            list: Semantic tokens.
+        """
         res = self._send_request_document(
             path,
             "textDocument/semanticTokens/range",
@@ -408,16 +776,111 @@ class LeanLSPClient:
         return self.token_processor(res["data"])
 
     def get_folding_range(self, path: str) -> list:
+        """Get folding ranges in a document.
+
+        The :guilabel:`textDocument/foldingRange` method in LSP returns folding ranges in a document.
+
+        More information:
+
+        - LSP Docs: `Folding Range Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange>`_
+        - Lean Source: `RequestHandling.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L615>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'startLine': 0,
+                    'endLine': 1,
+                    'kind': 'region'
+                },
+                # ...
+            ]
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            list: Folding ranges.
+
+        """
         return self._send_request_document(path, "textDocument/foldingRange", {})
 
-    def get_plain_goal(self, path: str, line: int, character: int) -> dict | None:
+    def get_goal(self, path: str, line: int, character: int) -> dict | None:
+        """Get proof goals at a given position.
+
+        :guilabel:`$/lean/plainGoal` is a custom lsp request that returns the proof goals at a specified cursor position.
+
+        More information:
+
+        - Lean Source: `RequestHandling.lean\u200A\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L285>`_
+
+        Note:
+
+            - Returns ``{'goals': [], 'rendered': 'no goals'}`` if there are no goals left 🎉.
+            - Returns ``None`` if there are no goals at the position.
+
+        Example response:
+
+        .. code-block:: python
+
+            {
+                "goals": [
+                    "case succ\\nn' : Nat\\nih : n' + 0 = n'\\n⊢ (n' + 0).succ + 0 = (n' + 0).succ"
+                ],
+                "rendered": "```lean\\ncase succ\\nn' : Nat\\nih : n' + 0 = n'\\n⊢ (n' + 0).succ + 0 = (n' + 0).succ\\n```"
+            }
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            dict | None: Proof goals at the position.
+        """
         return self._send_request_document(
             path,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_plain_term_goal(self, path: str, line: int, character: int) -> dict | None:
+    def get_goal_term(self, path: str, line: int, character: int) -> dict | None:
+        """Get term goal at a given position.
+
+        :guilabel:`$/lean/plainTermGoal` is a custom lsp request that returns the term goal at a specified cursor position.
+
+        More information:
+
+        - Lean Source: `RequestHandling.lean\u200A\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L316>`_
+
+        Note:
+
+            Returns ``None`` if there are no goals at the position.
+
+        Example response:
+
+        .. code-block:: python
+
+            {
+                'range': {
+                    'start': {'line': 9, 'character': 8},
+                    'end': {'line': 9, 'character': 20}
+                },
+                'goal': "n' : Nat\\nih : n' + 0 = n'\\n⊢ ∀ (n m : Nat), n + m.succ = (n + m).succ"
+            }
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            dict | None: Term goal at the position.
+
+
+        """
         return self._send_request_document(
             path,
             "$/lean/plainTermGoal",

@@ -7,7 +7,8 @@ Client
 .. automodule:: leanclient.client
    :members:
    :undoc-members:
-   :show-inheritance:
+   :private-members:
+
 
 Utils
 -----

@@ -68,7 +68,21 @@ if __name__ == "__main__":
     if "--profile" in sys.argv:
         profiler = start_profiler()
 
-    unittest.TextTestRunner().run(unittest.TestLoader().discover("tests"))
+    white_list = [
+        "test_client_requests",
+        "test_client_errors",
+        "test_client_files",
+        "test_client_benchmark"
+    ]
+
+    if not white_list:
+        unittest.TextTestRunner().run(unittest.TestLoader().discover("tests"))
+    else:
+        suite = unittest.TestSuite()
+        loader = unittest.TestLoader()
+        for test in white_list:
+            suite.addTests(loader.loadTestsFromName(test))
+        unittest.TextTestRunner().run(suite)
 
     if profiler:
         stop_profiler(profiler, "tests/profile.png")

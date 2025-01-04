@@ -19,16 +19,15 @@ class TestLSPClientRequests(unittest.TestCase):
 
     def test_completion(self):
         result = self.lsp.get_completion(TEST_FILE_PATH, 9, 15)
-        assert type(result) == dict
-        assert "isIncomplete" in result
-        assert len(result["items"]) > 100
+        assert type(result) == list
+        assert len(result) > 100
 
     def test_completion_item_resolve(self):
         result = self.lsp.get_completion(TEST_FILE_PATH, 9, 15)
-        assert type(result) == dict
-        item = random.choice(result["items"])
-        result = self.lsp.get_completion_item_resolve(item)
-        result["data"]["id"]["const"]["declName"]
+        assert type(result) == list
+        item = random.choice(result)
+        resolve_res = self.lsp.get_completion_item_resolve(item)
+        assert type(resolve_res) == str
 
     def test_hover(self):
         res = self.lsp.get_hover(TEST_FILE_PATH, 4, 4)
@@ -102,23 +101,23 @@ class TestLSPClientRequests(unittest.TestCase):
         assert res[0]["kind"] == "region"
 
     def test_plain_goal(self):
-        res = self.lsp.get_plain_goal(TEST_FILE_PATH, 9, 12)
+        res = self.lsp.get_goal(TEST_FILE_PATH, 9, 12)
         assert type(res) == dict
         assert "⊢" in res["goals"][0]
-        res = self.lsp.get_plain_goal(TEST_FILE_PATH, 9, 25)
+        res = self.lsp.get_goal(TEST_FILE_PATH, 9, 25)
         assert len(res["goals"]) == 0
 
     def test_plain_term_goal(self):
-        res = self.lsp.get_plain_term_goal(TEST_FILE_PATH, 9, 12)
+        res = self.lsp.get_goal_term(TEST_FILE_PATH, 9, 12)
         assert type(res) == dict
         assert "⊢" in res["goal"]
-        res = self.lsp.get_plain_term_goal(TEST_FILE_PATH, 9, 15)
-        assert "⊢" in res["goal"]
+        res2 = self.lsp.get_goal_term(TEST_FILE_PATH, 9, 15)
+        self.assertEqual(res, res2)
 
     def test_empty_response(self):
-        res = self.lsp.get_plain_goal(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_goal(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)
-        res = self.lsp.get_plain_term_goal(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_goal_term(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)
         res = self.lsp.get_hover(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)

@@ -82,13 +82,13 @@ class TestLSPClientBenchmark(unittest.TestCase):
         COL = 4
 
         items = self.lsp.get_completion(file_path, LINE, COL + 20)
-        completion_item = items["items"][8]
+        completion_item = items[8]
 
         requests = [
-            ("plain_goal", self.lsp.get_plain_goal, (file_path, LINE, COL)),
+            ("plain_goal", self.lsp.get_goal, (file_path, LINE, COL)),
             (
                 "plain_term_goal",
-                self.lsp.get_plain_term_goal,
+                self.lsp.get_goal_term,
                 (file_path, LINE, COL + 20),
             ),
             ("completion", self.lsp.get_completion, (file_path, LINE, COL + 20)),
