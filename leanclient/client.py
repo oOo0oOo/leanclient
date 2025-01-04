@@ -22,6 +22,7 @@ class LeanLSPClient:
 
     def __init__(self, project_path: str, max_opened_files: int = 8):
         self.project_path = os.path.abspath(project_path) + "/"
+        self.len_project_uri = len(self.project_path) + 7
         self.max_opened_files = max_opened_files
         self.request_id = 0
         self.opened_files = collections.OrderedDict()
@@ -56,12 +57,30 @@ class LeanLSPClient:
         self.stdin.close()
         self.process.wait()
 
-    def local_to_uri(self, file_path: str) -> str:
-        return f"file://{self.project_path}{file_path}"
+    # URI HANDLING
+    # Users will use local file paths (relative to project path) but internally we use absolute URIs.
+    # E.g. ".lake/packages/LeanFile.lean" -> "file:///path/to/project/.lake/packages/LeanFile.lean" (URI)
+    def _local_to_uri(self, local_path: str) -> str:
+        return "file://" + self.project_path + local_path
+
+    def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
+        return [
+            "file://" + self.project_path + local_path for local_path in local_paths
+        ]
+
+    def _uri_to_abs(self, uri: str) -> str:
+        return uri[7:]
+
+    def _uri_to_local(self, uri: str) -> str:
+        return uri[self.len_project_uri :]
 
     # LANGUAGE SERVER RPC INTERACTION
     def _read_stdout(self) -> dict:
-        """Read the next message from the language server. Blocking."""
+        """Read the next message from the language server. Blocking.
+
+        Returns:
+            dict: JSON response from the language server.
+        """
         header = self.stdout.readline().decode("ascii")
 
         # Handle EOF: Return contents of stderr (non-blocking using select)
@@ -85,7 +104,13 @@ class LeanLSPClient:
         return resp
 
     def _send_request_rpc(self, method: str, params: dict, is_notification: bool):
-        """Send a JSON rpc request to the language server."""
+        """Send a JSON rpc request to the language server.
+
+        Args:
+            method (str): Method name.
+            params (dict): Parameters for the method.
+            is_notification (bool): Whether the request is a notification.
+        """
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -103,8 +128,12 @@ class LeanLSPClient:
     def _send_request(self, method: str, params: dict) -> list[dict]:
         """Send a request to the language server.
 
+        Args:
+            method (str): Method name.
+            params (dict): Parameters for the method.
+
         Returns:
-            list[dict]: List of responses, the last one being the final response
+            list[dict]: List of responses in the order they were received.
         """
         self._send_request_rpc(method, params, is_notification=False)
         rid = self.request_id - 1
@@ -117,19 +146,43 @@ class LeanLSPClient:
 
         return results
 
-    def _send_request_document(self, uri: str, method: str, params: dict) -> dict:
-        """Send request about a document."""
-        self.open_file(uri)
-        params["textDocument"] = {"uri": uri}
+    def _send_request_document(self, path: str, method: str, params: dict) -> dict:
+        """Send request about a document.
+
+        NOTE: This function drops all intermediate responses and only returns the final response.
+
+        Args:
+            path (str): Relative file path.
+            method (str): Method name.
+            params (dict): Parameters for the method.
+
+        Returns:
+            dict: Final response.
+        """
+        self.open_file(path)
+        params["textDocument"] = {"uri": self._local_to_uri(path)}
         results = self._send_request(method, params)
         return results[-1]["result"]
 
     def _send_notification(self, method: str, params: dict):
-        """Send a notification to the language server."""
+        """Send a notification to the language server.
+
+        Args:
+            method (str): Method name.
+            params (dict): Parameters for the method.
+        """
         self._send_request_rpc(method, params, is_notification=True)
 
-    def _wait_for_diagnostics(self, uris: list[str]) -> dict:
-        # waitForDiagnostics in series; Parallel requests are not reliable?
+    def _wait_for_diagnostics(self, uris: list[str]) -> list[dict]:
+        """Wait until `waitForDiagnostics` returns or an rpc error occurs.
+
+        Args:
+            uris (list[str]): List of URIs to wait for diagnostics on.
+
+        Returns:
+            list[dict]: List of responses in the order they were received.
+        """
+        # Waiting in series; Parallel requests are not reliable?
         responses = []
         for uri in uris:
             responses += self._send_request(
@@ -158,21 +211,22 @@ class LeanLSPClient:
         return [diagnostics[uri] for uri in uris]
 
     # OPEN/CLOSE FILES IN LANGUAGE SERVER
-    def _open_files_rpc(self, uris: list[str]) -> list:
+    def _open_files_rpc(self, paths: list[str]) -> list:
         """Open files in the language server.
 
         This function blocks until the file waitForDiagnostics returns.
 
         Args:
-            uris (list[str]): List of URIs to open.
+            paths (list[str]): List of relative file paths.
             return_diagnostics (bool): Whether to return diagnostics for each file.
 
         Returns:
-            list: List of diagnostics for each file.
+            list: List of diagnostics for each file: [[errors, warnings]]
         """
+        uris = self._locals_to_uris(paths)
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
-            with open(uri[7:], "r") as f:  # Remove "file://" prefix
+            with open(self._uri_to_abs(uri), "r") as f:
                 params["textDocument"]["text"] = f.read()
             params["textDocument"]["languageId"] = "lean"
             params["textDocument"]["version"] = 1
@@ -180,46 +234,61 @@ class LeanLSPClient:
 
         return self._wait_for_diagnostics(uris)
 
-    def open_files(self, uris: list[str]) -> list[list]:
+    def open_files(self, paths: list[str]) -> list[list]:
         """Open files in the language server.
 
         Args:
-            uris (list[str]): List of URIs to open.
+            paths (list[str]): List of relative file paths to open.
 
         Returns:
-            list[list]: List of diagnostics for each file
+            list[list]: List of diagnostics for each file: [[errors, warnings]]
         """
-        if len(uris) > self.max_opened_files:
+        if len(paths) > self.max_opened_files:
             print(
                 f"Warning! Should not open more than {self.max_opened_files} files at once."
             )
 
         # Open new files
-        new_uris = [uri for uri in uris if uri not in self.opened_files]
-        if new_uris:
-            diagnostics = self._open_files_rpc(new_uris)
-            self.opened_files.update(zip(new_uris, diagnostics))
+        new_files = [p for p in paths if p not in self.opened_files]
+        if new_files:
+            diagnostics = self._open_files_rpc(new_files)
+            self.opened_files.update(zip(new_files, diagnostics))
 
         # Remove files if over limit
         remove_count = max(0, len(self.opened_files) - self.max_opened_files)
         if remove_count > 0:
-            removable_uris = [uri for uri in self.opened_files if uri not in uris]
-            removable_uris = removable_uris[:remove_count]
-            self.close_files(removable_uris)
-            for uri in removable_uris:
-                del self.opened_files[uri]
+            removable_paths = [p for p in self.opened_files if p not in paths]
+            removable_paths = removable_paths[:remove_count]
+            self.close_files(removable_paths)
+            for path in removable_paths:
+                del self.opened_files[path]
 
-        return [self.opened_files[uri] for uri in uris]
+        return [self.opened_files[path] for path in paths]
 
-    def open_file(self, uri: str) -> list:
-        """Make a file available to the language server if not already."""
-        return self.open_files([uri])[0]
+    def open_file(self, path: str) -> list:
+        """Open a file in the language server if not already opened.
 
-    def update_file(self, uri: str, changes: list[DocumentContentChange]) -> list:
+        Args:
+            path (str): Relative file path to open.
+
+        Returns:
+            list: Diagnostics for file: [errors, warnings]
+        """
+        return self.open_files([path])[0]
+
+    def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
 
         This function blocks until the file waitForDiagnostics returns.
+
+        Args:
+            path (str): Relative file path to update.
+            changes (list[DocumentContentChange]): List of changes to apply.
+
+        Returns:
+            list: List of diagnostics: [errors, warnings]
         """
+        uri = self._local_to_uri(path)
         params = {"textDocument": {"uri": uri}}
         params["textDocument"]["languageId"] = "lean"
         params["textDocument"]["version"] = 1
@@ -228,15 +297,16 @@ class LeanLSPClient:
 
         return self._wait_for_diagnostics([uri])[0]
 
-    def close_files(self, uris: list[str], blocking: bool = False):
+    def close_files(self, paths: list[str], blocking: bool = False):
         """Close files in the language server.
 
         Args:
-            uris (list[str]): List of URIs to close.
-            blocking (bool): Not blocking is a bit risky
+            paths (list[str]): List of relative file paths to close.
+            blocking (bool): Not blocking can be risky if you close files frequently.
         """
         # Only close if file is open
-        uris = [uri for uri in uris if uri in self.opened_files]
+        paths = [p for p in paths if p in self.opened_files]
+        uris = self._locals_to_uris(paths)
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
@@ -252,44 +322,43 @@ class LeanLSPClient:
     # LANGUAGE SERVER API
     # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
 
-    def get_completion(self, uri: str, line: int, character: int) -> dict:
+    def get_completion(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
 
     def get_completion_item_resolve(self, item: dict) -> dict:
+        uri = item["data"]["params"]["textDocument"]["uri"]
         return self._send_request_document(
-            item["data"]["params"]["textDocument"]["uri"],
-            "completionItem/resolve",
-            item,
+            self._uri_to_local(uri), "completionItem/resolve", item
         )
 
-    def get_hover(self, uri: str, line: int, character: int) -> dict:
+    def get_hover(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_declaration(self, uri: str, line: int, character: int) -> dict:
+    def get_declaration(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_definition(self, uri: str, line: int, character: int) -> dict:
+    def get_definition(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_references(self, uri: str, line: int, character: int) -> dict:
+    def get_references(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/references",
             {
                 "position": {"line": line, "character": character},
@@ -297,37 +366,37 @@ class LeanLSPClient:
             },
         )
 
-    def get_type_definition(self, uri: str, line: int, character: int) -> dict:
+    def get_type_definition(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_highlight(self, uri: str, line: int, character: int) -> dict:
+    def get_document_highlight(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_symbol(self, uri: str) -> dict:
-        return self._send_request_document(uri, "textDocument/documentSymbol", {})
+    def get_document_symbol(self, path: str) -> dict:
+        return self._send_request_document(path, "textDocument/documentSymbol", {})
 
-    def get_semantic_tokens_full(self, uri: str) -> list:
-        res = self._send_request_document(uri, "textDocument/semanticTokens/full", {})
+    def get_semantic_tokens_full(self, path: str) -> list:
+        res = self._send_request_document(path, "textDocument/semanticTokens/full", {})
         return self.token_processor(res["data"])
 
     def get_semantic_tokens_range(
         self,
-        uri: str,
+        path: str,
         start_line: int,
         start_character: int,
         end_line: int,
         end_character: int,
     ) -> list:
         res = self._send_request_document(
-            uri,
+            path,
             "textDocument/semanticTokens/range",
             {
                 "range": {
@@ -338,19 +407,19 @@ class LeanLSPClient:
         )
         return self.token_processor(res["data"])
 
-    def get_folding_range(self, uri: str) -> dict:
-        return self._send_request_document(uri, "textDocument/foldingRange", {})
+    def get_folding_range(self, path: str) -> dict:
+        return self._send_request_document(path, "textDocument/foldingRange", {})
 
-    def get_plain_goal(self, uri: str, line: int, character: int) -> dict:
+    def get_plain_goal(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_plain_term_goal(self, uri: str, line: int, character: int) -> dict:
+    def get_plain_term_goal(self, path: str, line: int, character: int) -> dict:
         return self._send_request_document(
-            uri,
+            path,
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},
         )

@@ -1,7 +1,4 @@
 # Varia to be sorted later...
-import os
-import subprocess
-import cProfile
 from typing import NamedTuple
 
 
@@ -45,30 +42,3 @@ class SemanticTokenProcessor:
             char = char + d_char if d_line == 0 else d_char
             tokens.append([line, char, length, types[token]])
         return tokens
-
-
-def find_lean_files_recursively(abs_path: str) -> list[str]:
-    uris = []
-    for root, __, files in os.walk(abs_path):
-        for file in files:
-            if file.endswith(".lean"):
-                uris.append("file://" + os.path.join(root, file))
-    return uris
-
-
-# Profiling. This requires `gprof2dot` and `dot` to be installed.
-def start_profiler() -> cProfile.Profile:
-    profiler = cProfile.Profile()
-    profiler.enable()
-    return profiler
-
-
-def stop_profiler(profiler: cProfile.Profile, out_path: str = "profile.png"):
-    profiler.disable()
-    profiler.dump_stats("p.prof")
-    cmd = f"gprof2dot -f pstats p.prof -n 0.005 -e 0.001 | dot -Tpng -o {out_path}"
-    try:
-        subprocess.run(cmd, shell=True, check=True)
-    except subprocess.CalledProcessError:
-        print("gprof2dot or dot is not installed. Skipping profile visualization.")
-    os.remove("p.prof")

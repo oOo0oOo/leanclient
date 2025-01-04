@@ -10,16 +10,15 @@ from leanclient import LeanLSPClient
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
-class TestLanguageServerDiagnostics(unittest.TestCase):
+class TestLSPClientDiagnostics(unittest.TestCase):
     def setUp(self):
         self.lsp = LeanLSPClient(TEST_ENV_DIR)
-        self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
         self.lsp.close()
 
     def test_get_diagnostics(self):
-        diagnostics = self.lsp.open_file(self.uri)
+        diagnostics = self.lsp.open_file(TEST_FILE_PATH)
         exp = [
             ["unexpected end of input; expected ':'"],
             ["declaration uses 'sorry'", "declaration uses 'sorry'"],
@@ -27,10 +26,10 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
         self.assertEqual(diagnostics, exp)
 
 
-class TestLanguageServerErrors(unittest.TestCase):
+class TestLSPClientErrors(unittest.TestCase):
     def setUp(self):
         self.lsp = LeanLSPClient(TEST_ENV_DIR)
-        self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
+        self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
         self.lsp.close()

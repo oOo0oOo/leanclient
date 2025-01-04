@@ -16,17 +16,17 @@ Not tasty for consumption yet.
 
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Allow interaction before `waitForDiagnostics` returns
+- Virtual files (no actual file on disk), only in-memory in lsp and client
+- Use document versions to handle evolving file states
 - Automatic lean env setup for non Debian-based systems
 
 ### Missing LSP Features
 
 Might be implemented in the future:
-- `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls`, ...
-- `textDocument/prepareRename`, `textDocument/rename`
-
-Not even sure if these methods are exposed via the Lean language server:
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
+- `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
+- `textDocument/prepareRename`, `textDocument/rename`
 - `$/lean/ileanInfoUpdate`, `$/lean/ileanInfoFinal`, `$/lean/importClosure`, `$/lean/staleDependency`
 
 ## Features
