@@ -1,5 +1,5 @@
 import os
-import sys
+import subprocess
 import cProfile
 
 
@@ -25,7 +25,7 @@ class SemanticTokenProcessor:
         This function is a reverse translation of:
         https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest
 
-        NOTE: Token modifiers are currently ignored (speed gains), as they are not used in lean core. See here:
+        NOTE: Token modifiers are ignored (speed gains). They are not used in lean core. See here:
         https://github.com/leanprover/lean4/blob/10b2f6b27e79e2c38d4d613f18ead3323a58ba4b/src/Lean/Data/Lsp/LanguageFeatures.lean#L360
         """
         tokens = []
@@ -39,9 +39,8 @@ class SemanticTokenProcessor:
         return tokens
 
 
-# Profiling
+# Profiling. This requires `gprof2dot` and `dot` to be installed.
 def start_profiler() -> cProfile.Profile:
-    sys.setrecursionlimit(10000)
     profiler = cProfile.Profile()
     profiler.enable()
     return profiler
@@ -51,5 +50,8 @@ def stop_profiler(profiler: cProfile.Profile, out_path: str = "profile.png"):
     profiler.disable()
     profiler.dump_stats("p.prof")
     cmd = f"gprof2dot -f pstats p.prof -n 0.005 -e 0.001 | dot -Tpng -o {out_path}"
-    os.system(cmd)
+    try:
+        subprocess.run(cmd, shell=True, check=True)
+    except subprocess.CalledProcessError:
+        print("gprof2dot or dot is not installed. Skipping profile visualization.")
     os.remove("p.prof")

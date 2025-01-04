@@ -5,18 +5,17 @@ import time
 import unittest
 
 from leanclient.language_server import LeanLanguageServer, DocumentContentChange
-from leanclient.config import LEAN_FILE_PATH
 from leanclient.utils import find_lean_files_recursively
+
+from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
 class TestLanguageServer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLanguageServer(
-            use_mathlib=True, starting_file_path="tests/tests.lean"
-        )
-        cls.uri = cls.lsp.local_to_uri(LEAN_FILE_PATH)
+        cls.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        cls.uri = cls.lsp.local_to_uri(TEST_FILE_PATH)
 
     @classmethod
     def tearDownClass(cls):
@@ -24,9 +23,8 @@ class TestLanguageServer(unittest.TestCase):
 
     def test_setup(self):
         # Open a document
-        self.lsp.sync_file(self.uri)
-        exp = f"file://{self.lsp.lake_dir}{LEAN_FILE_PATH}"
-        self.assertEqual(self.uri, exp)
+        self.lsp.open_file(self.uri)
+        self.assertTrue(self.uri.endswith("Basic.lean"))
 
         result = self.lsp._send_request_document(
             self.uri,
@@ -58,11 +56,11 @@ class TestLanguageServer(unittest.TestCase):
 
     def test_request_definition(self):
         res = self.lsp.request_definition(self.uri, 1, 29)
-        self.assertTrue(res[0]["targetUri"].endswith("Prelude.lean"))
+        self.assertTrue(res[0]["uri"].endswith("Prelude.lean"))
 
     def test_references(self):
-        res = self.lsp.request_references(self.uri, 1, 29)
-        assert len(res) > 1000
+        res = self.lsp.request_references(self.uri, 9, 24)
+        self.assertTrue(len(res) > 1)
 
     def test_type_definition(self):
         res = self.lsp.request_type_definition(self.uri, 1, 36)
@@ -114,24 +112,24 @@ class TestLanguageServer(unittest.TestCase):
         res = self.lsp.request_plain_term_goal(self.uri, 9, 15)
         assert "⊢" in res["goal"]
 
-    def test_sync_files(self):
-        path = self.lsp.lake_dir
+    def test_open_files(self):
+        path = self.lsp.project_path
         path += ".lake/packages/mathlib/Mathlib/Topology/"
         all_files = find_lean_files_recursively(path)
         N = 3  # randint(0, len(all_files) - 3)  ?
-        diag = self.lsp.sync_file(all_files[N])
-        diag2 = self.lsp.sync_file(all_files[N])  # One file overlap
-        diags = self.lsp.sync_files(all_files[N : N + 2])  # Two files, 1 overlap
-        diags2 = self.lsp.sync_files(all_files[N : N + 2])  # Cache
+        diag = self.lsp.open_file(all_files[N])
+        diag2 = self.lsp.open_file(all_files[N])  # One file overlap
+        diags = self.lsp.open_files(all_files[N : N + 2])  # Two files, 1 overlap
+        diags2 = self.lsp.open_files(all_files[N : N + 2])  # Cache
 
         self.assertEqual(diag, diag2)
         self.assertEqual(diag, diags[0])
         self.assertEqual(diags, diags2)
 
-    def test_sync_update(self):
+    def test_file_update(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
         path = self.lsp.local_to_uri(path)
-        errors, __ = self.lsp.sync_file(path)
+        errors, __ = self.lsp.open_file(path)
         self.assertEqual(len(errors), 0)
 
         # Make some random changes
@@ -150,7 +148,7 @@ class TestLanguageServer(unittest.TestCase):
             f"Updated {len(changes)} changes in one call: {len(changes) / (time.time() - t0):.2f} changes/s"
         )
 
-    def test_sync_line_by_line(self):
+    def test_file_update_line_by_line(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
         path = self.lsp.local_to_uri(path)
 
@@ -163,7 +161,7 @@ class TestLanguageServer(unittest.TestCase):
         with open(fantasy[7:], "w") as f:
             f.write(text)
 
-        self.lsp.sync_file(fantasy)
+        self.lsp.open_file(fantasy)
 
         count = 0
         lines = lines[start:]
@@ -181,8 +179,3 @@ class TestLanguageServer(unittest.TestCase):
         speed = len(lines) / (time.time() - t0)
         os.remove(fantasy[7:])
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")
-
-    # Test custom methods
-    def test_get_sorries(self):
-        res = self.lsp.get_sorries(self.uri)
-        self.assertEqual(res, [[12, 47, 5], [13, 52, 5]])

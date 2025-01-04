@@ -5,7 +5,8 @@ import unittest
 
 from leanclient.language_server import LeanLanguageServer
 from leanclient.utils import find_lean_files_recursively, start_profiler, stop_profiler
-from leanclient.config import MAX_SYNCED_FILES
+
+from run_tests import TEST_ENV_DIR
 
 BENCH_MATHLIB_ROOT_FOLDERS = [
     ".lake/packages/mathlib/Mathlib",
@@ -20,15 +21,13 @@ BENCH_MATHLIB_ROOT_FOLDERS = [
 
 class TestLanguageServer(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(
-            use_mathlib=True, starting_file_path="tests/tests.lean"
-        )
+        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
 
     def tearDown(self):
         self.lsp.close()
 
     def test_bench_opening_files(self):
-        path = self.lsp.lake_dir + BENCH_MATHLIB_ROOT_FOLDERS[0]
+        path = self.lsp.project_path + BENCH_MATHLIB_ROOT_FOLDERS[0]
         all_files = find_lean_files_recursively(path)
         all_files = sorted(all_files)
         random.seed(3.142)
@@ -42,9 +41,9 @@ class TestLanguageServer(unittest.TestCase):
             profiler = start_profiler()
 
         t0 = time.time()
-        diagnostics = self.lsp.sync_files(files)
+        diagnostics = self.lsp.open_files(files)
         # for file in files:
-        #     self.lsp.sync_file(file)
+        #     self.lsp.open_file(file)
         duration = time.time() - t0
 
         self.assertEqual(len(diagnostics), NUM_FILES)
@@ -66,18 +65,18 @@ class TestLanguageServer(unittest.TestCase):
 
         # Load overlapping files
         EXTRA_FILES = 2
-        if MAX_SYNCED_FILES > NUM_FILES:
-            msg = f"TEST WARNING: Decrease MAX_SYNCED_FILES to {NUM_FILES} to test overlapping files."
+        if self.lsp.max_opened_files > NUM_FILES:
+            msg = f"TEST WARNING: Decrease `max_opened_files` to {NUM_FILES} to test overlapping files."
             print(msg)
         new_files = all_files[NUM_FILES - EXTRA_FILES : NUM_FILES + EXTRA_FILES]
         t0 = time.time()
-        diagnostics2 = self.lsp.sync_files(new_files)
+        diagnostics2 = self.lsp.open_files(new_files)
         extra_duration = time.time() - t0
         self.assertEqual(diagnostics[-EXTRA_FILES:], diagnostics2[:EXTRA_FILES])
         msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"
         print(msg)
 
-        self.lsp._close_files(files)
+        self.lsp.close_files(files)
 
         # Layout profile using dot and gprof2dot
         if LOCAL_PROFILE:
@@ -88,7 +87,7 @@ class TestLanguageServer(unittest.TestCase):
             ".lake/packages/mathlib/Mathlib/Topology/MetricSpace/Infsep.lean"
         )
 
-        self.lsp.sync_file(file)
+        self.lsp.open_file(file)
 
         LOCAL_PROFILE = False
         NUM_REPEATS = 32

@@ -10,14 +10,13 @@ Not tasty for consumption yet.
 
 - Broad architecture, API and config changes
 - Proper documentation
-- Allow use in custom lean projects
 - Publishing on pipy -> Installation via pip
 
 ### Potential Features
 
-- Automatic lean env setup for non Debian-based systems
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Allow interaction before `waitForDiagnostics` returns
+- Automatic lean env setup for non Debian-based systems
 
 ### Missing LSP Features
 

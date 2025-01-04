@@ -1,27 +1,25 @@
 import sys
 import os
-
 from pprint import pprint
 import unittest
 
 import orjson
 
 from leanclient.language_server import LeanLanguageServer
-from leanclient.config import LEAN_FILE_PATH
+
+from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
 class TestLanguageServerDiagnostics(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(
-            use_mathlib=True, starting_file_path="tests/tests.lean"
-        )
-        self.uri = self.lsp.local_to_uri(LEAN_FILE_PATH)
+        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
         self.lsp.close()
 
     def test_get_diagnostics(self):
-        diagnostics = self.lsp.sync_file(self.uri)
+        diagnostics = self.lsp.open_file(self.uri)
         exp = [
             ["unexpected end of input; expected ':'"],
             ["declaration uses 'sorry'", "declaration uses 'sorry'"],
@@ -31,10 +29,8 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
 
 class TestLanguageServerErrors(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(
-            use_mathlib=True, starting_file_path="tests/tests.lean"
-        )
-        self.uri = self.lsp.local_to_uri(LEAN_FILE_PATH)
+        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
         self.lsp.close()
