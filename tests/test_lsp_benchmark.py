@@ -3,8 +3,12 @@ from pprint import pprint
 import time
 import unittest
 
-from leanclient.language_server import LeanLanguageServer
-from leanclient.utils import find_lean_files_recursively, start_profiler, stop_profiler
+from leanclient import (
+    LeanLSPClient,
+    find_lean_files_recursively,
+    start_profiler,
+    stop_profiler,
+)
 
 from run_tests import TEST_ENV_DIR
 
@@ -21,7 +25,7 @@ BENCH_MATHLIB_ROOT_FOLDERS = [
 
 class TestLanguageServer(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR)
 
     def tearDown(self):
         self.lsp.close()
@@ -98,44 +102,44 @@ class TestLanguageServer(unittest.TestCase):
         LINE = 380
         COL = 4
 
-        items = self.lsp.request_completion(file, LINE, COL + 20)
+        items = self.lsp.get_completion(file, LINE, COL + 20)
         completion_item = items["items"][8]
 
         requests = [
-            ("plain_goal", self.lsp.request_plain_goal, (file, LINE, COL)),
+            ("plain_goal", self.lsp.get_plain_goal, (file, LINE, COL)),
             (
                 "plain_term_goal",
-                self.lsp.request_plain_term_goal,
+                self.lsp.get_plain_term_goal,
                 (file, LINE, COL + 20),
             ),
-            ("completion", self.lsp.request_completion, (file, LINE, COL + 20)),
+            ("completion", self.lsp.get_completion, (file, LINE, COL + 20)),
             (
                 "completion_item_resolve",
-                self.lsp.request_completion_item_resolve,
+                self.lsp.get_completion_item_resolve,
                 (completion_item,),
             ),
-            ("definition", self.lsp.request_definition, (file, LINE, COL)),
-            ("hover", self.lsp.request_hover, (file, LINE, COL)),
-            ("declaration", self.lsp.request_declaration, (file, LINE, COL)),
-            ("references", self.lsp.request_references, (file, LINE, COL + 20)),
+            ("definition", self.lsp.get_definition, (file, LINE, COL)),
+            ("hover", self.lsp.get_hover, (file, LINE, COL)),
+            ("declaration", self.lsp.get_declaration, (file, LINE, COL)),
+            ("references", self.lsp.get_references, (file, LINE, COL + 20)),
             (
                 "type_definition",
-                self.lsp.request_type_definition,
+                self.lsp.get_type_definition,
                 (file, LINE, COL + 10),
             ),
             (
                 "document_highlight",
-                self.lsp.request_document_highlight,
+                self.lsp.get_document_highlight,
                 (file, LINE, COL + 20),
             ),
-            ("document_symbol", self.lsp.request_document_symbol, (file,)),
-            ("semantic_tokens_full", self.lsp.request_semantic_tokens_full, (file,)),
+            ("document_symbol", self.lsp.get_document_symbol, (file,)),
+            ("semantic_tokens_full", self.lsp.get_semantic_tokens_full, (file,)),
             (
                 "semantic_tokens_range",
-                self.lsp.request_semantic_tokens_range,
+                self.lsp.get_semantic_tokens_range,
                 (file, 0, 0, LINE, COL),
             ),
-            ("folding_range", self.lsp.request_folding_range, (file,)),
+            ("folding_range", self.lsp.get_folding_range, (file,)),
         ]
 
         print(f"Requesting {NUM_REPEATS} each:")

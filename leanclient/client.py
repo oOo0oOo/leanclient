@@ -1,32 +1,16 @@
 import os
 import collections
 from pprint import pprint
+import select
 import subprocess
-from typing import NamedTuple
 
-import selectors
 import orjson
 
-from leanclient.utils import SemanticTokenProcessor
+from .utils import SemanticTokenProcessor, DocumentContentChange
 
 
-class DocumentContentChange(NamedTuple):
-    text: str
-    start: list[int]
-    end: list[int]
-
-    def get_dict(self) -> dict:
-        return {
-            "text": self.text,
-            "range": {
-                "start": {"line": self.start[0], "character": self.start[1]},
-                "end": {"line": self.end[0], "character": self.end[1]},
-            },
-        }
-
-
-class LeanLanguageServer:
-    """LeanLanguageServer is a thin wrapper around the Lean language server.
+class LeanLSPClient:
+    """LeanLSPClient is a thin wrapper around the Lean language server.
 
     It interacts with a subprocess (`lake serve`) using the Language Server Protocol (LSP).
     This wrapper is blocking and synchronous.
@@ -80,13 +64,11 @@ class LeanLanguageServer:
         """Read the next message from the language server. Blocking."""
         header = self.stdout.readline().decode("ascii")
 
-        # Handle EOF: Return contents of stderr (non-blocking using selectors)
+        # Handle EOF: Return contents of stderr (non-blocking using select)
         if not header:
             stderr = self.process.stderr
-            stderr_sel = selectors.DefaultSelector()
-            stderr_sel.register(stderr, selectors.EVENT_READ)
             line = "No lake stderr message."
-            if stderr_sel.select(timeout=0.05):
+            if select.select([stderr], [], [], 0.05)[0]:
                 line = "lake stderr message:\n" + stderr.readline().decode("utf-8")
             self.close()
             raise EOFError(f"Language server has closed. {line}")
@@ -270,42 +252,42 @@ class LeanLanguageServer:
     # LANGUAGE SERVER API
     # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
 
-    def request_completion(self, uri: str, line: int, character: int) -> dict:
+    def get_completion(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_completion_item_resolve(self, item: dict) -> dict:
+    def get_completion_item_resolve(self, item: dict) -> dict:
         return self._send_request_document(
             item["data"]["params"]["textDocument"]["uri"],
             "completionItem/resolve",
             item,
         )
 
-    def request_hover(self, uri: str, line: int, character: int) -> dict:
+    def get_hover(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_declaration(self, uri: str, line: int, character: int) -> dict:
+    def get_declaration(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_definition(self, uri: str, line: int, character: int) -> dict:
+    def get_definition(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_references(self, uri: str, line: int, character: int) -> dict:
+    def get_references(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/references",
@@ -315,28 +297,28 @@ class LeanLanguageServer:
             },
         )
 
-    def request_type_definition(self, uri: str, line: int, character: int) -> dict:
+    def get_type_definition(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_document_highlight(self, uri: str, line: int, character: int) -> dict:
+    def get_document_highlight(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_document_symbol(self, uri: str) -> dict:
+    def get_document_symbol(self, uri: str) -> dict:
         return self._send_request_document(uri, "textDocument/documentSymbol", {})
 
-    def request_semantic_tokens_full(self, uri: str) -> list:
+    def get_semantic_tokens_full(self, uri: str) -> list:
         res = self._send_request_document(uri, "textDocument/semanticTokens/full", {})
         return self.token_processor(res["data"])
 
-    def request_semantic_tokens_range(
+    def get_semantic_tokens_range(
         self,
         uri: str,
         start_line: int,
@@ -356,17 +338,17 @@ class LeanLanguageServer:
         )
         return self.token_processor(res["data"])
 
-    def request_folding_range(self, uri: str) -> dict:
+    def get_folding_range(self, uri: str) -> dict:
         return self._send_request_document(uri, "textDocument/foldingRange", {})
 
-    def request_plain_goal(self, uri: str, line: int, character: int) -> dict:
+    def get_plain_goal(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    def request_plain_term_goal(self, uri: str, line: int, character: int) -> dict:
+    def get_plain_term_goal(self, uri: str, line: int, character: int) -> dict:
         return self._send_request_document(
             uri,
             "$/lean/plainTermGoal",

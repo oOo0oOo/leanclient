@@ -5,14 +5,14 @@ import unittest
 
 import orjson
 
-from leanclient.language_server import LeanLanguageServer
+from leanclient import LeanLSPClient
 
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
 class TestLanguageServerDiagnostics(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR)
         self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
@@ -29,7 +29,7 @@ class TestLanguageServerDiagnostics(unittest.TestCase):
 
 class TestLanguageServerErrors(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLanguageServer(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR)
         self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):

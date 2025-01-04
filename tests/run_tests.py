@@ -3,7 +3,7 @@ import unittest
 import sys
 import shutil
 
-from leanclient.utils import start_profiler, stop_profiler
+from leanclient import start_profiler, stop_profiler
 
 # TEST CONFIG. Move?
 TEST_ENV_DIR = ".lake_env/"
