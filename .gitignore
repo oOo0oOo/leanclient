@@ -8,3 +8,4 @@ examples/
 tests/profile*.png
 
 docs/build/
+docs/source/api/
