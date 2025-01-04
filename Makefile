@@ -1,14 +1,13 @@
-.PHONY: build install test
+.PHONY: build install test test-profile
 
 build:
-	pip install wheel
-	python setup.py sdist bdist_wheel
+	poetry build
 
 install:
-	pip install -e .[dev]
+	poetry install
 
 test:
-	python tests/run_tests.py
+	poetry run python tests/run_tests.py
 
 test-profile:
-	python tests/run_tests.py --profile
+	poetry run python tests/run_tests.py --profile

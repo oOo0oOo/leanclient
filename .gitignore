@@ -1,12 +1,10 @@
-venv/
-
-dist/
-build/
-*.egg-info/
-
 __pycache__/
 
-.lake_env/
+dist/
+poetry.lock
 
+.lake_env/
 examples/
 tests/profile*.png
+
+docs/build/
