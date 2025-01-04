@@ -9,6 +9,7 @@ from leanclient import LeanLSPClient, DocumentContentChange
 from utils import get_random_fast_mathlib_files, get_random_mathlib_files
 from run_tests import TEST_ENV_DIR
 
+
 class TestLSPClientFiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

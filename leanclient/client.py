@@ -322,41 +322,41 @@ class LeanLSPClient:
     # LANGUAGE SERVER API
     # https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L710
 
-    def get_completion(self, path: str, line: int, character: int) -> dict:
+    def get_completion(self, path: str, line: int, character: int) -> dict | None:
         return self._send_request_document(
             path,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_completion_item_resolve(self, item: dict) -> dict:
+    def get_completion_item_resolve(self, item: dict) -> dict | None:
         uri = item["data"]["params"]["textDocument"]["uri"]
         return self._send_request_document(
             self._uri_to_local(uri), "completionItem/resolve", item
         )
 
-    def get_hover(self, path: str, line: int, character: int) -> dict:
+    def get_hover(self, path: str, line: int, character: int) -> dict | None:
         return self._send_request_document(
             path,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_declaration(self, path: str, line: int, character: int) -> dict:
+    def get_declaration(self, path: str, line: int, character: int) -> list:
         return self._send_request_document(
             path,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_definition(self, path: str, line: int, character: int) -> dict:
+    def get_definition(self, path: str, line: int, character: int) -> list:
         return self._send_request_document(
             path,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_references(self, path: str, line: int, character: int) -> dict:
+    def get_references(self, path: str, line: int, character: int) -> list:
         return self._send_request_document(
             path,
             "textDocument/references",
@@ -366,21 +366,21 @@ class LeanLSPClient:
             },
         )
 
-    def get_type_definition(self, path: str, line: int, character: int) -> dict:
+    def get_type_definition(self, path: str, line: int, character: int) -> list:
         return self._send_request_document(
             path,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_highlight(self, path: str, line: int, character: int) -> dict:
+    def get_document_highlight(self, path: str, line: int, character: int) -> list:
         return self._send_request_document(
             path,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_symbol(self, path: str) -> dict:
+    def get_document_symbol(self, path: str) -> list:
         return self._send_request_document(path, "textDocument/documentSymbol", {})
 
     def get_semantic_tokens_full(self, path: str) -> list:
@@ -407,17 +407,17 @@ class LeanLSPClient:
         )
         return self.token_processor(res["data"])
 
-    def get_folding_range(self, path: str) -> dict:
+    def get_folding_range(self, path: str) -> list:
         return self._send_request_document(path, "textDocument/foldingRange", {})
 
-    def get_plain_goal(self, path: str, line: int, character: int) -> dict:
+    def get_plain_goal(self, path: str, line: int, character: int) -> dict | None:
         return self._send_request_document(
             path,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
         )
 
-    def get_plain_term_goal(self, path: str, line: int, character: int) -> dict:
+    def get_plain_term_goal(self, path: str, line: int, character: int) -> dict | None:
         return self._send_request_document(
             path,
             "$/lean/plainTermGoal",
