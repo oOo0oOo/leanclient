@@ -7,7 +7,7 @@ It enables interaction with a Lean language server instance running in a subproc
 ## Key Features
 
 - **Interact**: Query and change lean files.
-- **Thin wrapper**: Directly expose the `Lean Language Server <https://github.com/leanprover/lean4/tree/master/src/Lean/Server>`_ via the `LSP <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
+- **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server) via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 - **Synchronous**: Requests block until a response is received.
 - **Fast**: During `make test-profile` more than 99% of time is spent waiting for a server response.
 
