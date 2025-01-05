@@ -12,7 +12,7 @@ from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 class TestLSPClientDiagnostics(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     def tearDown(self):
         self.lsp.close()
@@ -28,7 +28,7 @@ class TestLSPClientDiagnostics(unittest.TestCase):
 
 class TestLSPClientErrors(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
         self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):

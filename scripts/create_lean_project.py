@@ -18,12 +18,16 @@ import argparse
 
 
 def create_lean_project(
-    project_path: str, project_name: str, use_mathlib: bool = False, force: bool = False
+    project_path: str,
+    project_name: str,
+    lean_version: str = "stable",
+    use_mathlib: bool = False,
+    force: bool = False,
 ):
     """Create a simple Lean project with lake and optionally Mathlib.
     This is used in testing."""
     # Install lean and lake
-    install_env(project_path)
+    install_env(project_path, lean_version)
 
     # If project already exists return
     full_path = os.path.join(project_path, project_name)
@@ -44,7 +48,7 @@ def create_lean_project(
 
     toml = f'name = "{project_name}"\nversion = "0.1.0"\n\n[[lean_lib]]\nname = "{project_name}"\n'
     if use_mathlib:
-        toml += f'[[require]]\nname = "mathlib"\nscope = "leanprover-community"\nrev = "stable"\n'
+        toml += f'[[require]]\nname = "mathlib"\nscope = "leanprover-community"\nrev = "{lean_version}"\n'
     with open(os.path.join(project_path, "lakefile.toml"), "w") as f:
         f.write(toml)
 
@@ -52,7 +56,7 @@ def create_lean_project(
     subprocess.run(f"lake build", shell=True, cwd=project_path)
 
 
-def install_env(project_path: str):
+def install_env(project_path: str, lean_version: str = "stable"):
     """Install the Lean environment, elan, lake, imports, update and build.
     NOTE: Fails on non-Debian-systems if you can not run `elan self update` in project_path.
     """
@@ -95,12 +99,12 @@ def install_env(project_path: str):
 
     # Install lean
     subprocess.run(
-        f"elan toolchain install leanprover/lean4:stable",
+        f"elan toolchain install leanprover/lean4:{lean_version}",
         shell=True,
         cwd=project_path,
     ),
     subprocess.run(
-        f"elan override set leanprover/lean4:stable",
+        f"elan override set leanprover/lean4:{lean_version}",
         shell=True,
         cwd=project_path,
     )
@@ -115,6 +119,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("project_name", type=str, help="The name of the Lean project.")
     parser.add_argument(
+        "lean_version",
+        type=str,
+        default="stable",
+        help="The version of Lean to install.",
+    )
+    parser.add_argument(
         "--use-mathlib", action="store_true", help="Include Mathlib in the project."
     )
     parser.add_argument(
@@ -126,5 +136,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     create_lean_project(
-        args.project_path, args.project_name, args.use_mathlib, args.force
+        args.project_path,
+        args.project_name,
+        args.lean_version,
+        args.use_mathlib,
+        args.force,
     )

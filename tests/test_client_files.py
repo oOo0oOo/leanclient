@@ -7,13 +7,13 @@ import unittest
 from leanclient import LeanLSPClient, DocumentContentChange
 
 from utils import get_random_fast_mathlib_files, get_random_mathlib_files
-from run_tests import TEST_ENV_DIR
+from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 
 
 class TestLSPClientFiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLSPClient(TEST_ENV_DIR)
+        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     @classmethod
     def tearDownClass(cls):
@@ -23,10 +23,13 @@ class TestLSPClientFiles(unittest.TestCase):
         """Not a test. Used to find fast opening mathlib files."""
         paths = get_random_mathlib_files(4)
 
+        paths = FAST_MATHLIB_FILES
+
         # Open files and benchmark each time
         benchs = []
         for path in paths:
             t0 = time.time()
+            print(f"Opening {path}")
             self.lsp.open_file(path)
             benchs.append([time.time() - t0, path])
 
@@ -73,9 +76,10 @@ class TestLSPClientFiles(unittest.TestCase):
             lines = f.readlines()
 
         fantasy = "Fantasy.lean"
+        fantasy_path = TEST_ENV_DIR + fantasy
         start = len(lines) - 24
         text = "".join(lines[:start])
-        with open(fantasy, "w") as f:
+        with open(fantasy_path, "w") as f:
             f.write(text)
 
         self.lsp.open_file(fantasy)
@@ -94,5 +98,5 @@ class TestLSPClientFiles(unittest.TestCase):
         self.assertTrue(count > 25)
         self.assertEqual(len(errors), 0)
         speed = len(lines) / (time.time() - t0)
-        os.remove(fantasy)
+        os.remove(fantasy_path)
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")

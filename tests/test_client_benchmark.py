@@ -10,7 +10,7 @@ from run_tests import TEST_ENV_DIR
 
 class TestLSPClientBenchmark(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(TEST_ENV_DIR)
+        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     def tearDown(self):
         self.lsp.close()
