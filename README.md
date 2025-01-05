@@ -1,16 +1,33 @@
 # leanclient
 
-Python client to interact with the Lean theorem prover language server.
+leanclient is a thin wrapper around the native Lean language server.
+It enables interaction with a Lean language server instance running in a subprocess.
 
-## WIP!
 
-Ready for use soon.
+## Key Features
 
-### Planned Features
+- **Interact**: Query and change lean files.
+- **Thin wrapper**: Directly expose the `Lean Language Server <https://github.com/leanprover/lean4/tree/master/src/Lean/Server>`_ via the `LSP <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
+- **Synchronous**: Requests block until a response is received.
+- **Fast**: During `make test-profile` more than 99% of time is spent waiting for a server response.
 
-- Smaller architecture, API and config changes
-- Proper documentation & examples
-- Publishing on pipy -> Installation via pip
+Check out the [documentation](https://leanclient.readthedocs.io) for more information.
+
+
+## Work in Progress
+
+**Not compatible** with Lean 4.15.0 (stable) yet.
+
+- The API is not stable.
+- There are many missing features.
+- Needs more testing with different setups.
+
+
+### Next Features
+
+- Documentation: Tutorial & examples
+- Publishing on pipy
+
 
 ### Potential Features
 
@@ -21,7 +38,8 @@ Ready for use soon.
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Allow interaction before `waitForDiagnostics` returns
 
-### Missing LSP Features
+
+### Missing LSP Methods
 
 Might be implemented in the future:
 - `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls`, ...
@@ -30,15 +48,8 @@ Might be implemented in the future:
 - `textDocument/prepareRename`, `textDocument/rename`
 - `$/lean/ileanInfoUpdate`, `$/lean/ileanInfoFinal`, `$/lean/importClosure`, `$/lean/staleDependency`
 
-## Features
 
-- **Interact** with a Lean language server instance running in a subprocess.
-- Automatically **sync files** (open/close) with the language server.
-- **Incremental** file changes using `textDocument/didChange`.
-- Receive file **diagnostics** upon changes.
-- **Thin wrapper**: During (`make test-profile`) less than 1% of 38s is spent in this package.
-
-## Use
+## Run Tests
 
 ```bash
 # python3 -m venv venv  # Or similar: Create environment
@@ -46,6 +57,13 @@ make install            # Installs python package and dev dependencies
 make test               # Run all tests, also installs fresh lean env if not found
 make test-profile       # Run all tests with cProfile
 ```
+
+## Documentation
+
+Read the documentation at [leanclient.readthedocs.io](https://leanclient.readthedocs.io).
+
+Run ``make docs`` to build the documentation locally.
+
 
 ## License
 

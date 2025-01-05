@@ -7,6 +7,8 @@ Overview
 leanclient is a thin wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
 
+Check out the `github repository <https://github.com/oOo0oOo/leanclient>`_.
+
 Key Features
 ------------
 
