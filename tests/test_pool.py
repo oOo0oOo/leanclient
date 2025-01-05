@@ -11,6 +11,7 @@ from run_tests import TEST_ENV_DIR, FAST_MATHLIB_FILES
 def get_num_folding_ranges(client: SingleFileClient) -> any:
     return len(client.get_folding_range())
 
+
 def empty_task(client: SingleFileClient) -> any:
     return "t"
 
@@ -64,5 +65,3 @@ class TestLeanClientPool(unittest.TestCase):
         for num_workers in [1, 4, 8]:
             with LeanClientPool(TEST_ENV_DIR, num_workers=num_workers) as pool:
                 pool.map(empty_task, files)
-
-

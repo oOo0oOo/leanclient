@@ -50,8 +50,8 @@ class TestLSPClientFiles(unittest.TestCase):
 
     def test_file_update(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
-        errors, __ = self.lsp.open_file(path)
-        self.assertEqual(len(errors), 0)
+        diag = self.lsp.open_file(path)
+        assert len(diag) <= 1
 
         # Make some random changes
         random.seed(6.28)
@@ -63,8 +63,8 @@ class TestLSPClientFiles(unittest.TestCase):
                 "inv#lid", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
             )
             changes.append(d)
-        errors, __ = self.lsp.update_file(path, changes)
-        self.assertTrue(len(errors) > 0)
+        diags = self.lsp.update_file(path, changes)
+        self.assertTrue(len(diags) > 0)
         print(
             f"Updated {len(changes)} changes in one call: {len(changes) / (time.time() - t0):.2f} changes/s"
         )
@@ -89,14 +89,13 @@ class TestLSPClientFiles(unittest.TestCase):
         t0 = time.time()
         for i, line in enumerate(lines):
             text += line
-            reply = self.lsp.update_file(
+            diag = self.lsp.update_file(
                 fantasy,
                 [DocumentContentChange(line, [i + start, 0], [i + start, len(line)])],
             )
-            errors, warnings = reply
-            count += len(errors) + len(warnings)
+            count += len(diag)
         self.assertTrue(count > 25)
-        self.assertEqual(len(errors), 0)
+        self.assertEqual(len(diag), 0)
         speed = len(lines) / (time.time() - t0)
         os.remove(fantasy_path)
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")

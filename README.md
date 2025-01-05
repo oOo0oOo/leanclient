@@ -6,10 +6,11 @@ It enables interaction with a Lean language server instance running in a subproc
 
 ## Key Features
 
-- **Interact**: Query and change lean files.
-- **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server) via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
+- **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
+- **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server).
 - **Synchronous**: Requests block until a response is received.
-- **Fast**: During `make test-profile` more than 99% of time is spent waiting for a server response.
+- **Fast**: Typically more than 99% of time is spent waiting.
+- **Parallel**: Easy batch processing of files using all your cores.
 
 Check out the [documentation](https://leanclient.readthedocs.io) for more information.
 
@@ -18,7 +19,7 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 
 **Not compatible** with Lean 4.15.0 (stable) yet.
 
-- The API is not stable.
+- The API is almost stable.
 - There are many missing features.
 - Needs more testing with different setups.
 
@@ -32,7 +33,6 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 ### Potential Features
 
 - Virtual files (no actual file on disk), only in-memory in lsp and client
-- Simple pool of parallel clients for faster scraping
 - Use document versions to handle evolving file states
 - Automatic lean env setup for non Debian-based systems
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)

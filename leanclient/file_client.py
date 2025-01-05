@@ -1,3 +1,6 @@
+from leanclient.utils import DocumentContentChange
+
+
 class SingleFileClient:
     """A simplified API for interacting with a single file only.
 
@@ -23,6 +26,18 @@ class SingleFileClient:
             blocking(bool): Not blocking can be risky if you close files frequently or reopen them.
         """
         return self.client.close_files([self.file_path], blocking)
+
+    def update_file(self, changes: list[DocumentContentChange]) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
+        return self.client.update_file(self.file_path, changes)
+
+    def get_diagnostics(self) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
+        return self.client.get_diagnostics(self.file_path)
+
+    def get_diagnostics_multi(self, paths: list[str]) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics_multi`"""
+        return self.client.get_diagnostics_multi(paths)
 
     def get_completion(self, line: int, column: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion`"""

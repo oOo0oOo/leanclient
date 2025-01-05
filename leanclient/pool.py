@@ -70,6 +70,7 @@ class LeanClientPool:
         num_workers(int, optional): The number of workers to use. Defaults to 70% of CPU cores.
         **kwargs: Additional arguments to pass to :class:`leanclient.client.LeanLSPClient`.
     """
+
     def __init__(self, project_path, num_workers=None, **kwargs):
         self.project_path = project_path
         self._init_args = kwargs
@@ -107,9 +108,16 @@ class LeanClientPool:
         Returns:
             Any: The result of the task.
         """
-        return self.pool.apply_async(_worker_task, args=(file_path,), kwds={"task": task})
+        return self.pool.apply_async(
+            _worker_task, args=(file_path,), kwds={"task": task}
+        )
 
-    def map(self, task: Callable[[SingleFileClient], None], file_paths: list, batch_size: int = 1) -> list:
+    def map(
+        self,
+        task: Callable[[SingleFileClient], None],
+        file_paths: list,
+        batch_size: int = 1,
+    ) -> list:
         """Parallel file processing.
 
         See :class:`LeanClientPool` for example use.

@@ -135,7 +135,7 @@ class LeanLSPClient:
         return resp
 
     def _send_request_rpc(self, method: str, params: dict, is_notification: bool):
-        """Send a JSON rpc request to the language server.
+        """Send a JSON RPC request to the language server.
 
         Args:
             method (str): Method name.
@@ -208,13 +208,39 @@ class LeanLSPClient:
     def _wait_for_diagnostics(self, uris: list[str]) -> list[dict]:
         """Wait until `waitForDiagnostics` returns or an rpc error occurs.
 
-        This is typically used after opening or updating files to get diagnostics and ensure the file is processed.
+        This should only be used right after opening or updating files not to miss any responses.
+
+        **Example diagnostics**:
+
+        .. code-block:: python
+
+            [
+                {
+                    'message': "declaration uses 'sorry'",
+                    'severity': 2,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}},
+                    'fullRange': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}}
+                },
+                {
+                    'message': "unexpected end of input; expected ':'",
+                    'severity': 1,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}},
+                    'fullRange': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}}
+                },
+                # ...
+            ]
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
 
         Returns:
-            list[dict]: List of responses in the order they were received.
+            list[dict]: List of diagnostic messages.
         """
         # Waiting in series; Parallel requests are not reliable?
         responses = []
@@ -238,20 +264,18 @@ class LeanLSPClient:
             for resp in responses
             if resp.get("method") == "textDocument/publishDiagnostics"
         }
-        for uri, diags in diagnostics.items():
-            errors = [diag["message"] for diag in diags if diag["severity"] == 1]
-            warnings = [diag["message"] for diag in diags if diag["severity"] == 2]
-            diagnostics[uri] = [errors, warnings]
         return [diagnostics[uri] for uri in uris]
 
     def _open_new_files(self, paths: list[str]) -> list:
         """Open new files in the language server.
 
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+
         Args:
             paths (list[str]): List of relative file paths.
 
         Returns:
-            list: List of diagnostics for each file: [[errors, warnings]]
+            list: List of diagnostics for each file.
         """
         uris = self._locals_to_uris(paths)
         for uri in uris:
@@ -264,14 +288,16 @@ class LeanLSPClient:
 
         return self._wait_for_diagnostics(uris)
 
-    def open_files(self, paths: list[str]) -> list[list]:
+    def open_files(self, paths: list[str]) -> list:
         """Open files in the language server or retrieve diagnostics from cache.
+
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
 
         Args:
             paths (list[str]): List of relative file paths to open.
 
         Returns:
-            list[list]: List of diagnostics for each file: [[errors, warnings]]
+            list: List of diagnostics for each file.
         """
         if len(paths) > self.max_opened_files:
             print(
@@ -296,23 +322,27 @@ class LeanLSPClient:
     def open_file(self, path: str) -> list:
         """Open a file in the language server or retrieve diagnostics from cache.
 
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+
         Args:
             path (str): Relative file path to open.
 
         Returns:
-            list: Diagnostics for file: [errors, warnings]
+            list: Diagnostics of file
         """
         return self.open_files([path])[0]
 
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
 
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+
         Args:
             path (str): Relative file path to update.
             changes (list[DocumentContentChange]): List of changes to apply.
 
         Returns:
-            list: List of diagnostics: [errors, warnings]
+            list: Diagnostics of file
         """
         uri = self._local_to_uri(path)
         params = {"textDocument": {"uri": uri}}
@@ -321,7 +351,9 @@ class LeanLSPClient:
         params["contentChanges"] = [c.get_dict() for c in changes]
         self._send_notification("textDocument/didChange", params)
 
-        return self._wait_for_diagnostics([uri])[0]
+        diagnostics = self._wait_for_diagnostics([uri])[0]
+        self.opened_files[path] = diagnostics
+        return diagnostics
 
     def close_files(self, paths: list[str], blocking: bool = True):
         """Close files in the language server.
@@ -349,6 +381,47 @@ class LeanLSPClient:
                 resp = self._read_stdout()
                 if resp and resp.get("method") == "textDocument/publishDiagnostics":
                     waiting_uris.discard(resp["params"]["uri"])
+
+    def get_diagnostics(self, path: str) -> list:
+        """Get diagnostics for a single file.
+
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            list: Diagnostics of file
+        """
+        if path in self.opened_files:
+            return self.opened_files[path]
+        return self.open_file(path)
+
+    def get_diagnostics_multi(self, paths: list[str]) -> list:
+        """Get diagnostics for a list of files.
+
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+
+        Args:
+            paths (list[str]): List of relative file paths.
+
+        Returns:
+            list: List of diagnostics for each file.
+        """
+        diagnostics = {}
+        missing = []
+        for path in paths:
+            if path in self.opened_files:
+                # Store these now, because they might be closed soon?
+                diagnostics[path] = self.opened_files[path]
+            else:
+                missing.append(path)
+
+        if missing:
+            missing = list(set(missing))
+            diagnostics.update(zip(missing, self.open_files(missing)))
+
+        return [diagnostics[path] for path in paths]
 
     def create_file_client(self, file_path: str) -> SingleFileClient:
         """Create a SingleFileClient for a file.

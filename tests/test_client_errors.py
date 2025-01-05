@@ -1,3 +1,4 @@
+import random
 import sys
 import os
 from pprint import pprint
@@ -10,6 +11,12 @@ from leanclient import LeanLSPClient
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
+EXP_DIAGNOSTICS = [
+    ["unexpected end of input; expected ':'"],
+    ["declaration uses 'sorry'", "declaration uses 'sorry'"],
+]
+
+
 class TestLSPClientDiagnostics(unittest.TestCase):
     def setUp(self):
         self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
@@ -17,13 +24,28 @@ class TestLSPClientDiagnostics(unittest.TestCase):
     def tearDown(self):
         self.lsp.close()
 
-    def test_get_diagnostics(self):
+    def test_open_diagnostics(self):
         diagnostics = self.lsp.open_file(TEST_FILE_PATH)
-        exp = [
-            ["unexpected end of input; expected ':'"],
-            ["declaration uses 'sorry'", "declaration uses 'sorry'"],
-        ]
-        self.assertEqual(diagnostics, exp)
+        errors = [d["message"] for d in diagnostics if d["severity"] == 1]
+        self.assertEqual(errors, EXP_DIAGNOSTICS[0])
+        warnings = [d["message"] for d in diagnostics if d["severity"] == 2]
+        self.assertEqual(warnings, EXP_DIAGNOSTICS[1])
+
+    def test_get_diagnostics(self):
+        diag = self.lsp.get_diagnostics(TEST_FILE_PATH)
+        errors = [d["message"] for d in diag if d["severity"] == 1]
+        self.assertEqual(errors, EXP_DIAGNOSTICS[0])
+        warnings = [d["message"] for d in diag if d["severity"] == 2]
+        self.assertEqual(warnings, EXP_DIAGNOSTICS[1])
+
+        paths = [TEST_FILE_PATH] * 2
+        # paths.append("Main.lean")  # FIX: Why does this hang?
+        paths.append(
+            ".lake/packages/mathlib/Mathlib/Algebra/GroupWithZero/Divisibility.lean"
+        )
+        diag2 = self.lsp.get_diagnostics_multi(paths)
+        self.assertEqual(len(diag2[0]), len(diag))
+        assert len(diag2[-1]) > 0  # Any diagnostics in the mathlib file
 
 
 class TestLSPClientErrors(unittest.TestCase):
@@ -107,3 +129,53 @@ class TestLSPClientErrors(unittest.TestCase):
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
         self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, self.uri)
+
+    def invalid_path(self):
+        invalid_paths = [
+            "g.lean",
+            "garbage",
+            "g.txt",
+            "fantasy/f.lean",
+            "../e.lean",
+            " ",
+            " " + TEST_FILE_PATH,
+            TEST_FILE_PATH + " ",
+        ]
+
+        p = lambda: random.choice(invalid_paths)
+
+        # Check all methods
+        # _send_request_document
+        self.assertRaises(
+            FileNotFoundError,
+            self.lsp._send_request_document,
+            p(),
+            "textDocument/hover",
+            {{"position": {"line": 9, "character": 4}}},
+        )
+        self.assertRaises(FileNotFoundError, self.lsp._open_new_files[p()])
+        self.assertRaises(FileNotFoundError, self.lsp._open_new_files[p(), p()])
+        self.assertRaises(FileNotFoundError, self.lsp.open_files([p()]))
+        self.assertRaises(FileNotFoundError, self.lsp.open_file, p())
+        self.assertRaises(FileNotFoundError, self.lsp.update_file, p(), [])
+        self.assertRaises(FileNotFoundError, self.lsp.close_files, [p()])
+        self.assertRaises(FileNotFoundError, self.lsp.get_diagnostics, p())
+        self.assertRaises(FileNotFoundError, self.lsp.get_diagnostics_multi, [p()])
+        self.assertRaises(FileNotFoundError, self.lsp.create_file_client, p())
+
+        self.assertRaises(FileNotFoundError, self.lsp.get_completion, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_completion_item_resolve, {})
+        self.assertRaises(FileNotFoundError, self.lsp.get_hover, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_declaration, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_definition, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_references, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_type_definition, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_document_symbol, p())
+        self.assertRaises(FileNotFoundError, self.lsp.get_document_highlight, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_semantic_tokens, p())
+        self.assertRaises(
+            FileNotFoundError, self.lsp.get_semantic_tokens_range, p(), 0, 0, 10, 10
+        )
+        self.assertRaises(FileNotFoundError, self.lsp.get_folding_range, p())
+        self.assertRaises(FileNotFoundError, self.lsp.get_goal, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_term_goal, p(), 9, 4)

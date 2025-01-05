@@ -3,6 +3,7 @@ import unittest
 
 from leanclient import SingleFileClient, LeanLSPClient
 
+from leanclient.utils import DocumentContentChange
 from run_tests import TEST_ENV_DIR, TEST_FILE_PATH
 
 
@@ -45,4 +46,9 @@ class TestSingleFileClient(unittest.TestCase):
         res.append(sfc.get_folding_range())
         res.append(sfc.get_goal(9, 15))
         res.append(sfc.get_term_goal(9, 15))
+        res.append(sfc.get_diagnostics())
+        res.append(sfc.get_diagnostics_multi([TEST_FILE_PATH]))
+
         assert all(res)
+
+        sfc.update_file([DocumentContentChange("change", (0, 0), (0, 1))])
