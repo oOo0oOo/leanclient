@@ -9,6 +9,9 @@ Client
    :undoc-members:
    :private-members:
 
+|
+|
+|
 
 Single File Client
 ------------------
@@ -18,6 +21,20 @@ Single File Client
    :undoc-members:
    :private-members:
 
+|
+|
+|
+
+Lean Client Pool
+----------------
+
+.. automodule:: leanclient.pool
+   :members:
+   :private-members:
+
+|
+|
+|
 
 Utils
 -----
