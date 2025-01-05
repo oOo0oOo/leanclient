@@ -9,6 +9,16 @@ Client
    :undoc-members:
    :private-members:
 
+
+Single File Client
+------------------
+
+.. automodule:: leanclient.file_client
+   :members:
+   :undoc-members:
+   :private-members:
+
+
 Utils
 -----
 

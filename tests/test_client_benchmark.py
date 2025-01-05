@@ -112,7 +112,7 @@ class TestLSPClientBenchmark(unittest.TestCase):
                 (file_path, LINE, COL + 20),
             ),
             ("document_symbol", self.lsp.get_document_symbol, (file_path,)),
-            ("semantic_tokens_full", self.lsp.get_semantic_tokens_full, (file_path,)),
+            ("semantic_tokens_full", self.lsp.get_semantic_tokens, (file_path,)),
             (
                 "semantic_tokens_range",
                 self.lsp.get_semantic_tokens_range,

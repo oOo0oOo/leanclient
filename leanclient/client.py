@@ -7,6 +7,7 @@ import subprocess
 import orjson
 
 from .utils import SemanticTokenProcessor, DocumentContentChange
+from .file_client import SingleFileClient
 
 
 class LeanLSPClient:
@@ -325,6 +326,8 @@ class LeanLSPClient:
     def close_files(self, paths: list[str], blocking: bool = True):
         """Close files in the language server.
 
+        Calling this manually is optional, files are automatically closed when max_opened_files is reached.
+
         Args:
             paths (list[str]): List of relative file paths to close.
             blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
@@ -346,6 +349,17 @@ class LeanLSPClient:
                 resp = self._read_stdout()
                 if resp and resp.get("method") == "textDocument/publishDiagnostics":
                     waiting_uris.discard(resp["params"]["uri"])
+
+    def create_file_client(self, file_path: str) -> SingleFileClient:
+        """Create a SingleFileClient for a file.
+
+        Args:
+            file_path (str): Relative file path.
+
+        Returns:
+            SingleFileClient: A client for interacting with a single file.
+        """
+        return SingleFileClient(self, file_path)
 
     # LEAN LANGUAGE SERVER API
 
@@ -716,7 +730,7 @@ class LeanLSPClient:
         """
         return self._send_request_document(path, "textDocument/documentSymbol", {})
 
-    def get_semantic_tokens_full(self, path: str) -> list:
+    def get_semantic_tokens(self, path: str) -> list:
         """Get semantic tokens for the entire document.
 
         The :guilabel:`textDocument/semanticTokens/full` method in LSP returns semantic tokens for the entire document.

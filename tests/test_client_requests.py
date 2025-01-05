@@ -72,7 +72,7 @@ class TestLSPClientRequests(unittest.TestCase):
         assert res[0]["name"] == "add_zero_custom"
 
     def test_semantic_tokens_full(self):
-        res = self.lsp.get_semantic_tokens_full(TEST_FILE_PATH)
+        res = self.lsp.get_semantic_tokens(TEST_FILE_PATH)
         assert type(res) == list
         exp = [
             [1, 0, 7, "keyword"],
@@ -141,7 +141,7 @@ class TestLSPClientRequests(unittest.TestCase):
 
         res = self.lsp.get_document_symbol(path)
         self.assertEqual(res, [])
-        res = self.lsp.get_semantic_tokens_full(path)
+        res = self.lsp.get_semantic_tokens(path)
         self.assertEqual(res, [])
         res = self.lsp.get_folding_range(path)
         self.assertEqual(res, [])
