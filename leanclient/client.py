@@ -29,6 +29,7 @@ class LeanLSPClient:
         max_opened_files (int): Maximum number of files to keep open at once.
         initial_build (bool): Whether to run `lake build` on initialization.
     """
+
     def __init__(
         self, project_path: str, max_opened_files: int = 8, initial_build: bool = True
     ):
@@ -39,16 +40,15 @@ class LeanLSPClient:
         self.opened_files = collections.OrderedDict()
 
         if initial_build:
-            subprocess.run("lake build", shell=True, cwd=self.project_path)
+            subprocess.run(["lake", "build"], cwd=self.project_path)
 
-        # Run language server in a process
+        # Run the lean4 language server in a subprocess
         self.process = subprocess.Popen(
-            "lake serve",
-            shell=True,
+            ["lake", "serve"],
             cwd=self.project_path,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout

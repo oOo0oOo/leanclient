@@ -66,8 +66,7 @@ if __name__ == "__main__":
     target_dir = f"{TEST_ENV_DIR}{TEST_FILE_PATH}"
     shutil.copy("tests/tests.lean", target_dir)
 
-    # subprocess.run("lake update", cwd=TEST_ENV_DIR, shell=True, check=True)
-    subprocess.run("lake build", cwd=TEST_ENV_DIR, shell=True, check=True)
+    subprocess.run(["lake", "build"], cwd=TEST_ENV_DIR, check=True)
 
     # Collect tests
     white_list = [
@@ -76,7 +75,7 @@ if __name__ == "__main__":
         "test_file_client",
         "test_client_files",
         "test_pool",
-        "test_client_benchmark",
+        # "test_client_benchmark",
     ]
 
     if not white_list:

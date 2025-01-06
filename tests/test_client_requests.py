@@ -151,3 +151,9 @@ class TestLSPClientRequests(unittest.TestCase):
 
         # Remove the empty file
         os.remove(TEST_ENV_DIR + path)
+
+
+class TestClientInitialBuild(unittest.TestCase):
+    def test_initial_build(self):
+        lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=True)
+        lsp.close()
