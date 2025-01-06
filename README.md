@@ -1,4 +1,29 @@
-# leanclient
+<h1 align="center">
+  leanclient
+</h1>
+
+<h4 align="center">Interact with the lean4 language server.</h4>
+
+<p align="center">
+  <a href="https://pypi.org/project/leanclient/">
+    <img src="https://img.shields.io/pypi/v/leanclient.svg" alt="PyPI version" />
+  </a>
+  <a href="">
+    <img src="https://img.shields.io/github/last-commit/oOo0oOo/leanclient" alt="last update" />
+  </a>
+  <a href="https://github.com/oOo0oOo/leanclient/blob/master/LICENSE">
+    <img src="https://img.shields.io/github/license/oOo0oOo/leanclient.svg" alt="license" />
+  </a>
+</p>
+
+<p align="center">
+  <a href="#key-features">Key Features</a> •
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#currently-in-beta">Currently in Beta</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#testing">Testing</a> •
+  <a href="#license">License</a>
+</p>
 
 leanclient is a thin wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
@@ -21,7 +46,7 @@ The best way to get started is to check out this minimal example in Google Colab
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oOo0oOo/leanclient/blob/main/examples/getting_started_leanclient.ipynb)
 
-Or try locally:
+Or try it locally:
 
 1) Setup a new lean project or use an existing one. See the [colab notebook](examples/getting_started_leanclient.ipynb) for a basic Ubuntu setup.
 
@@ -109,7 +134,7 @@ Read the documentation at [leanclient.readthedocs.io](https://leanclient.readthe
 Run ``make docs`` to build the documentation locally.
 
 
-## Run Tests
+## Testing
 
 ```bash
 # python3 -m venv venv  # Or similar: Create environment
