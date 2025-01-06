@@ -179,3 +179,14 @@ class TestLSPClientErrors(unittest.TestCase):
         self.assertRaises(FileNotFoundError, self.lsp.get_folding_range, p())
         self.assertRaises(FileNotFoundError, self.lsp.get_goal, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_term_goal, p(), 9, 4)
+
+    def test_invalid_root(self):
+        with self.assertRaises(FileNotFoundError, msg=f"Path: invalid_path"):
+            LeanLSPClient("invalid_path", initial_build=False)
+
+        with self.assertRaises(NotADirectoryError, msg=f"Path: invalid_path"):
+            LeanLSPClient("leanclient/client.py", initial_build=False)
+
+        # Valid but not a lean project
+        with self.assertRaises(Exception, msg=f"Path: leanclient/"):
+            LeanLSPClient("leanclient/", initial_build=True)

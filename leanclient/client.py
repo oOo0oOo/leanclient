@@ -27,7 +27,7 @@ class LeanLSPClient:
     Args:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once.
-        initial_build (bool): Whether to run `lake build` on initialization.
+        initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
     """
 
     def __init__(
@@ -40,7 +40,7 @@ class LeanLSPClient:
         self.opened_files = collections.OrderedDict()
 
         if initial_build:
-            subprocess.run(["lake", "build"], cwd=self.project_path)
+            subprocess.run(["lake", "build"], cwd=self.project_path, check=True)
 
         # Run the lean4 language server in a subprocess
         self.process = subprocess.Popen(
@@ -52,6 +52,11 @@ class LeanLSPClient:
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
+
+        # Check stderr for any errors
+        error = self._read_stderr_non_blocking()
+        if error:
+            print("Process started with stderr message:\n", error)
 
         # Send initialization request, surprisingly no params required
         results = self._send_request("initialize", {"processId": os.getpid()})
@@ -118,10 +123,11 @@ class LeanLSPClient:
 
         # Handle EOF: Return contents of stderr (non-blocking using select)
         if not header:
-            stderr = self.process.stderr
-            line = "No lake stderr message."
-            if select.select([stderr], [], [], 0.05)[0]:
-                line = "lake stderr message:\n" + stderr.readline().decode("utf-8")
+            line = self._read_stderr_non_blocking()
+            if line:
+                line = "lake stderr message:\n" + line
+            if not line:
+                line = "No lake stderr message."
             self.close()
             raise EOFError(f"Language server has closed. {line}")
 
@@ -135,6 +141,20 @@ class LeanLSPClient:
             print("RPC Error Message:\n", resp)
 
         return resp
+
+    def _read_stderr_non_blocking(self, timeout: float = 0.00001) -> str:
+        """Read the next message from the language server's stderr.
+
+        Args:
+            timeout (float): Time to wait for stderr message.
+
+        Returns:
+            str: Message from the language server's stderr.
+        """
+        stderr = self.process.stderr
+        if select.select([stderr], [], [], timeout)[0]:
+            return stderr.readline().decode("utf-8")
+        return ""
 
     def _send_request_rpc(self, method: str, params: dict, is_notification: bool):
         """Send a JSON RPC request to the language server.

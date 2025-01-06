@@ -153,7 +153,7 @@ class TestLSPClientRequests(unittest.TestCase):
         os.remove(TEST_ENV_DIR + path)
 
 
-class TestClientInitialBuild(unittest.TestCase):
+class TestClientBasics(unittest.TestCase):
     def test_initial_build(self):
         lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=True)
         lsp.close()
