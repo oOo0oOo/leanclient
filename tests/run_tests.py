@@ -6,7 +6,7 @@ import shutil
 
 
 # TEST CONFIG. Move?
-TEST_ENV_DIR = ".lake_env/"
+TEST_ENV_DIR = ".test_env/"
 TEST_PROJECT_NAME = "LeanTestProject"
 TEST_FILE_PATH = f"{TEST_PROJECT_NAME}/Basic.lean"
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         "scripts/create_lean_project.py",
         TEST_ENV_DIR,
         TEST_PROJECT_NAME,
-        "v4.14.0",
+        "stable",
         "--use-mathlib",
     ]
     subprocess.run(cmd, check=True)
@@ -69,10 +69,7 @@ if __name__ == "__main__":
     # subprocess.run("lake update", cwd=TEST_ENV_DIR, shell=True, check=True)
     subprocess.run("lake build", cwd=TEST_ENV_DIR, shell=True, check=True)
 
-    profiler = None
-    if "--profile" in sys.argv:
-        profiler = start_profiler()
-
+    # Collect tests
     white_list = [
         "test_client_requests",
         "test_client_errors",
@@ -83,13 +80,20 @@ if __name__ == "__main__":
     ]
 
     if not white_list:
-        unittest.TextTestRunner().run(unittest.TestLoader().discover("tests"))
+        suite = unittest.TestLoader().discover("tests")
     else:
         suite = unittest.TestSuite()
         loader = unittest.TestLoader()
         for test in white_list:
             suite.addTests(loader.loadTestsFromName(test))
-        unittest.TextTestRunner().run(suite)
+    runner = unittest.TextTestRunner()
+
+    # Run tests
+    profiler = None
+    if "--profile" in sys.argv:
+        profiler = start_profiler()
+
+    runner.run(suite)
 
     if profiler:
         stop_profiler(profiler, "tests/profile.png")

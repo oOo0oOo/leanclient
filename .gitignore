@@ -3,9 +3,11 @@ __pycache__/
 dist/
 poetry.lock
 
-.lake_env/
+.test_env/
 tests/profile*.png
 
 docs/build/
+
+examples/LeanProject/
 
 TODO.md

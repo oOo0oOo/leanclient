@@ -7,7 +7,7 @@ Overview
 leanclient is a thin wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
 
-Check out the `github repository <https://leanclient.readthedocs.io>`_ for more information.
+Check out the `github repository <https://github.com/oOo0oOo/leanclient>`_ for more information.
 
 
 Key Features
@@ -76,8 +76,6 @@ Or try it locally:
 
 Currently in Beta
 -----------------
-
-**Not compatible** with Lean 4.15.0 (stable) yet.
 
 - The API is almost stable.
 - There are missing features.

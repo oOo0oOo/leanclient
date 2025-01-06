@@ -95,8 +95,6 @@ print(results)
 
 ## Currently in Beta
 
-**Not compatible** with Lean 4.15.0 (stable) yet.
-
 - The API is almost stable.
 - There are missing features.
 - Needs more testing with different setups.
