@@ -17,6 +17,17 @@ class SingleFileClient:
         self.client = client
         self.file_path = file_path
 
+    def open_file(self) -> list:
+        """Open the file.
+
+        This is usually called automatically when a method is called that requires an open file.
+        Use this to open the file manually and recieve its diagnostics.
+
+        Returns:
+            list: The diagnostic messages of the file.
+        """
+        return self.client.open_file(self.file_path)
+
     def close_file(self, blocking: bool = True):
         """Close the file.
 

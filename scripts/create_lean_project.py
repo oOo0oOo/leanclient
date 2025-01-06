@@ -25,7 +25,7 @@ def create_lean_project(
     force: bool = False,
 ):
     """Create a simple Lean project with lake and optionally Mathlib.
-    This is used in testing and jupyter notebooks."""
+    This is used in testing."""
     # Install lean and lake
     install_env(project_path, lean_version)
 
@@ -76,13 +76,13 @@ def install_env(project_path: str, lean_version: str = "stable"):
         # On Debian-based systems install lean and lake
         if os.path.exists("/etc/debian_version"):
             print("Installing lean and lake")
-            # If this fails we might consider also installing the vscode extension, like in
-            # https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh
-
             # Install lean/lake
-            # subprocess.run("sudo apt install -y git curl", shell=True, cwd=project_path)
+            cmd = "wget -q https://raw.githubusercontent.com/leanprover-community/mathlib4/master/scripts/install_debian.sh && bash install_debian.sh ; rm -f install_debian.sh && source ~/.profile"
+            subprocess.run(cmd, shell=True, cwd=project_path)
+
+            print("Installing elan (Lean version manager)")
             subprocess.run(
-                "wget https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh && bash elan-init.sh -y && rm elan-init.sh",
+                "curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y",
                 shell=True,
                 cwd=project_path,
             )

@@ -3,6 +3,8 @@
 leanclient is a thin wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
 
+Check out the [documentation](https://leanclient.readthedocs.io) for more information.
+
 
 ## Key Features
 
@@ -12,16 +14,15 @@ It enables interaction with a Lean language server instance running in a subproc
 - **Fast**: Typically more than 99% of time is spent waiting.
 - **Parallel**: Easy batch processing of files using all your cores.
 
-Check out the [documentation](https://leanclient.readthedocs.io) for more information.
 
-
-## Work in Progress
+## Currently in Beta
 
 **Not compatible** with Lean 4.15.0 (stable) yet.
 
 - The API is almost stable.
-- There are many missing features.
+- There are missing features.
 - Needs more testing with different setups.
+- Any feedback is appreciated!
 
 
 ### Next Features

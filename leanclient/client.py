@@ -49,7 +49,7 @@ class LeanLSPClient:
             cwd=self.project_path,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
@@ -63,7 +63,10 @@ class LeanLSPClient:
         self._send_notification("initialized", {})
 
     def close(self):
-        """Terminate the language server process and close all pipes."""
+        """Always close the client when done!
+
+        Terminates the language server process and close all pipes.
+        """
         self.process.terminate()
         self.process.stderr.close()
         self.stdout.close()
