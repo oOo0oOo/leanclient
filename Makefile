@@ -14,3 +14,9 @@ test-profile:
 
 docs:
 	poetry run sphinx-build -b html docs/source/ docs/build/
+
+publish:
+	poetry publish --build
+
+publish-test:
+	poetry publish --build --repository testpypi

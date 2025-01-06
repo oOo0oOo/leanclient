@@ -4,7 +4,6 @@ dist/
 poetry.lock
 
 .lake_env/
-examples/
 tests/profile*.png
 
 docs/build/

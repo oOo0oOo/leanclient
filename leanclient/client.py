@@ -14,7 +14,7 @@ class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
     It interacts with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
-    This wrapper is blocking, it spends 99% of its time waiting for a response from the language server.
+    This wrapper is blocking, it always waits until the language server responds.
 
     NOTE:
         Your **project_path** is the root folder of a Lean project where `lakefile.toml` is located.
@@ -29,7 +29,6 @@ class LeanLSPClient:
         max_opened_files (int): Maximum number of files to keep open at once.
         initial_build (bool): Whether to run `lake build` on initialization.
     """
-
     def __init__(
         self, project_path: str, max_opened_files: int = 8, initial_build: bool = True
     ):
