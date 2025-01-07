@@ -18,12 +18,12 @@ class TestLSPClientRequests(unittest.TestCase):
         cls.lsp.close()
 
     def test_completion(self):
-        result = self.lsp.get_completion(TEST_FILE_PATH, 9, 15)
+        result = self.lsp.get_completions(TEST_FILE_PATH, 9, 15)
         assert type(result) == list
         assert len(result) > 100
 
     def test_completion_item_resolve(self):
-        result = self.lsp.get_completion(TEST_FILE_PATH, 9, 15)
+        result = self.lsp.get_completions(TEST_FILE_PATH, 9, 15)
         assert type(result) == list
         item = random.choice(result)
         resolve_res = self.lsp.get_completion_item_resolve(item)
@@ -35,12 +35,12 @@ class TestLSPClientRequests(unittest.TestCase):
         assert "The left hand" in res["contents"]["value"]
 
     def test_declaration(self):
-        res = self.lsp.get_declaration(TEST_FILE_PATH, 6, 4)
+        res = self.lsp.get_declarations(TEST_FILE_PATH, 6, 4)
         assert type(res) == list
         assert "targetUri" in res[0]
 
     def test_request_definition(self):
-        res = self.lsp.get_definition(TEST_FILE_PATH, 1, 29)
+        res = self.lsp.get_definitions(TEST_FILE_PATH, 1, 29)
         assert type(res) == list
         res = res[0]
         if "uri" in res:
@@ -57,17 +57,17 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertTrue(len(res) > 1)
 
     def test_type_definition(self):
-        res = self.lsp.get_type_definition(TEST_FILE_PATH, 1, 36)
+        res = self.lsp.get_type_definitions(TEST_FILE_PATH, 1, 36)
         assert type(res) == list
         self.assertTrue(res[0]["targetUri"].endswith("Prelude.lean"))
 
     def test_document_highlight(self):
-        res = self.lsp.get_document_highlight(TEST_FILE_PATH, 9, 8)
+        res = self.lsp.get_document_highlights(TEST_FILE_PATH, 9, 8)
         assert type(res) == list
         assert res[0]["range"]["end"]["character"] == 20
 
     def test_document_symbol(self):
-        res = self.lsp.get_document_symbol(TEST_FILE_PATH)
+        res = self.lsp.get_document_symbols(TEST_FILE_PATH)
         assert type(res) == list
         assert res[0]["name"] == "add_zero_custom"
 
@@ -96,7 +96,7 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertEqual(res, exp)
 
     def test_folding_range(self):
-        res = self.lsp.get_folding_range(TEST_FILE_PATH)
+        res = self.lsp.get_folding_ranges(TEST_FILE_PATH)
         assert type(res) == list
         assert res[0]["kind"] == "region"
 
@@ -121,15 +121,15 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertEqual(res, None)
         res = self.lsp.get_hover(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)
-        res = self.lsp.get_declaration(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_declarations(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, [])
-        res = self.lsp.get_definition(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_definitions(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, [])
         res = self.lsp.get_references(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, [])
-        res = self.lsp.get_type_definition(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_type_definitions(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, [])
-        res = self.lsp.get_document_highlight(TEST_FILE_PATH, 0, 0)
+        res = self.lsp.get_document_highlights(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, [])
         res = self.lsp.get_semantic_tokens_range(TEST_FILE_PATH, 0, 0, 0, 0)
         self.assertEqual(res, [])
@@ -139,11 +139,11 @@ class TestLSPClientRequests(unittest.TestCase):
         with open(TEST_ENV_DIR + path, "w") as f:
             f.write("")
 
-        res = self.lsp.get_document_symbol(path)
+        res = self.lsp.get_document_symbols(path)
         self.assertEqual(res, [])
         res = self.lsp.get_semantic_tokens(path)
         self.assertEqual(res, [])
-        res = self.lsp.get_folding_range(path)
+        res = self.lsp.get_folding_ranges(path)
         self.assertEqual(res, [])
         # res = self.lsp.get_completion(path, 0, 0)  # Never empty?
         # self.assertEqual(res, None)

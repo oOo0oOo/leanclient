@@ -67,12 +67,12 @@ client = lc.LeanLSPClient(PROJECT_PATH)
 
 # Query a lean file in your project
 file_path = "MyProject/Basic.lean"
-result = client.get_goal(file_path, line=1, column=2)
+result = client.get_goal(file_path, line=1, character=2)
 print(result)
 
 # Use a SingleFileClient for simplified interaction with a single file.
 sfc = client.create_file_client(file_path)
-result = sfc.get_term_goal(line=1, column=2)
+result = sfc.get_term_goal(line=1, character=2)
 print(result)
 
 # Use a LeanClientPool for easy parallel processing multiple files.

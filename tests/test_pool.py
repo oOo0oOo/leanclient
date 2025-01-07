@@ -9,7 +9,7 @@ from run_tests import TEST_ENV_DIR, FAST_MATHLIB_FILES
 
 # Some batch tasks
 def get_num_folding_ranges(client: SingleFileClient) -> any:
-    return len(client.get_folding_range())
+    return len(client.get_folding_ranges())
 
 
 def empty_task(client: SingleFileClient) -> any:

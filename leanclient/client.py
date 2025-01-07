@@ -471,7 +471,7 @@ class LeanLSPClient:
 
     # LEAN LANGUAGE SERVER API
 
-    def get_completion(self, path: str, line: int, character: int) -> list:
+    def get_completions(self, path: str, line: int, character: int) -> list:
         """Get completion items at a file position.
 
         The :guilabel:`textDocument/completion` method in LSP provides context-aware code completion suggestions at a specified cursor position.
@@ -589,7 +589,7 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_declaration(self, path: str, line: int, character: int) -> list:
+    def get_declarations(self, path: str, line: int, character: int) -> list:
         """Get locations of declarations at a file position.
 
         The :guilabel:`textDocument/declaration` method in LSP retrieves the declaration location of a symbol at a specified cursor position.
@@ -633,7 +633,7 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_definition(self, path: str, line: int, character: int) -> list:
+    def get_definitions(self, path: str, line: int, character: int) -> list:
         """Get location of symbol definition at a file position.
 
         The :guilabel:`textDocument/definition` method in LSP retrieves the definition location of a symbol at a specified cursor position.
@@ -720,7 +720,7 @@ class LeanLSPClient:
             },
         )
 
-    def get_type_definition(self, path: str, line: int, character: int) -> list:
+    def get_type_definitions(self, path: str, line: int, character: int) -> list:
         """Get locations of type definition of a symbol at a file position.
 
         The :guilabel:`textDocument/typeDefinition` method in LSP returns the location of a symbol's type definition based on the cursor's position.
@@ -764,8 +764,8 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_highlight(self, path: str, line: int, character: int) -> list:
-        """Get highlight range for a symbol at a file position.
+    def get_document_highlights(self, path: str, line: int, character: int) -> list:
+        """Get highlight ranges for a symbol at a file position.
 
         The :guilabel:`textDocument/documentHighlight` method in LSP returns the highlighted range at a specified cursor position.
 
@@ -801,7 +801,7 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_document_symbol(self, path: str) -> list:
+    def get_document_symbols(self, path: str) -> list:
         """Get all document symbols in a document.
 
         The :guilabel:`textDocument/documentSymbol` method in LSP retrieves all symbols within a document, providing their names, kinds, and locations.
@@ -906,7 +906,7 @@ class LeanLSPClient:
         )
         return self.token_processor(res["data"])
 
-    def get_folding_range(self, path: str) -> list:
+    def get_folding_ranges(self, path: str) -> list:
         """Get folding ranges in a document.
 
         The :guilabel:`textDocument/foldingRange` method in LSP returns folding ranges in a document.

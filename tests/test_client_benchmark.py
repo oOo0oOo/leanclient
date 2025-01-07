@@ -81,7 +81,7 @@ class TestLSPClientBenchmark(unittest.TestCase):
         LINE = 380
         COL = 4
 
-        items = self.lsp.get_completion(file_path, LINE, COL + 20)
+        items = self.lsp.get_completions(file_path, LINE, COL + 20)
         completion_item = items[8]
 
         requests = [
@@ -91,34 +91,34 @@ class TestLSPClientBenchmark(unittest.TestCase):
                 self.lsp.get_term_goal,
                 (file_path, LINE, COL + 20),
             ),
-            ("completion", self.lsp.get_completion, (file_path, LINE, COL + 20)),
+            ("completion", self.lsp.get_completions, (file_path, LINE, COL + 20)),
             (
                 "completion_item_resolve",
                 self.lsp.get_completion_item_resolve,
                 (completion_item,),
             ),
-            ("definition", self.lsp.get_definition, (file_path, LINE, COL)),
+            ("definition", self.lsp.get_definitions, (file_path, LINE, COL)),
             ("hover", self.lsp.get_hover, (file_path, LINE, COL)),
-            ("declaration", self.lsp.get_declaration, (file_path, LINE, COL)),
+            ("declaration", self.lsp.get_declarations, (file_path, LINE, COL)),
             ("references", self.lsp.get_references, (file_path, LINE, COL + 20)),
             (
                 "type_definition",
-                self.lsp.get_type_definition,
+                self.lsp.get_type_definitions,
                 (file_path, LINE, COL + 10),
             ),
             (
                 "document_highlight",
-                self.lsp.get_document_highlight,
+                self.lsp.get_document_highlights,
                 (file_path, LINE, COL + 20),
             ),
-            ("document_symbol", self.lsp.get_document_symbol, (file_path,)),
+            ("document_symbol", self.lsp.get_document_symbols, (file_path,)),
             ("semantic_tokens_full", self.lsp.get_semantic_tokens, (file_path,)),
             (
                 "semantic_tokens_range",
                 self.lsp.get_semantic_tokens_range,
                 (file_path, 0, 0, LINE, COL),
             ),
-            ("folding_range", self.lsp.get_folding_range, (file_path,)),
+            ("folding_range", self.lsp.get_folding_ranges, (file_path,)),
         ]
 
         print(f"{NUM_REPEATS} identical requests each:")

@@ -163,20 +163,22 @@ class TestLSPClientErrors(unittest.TestCase):
         self.assertRaises(FileNotFoundError, self.lsp.get_diagnostics_multi, [p()])
         self.assertRaises(FileNotFoundError, self.lsp.create_file_client, p())
 
-        self.assertRaises(FileNotFoundError, self.lsp.get_completion, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_completions, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_completion_item_resolve, {})
         self.assertRaises(FileNotFoundError, self.lsp.get_hover, p(), 9, 4)
-        self.assertRaises(FileNotFoundError, self.lsp.get_declaration, p(), 9, 4)
-        self.assertRaises(FileNotFoundError, self.lsp.get_definition, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_declarations, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_definitions, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_references, p(), 9, 4)
-        self.assertRaises(FileNotFoundError, self.lsp.get_type_definition, p(), 9, 4)
-        self.assertRaises(FileNotFoundError, self.lsp.get_document_symbol, p())
-        self.assertRaises(FileNotFoundError, self.lsp.get_document_highlight, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_type_definitions, p(), 9, 4)
+        self.assertRaises(FileNotFoundError, self.lsp.get_document_symbols, p())
+        self.assertRaises(
+            FileNotFoundError, self.lsp.get_document_highlights, p(), 9, 4
+        )
         self.assertRaises(FileNotFoundError, self.lsp.get_semantic_tokens, p())
         self.assertRaises(
             FileNotFoundError, self.lsp.get_semantic_tokens_range, p(), 0, 0, 10, 10
         )
-        self.assertRaises(FileNotFoundError, self.lsp.get_folding_range, p())
+        self.assertRaises(FileNotFoundError, self.lsp.get_folding_ranges, p())
         self.assertRaises(FileNotFoundError, self.lsp.get_goal, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_term_goal, p(), 9, 4)
 

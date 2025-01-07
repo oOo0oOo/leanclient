@@ -50,62 +50,62 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics_multi`"""
         return self.client.get_diagnostics_multi(paths)
 
-    def get_completion(self, line: int, column: int) -> list:
+    def get_completions(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion`"""
-        return self.client.get_completion(self.file_path, line, column)
+        return self.client.get_completions(self.file_path, line, character)
 
     def get_completion_item_resolve(self, item: dict) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion_item_resolve`"""
         return self.client.get_completion_item_resolve(item)
 
-    def get_hover(self, line: int, column: int) -> dict:
+    def get_hover(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_hover`"""
-        return self.client.get_hover(self.file_path, line, column)
+        return self.client.get_hover(self.file_path, line, character)
 
-    def get_declaration(self, line: int, column: int) -> list:
+    def get_declarations(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_declaration`"""
-        return self.client.get_declaration(self.file_path, line, column)
+        return self.client.get_declarations(self.file_path, line, character)
 
-    def get_definition(self, line: int, column: int) -> list:
+    def get_definitions(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_definition`"""
-        return self.client.get_definition(self.file_path, line, column)
+        return self.client.get_definitions(self.file_path, line, character)
 
-    def get_references(self, line: int, column: int) -> list:
+    def get_references(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_references`"""
-        return self.client.get_references(self.file_path, line, column)
+        return self.client.get_references(self.file_path, line, character)
 
-    def get_type_definition(self, line: int, column: int) -> list:
+    def get_type_definitions(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_type_definition`"""
-        return self.client.get_type_definition(self.file_path, line, column)
+        return self.client.get_type_definitions(self.file_path, line, character)
 
-    def get_document_symbol(self) -> list:
+    def get_document_symbols(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_symbol`"""
-        return self.client.get_document_symbol(self.file_path)
+        return self.client.get_document_symbols(self.file_path)
 
-    def get_document_highlight(self, line: int, column: int) -> list:
+    def get_document_highlights(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_highlight`"""
-        return self.client.get_document_highlight(self.file_path, line, column)
+        return self.client.get_document_highlights(self.file_path, line, character)
 
     def get_semantic_tokens(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_semantic_tokens`"""
         return self.client.get_semantic_tokens(self.file_path)
 
     def get_semantic_tokens_range(
-        self, start_line: int, start_column: int, end_line: int, end_column: int
+        self, start_line: int, start_character: int, end_line: int, end_character: int
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_semantic_tokens_range`"""
         return self.client.get_semantic_tokens_range(
-            self.file_path, start_line, start_column, end_line, end_column
+            self.file_path, start_line, start_character, end_line, end_character
         )
 
-    def get_folding_range(self) -> list:
+    def get_folding_ranges(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_folding_range`"""
-        return self.client.get_folding_range(self.file_path)
+        return self.client.get_folding_ranges(self.file_path)
 
-    def get_goal(self, line: int, column: int) -> dict:
+    def get_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_goal`"""
-        return self.client.get_goal(self.file_path, line, column)
+        return self.client.get_goal(self.file_path, line, character)
 
-    def get_term_goal(self, line: int, column: int) -> dict:
+    def get_term_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_term_goal`"""
-        return self.client.get_term_goal(self.file_path, line, column)
+        return self.client.get_term_goal(self.file_path, line, character)
