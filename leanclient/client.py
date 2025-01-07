@@ -357,7 +357,12 @@ class LeanLSPClient:
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
 
+        Note:
+
+            Changes are not written to disk! Will be implemented in the future.
+
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+        Raises a FileNotFoundError if the file is not open.
 
         Args:
             path (str): Relative file path to update.
@@ -366,6 +371,8 @@ class LeanLSPClient:
         Returns:
             list: Diagnostics of file
         """
+        if path not in self.opened_files:
+            raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
         uri = self._local_to_uri(path)
         params = {"textDocument": {"uri": uri}}
         params["textDocument"]["languageId"] = "lean"
@@ -373,8 +380,14 @@ class LeanLSPClient:
         params["contentChanges"] = [c.get_dict() for c in changes]
         self._send_notification("textDocument/didChange", params)
 
-        diagnostics = self._wait_for_diagnostics([uri])[0]
-        self.opened_files[path] = diagnostics
+        # Simply await the first diagnostics
+        # waitForDiagnostics does not return...
+        while True:
+            resp = self._read_stdout()
+            if resp.get("method") == "textDocument/publishDiagnostics":
+                break
+        diagnostics = resp["params"]["diagnostics"]
+        self.opened_files[path] = resp["params"]["diagnostics"]
         return diagnostics
 
     def close_files(self, paths: list[str], blocking: bool = True):
