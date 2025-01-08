@@ -118,7 +118,6 @@ print(results)
 ### Missing LSP Methods
 
 Might be implemented in the future:
-- `callHierarchy/incomingCalls`, `callHierarchy/outgoingCalls`, ...
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`

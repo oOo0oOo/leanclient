@@ -938,6 +938,137 @@ class LeanLSPClient:
         """
         return self._send_request_document(path, "textDocument/foldingRange", {})
 
+    def get_call_hierarchy_items(self, path: str, line: int, character: int) -> list:
+        """Get call hierarchy items at a file position.
+
+        The :guilabel:`textDocument/prepareCallHierarchy` method in LSP retrieves call hierarchy items at a specified cursor position.
+        Use a call hierarchy item to get the incoming and outgoing calls: :meth:`get_call_hierarchy_incoming` and :meth:`get_call_hierarchy_outgoing`.
+
+        More Information:
+
+        - LSP Docs: `Prepare Call Hierarchy Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy>`_
+        - Lean Source: `Watchdog.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'data': {'module': 'LeanTestProject.Basic', 'name': 'add_zero_custom'},
+                    'kind': 14,
+                    'name': 'add_zero_custom',
+                    'range': {'end': {'character': 23, 'line': 1},
+                                'start': {'character': 8, 'line': 1}},
+                    'selectionRange': {'end': {'character': 23, 'line': 1},
+                                        'start': {'character': 8, 'line': 1}},
+                    'uri': 'file://...'
+                }
+            ]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number.
+            character (int): Character number.
+
+        Returns:
+            list: Call hierarchy items.
+        """
+        return self._send_request_document(
+            path,
+            "textDocument/prepareCallHierarchy",
+            {"position": {"line": line, "character": character}},
+        )
+
+    def get_call_hierarchy_incoming(self, item: dict) -> list:
+        """Get call hierarchy items that call a symbol.
+
+        The :guilabel:`callHierarchy/incomingCalls` method in LSP retrieves incoming call hierarchy items for a specified item.
+        Use :meth:`get_call_hierarchy_items` first to get an item.
+
+        More Information:
+
+        - LSP Docs: `Incoming Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls>`_
+        - Lean Source: `Watchdog.lean\u200E <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'from': {
+                        'data': {'module': 'Mathlib.Data.Finset.Card', 'name': 'Finset.exists_eq_insert_iff'},
+                        'kind': 14,
+                        'name': 'Finset.exists_eq_insert_iff',
+                        'range': {'end': {'character': 39, 'line': 630},
+                                    'start': {'character': 0, 'line': 618}},
+                        'selectionRange': {'end': {'character': 28, 'line': 618},
+                                            'start': {'character': 8, 'line': 618}},
+                        'uri': 'file://...'
+                    },
+                    'fromRanges': [{'end': {'character': 36, 'line': 630},
+                                    'start': {'character': 10, 'line': 630}}]
+                },
+                # ...
+            ]
+
+        Args:
+            item (dict): The call hierarchy item.
+
+        Returns:
+            list: Incoming call hierarchy items.
+        """
+        return self._send_request_document(
+            self._uri_to_local(item["uri"]),
+            "callHierarchy/incomingCalls",
+            {"item": item},
+        )
+
+    def get_call_hierarchy_outgoing(self, item: dict) -> list:
+        """Get outgoing call hierarchy items for a given item.
+
+        The :guilabel:`callHierarchy/outgoingCalls` method in LSP retrieves outgoing call hierarchy items for a specified item.
+        Use :meth:`get_call_hierarchy_items` first to get an item.
+
+        More Information:
+
+        - LSP Docs: `Outgoing Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls>`_
+        - Lean Source: `Watchdog.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'fromRanges': [{'end': {'character': 52, 'line': 184},
+                                    'start': {'character': 48, 'line': 184}},
+                                    {'end': {'character': 66, 'line': 184},
+                                    'start': {'character': 62, 'line': 184}}],
+                    'to': {'data': {'module': 'Mathlib.Data.Finset.Insert', 'name': 'Finset.cons'},
+                            'kind': 14,
+                            'name': 'Finset.cons',
+                            'range': {'end': {'character': 8, 'line': 234},
+                                    'start': {'character': 4, 'line': 234}},
+                            'selectionRange': {'end': {'character': 8, 'line': 234},
+                                            'start': {'character': 4, 'line': 234}},
+                            'uri': 'file://...'}
+                }
+            ]
+
+        Args:
+            item (dict): The call hierarchy item.
+
+        Returns:
+            list: Outgoing call hierarchy items.
+        """
+        return self._send_request_document(
+            self._uri_to_local(item["uri"]),
+            "callHierarchy/outgoingCalls",
+            {"item": item},
+        )
+
     def get_goal(self, path: str, line: int, character: int) -> dict | None:
         """Get proof goal at a file position.
 

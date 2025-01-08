@@ -84,6 +84,9 @@ class TestLSPClientBenchmark(unittest.TestCase):
         items = self.lsp.get_completions(file_path, LINE, COL + 20)
         completion_item = items[8]
 
+        items = self.lsp.get_call_hierarchy_items(file_path, LINE, COL + 20)
+        call_hierarchy_item = items[0]
+
         requests = [
             ("plain_goal", self.lsp.get_goal, (file_path, LINE, COL)),
             (
@@ -119,6 +122,21 @@ class TestLSPClientBenchmark(unittest.TestCase):
                 (file_path, 0, 0, LINE, COL),
             ),
             ("folding_range", self.lsp.get_folding_ranges, (file_path,)),
+            (
+                "call hierarchy items",
+                self.lsp.get_call_hierarchy_items,
+                (file_path, LINE, COL + 20),
+            ),
+            (
+                "call hierarchy incoming",
+                self.lsp.get_call_hierarchy_incoming,
+                (call_hierarchy_item,),
+            ),
+            (
+                "call hierarchy outgoing",
+                self.lsp.get_call_hierarchy_outgoing,
+                (call_hierarchy_item,),
+            ),
         ]
 
         print(f"{NUM_REPEATS} identical requests each:")

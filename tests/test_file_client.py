@@ -48,7 +48,12 @@ class TestSingleFileClient(unittest.TestCase):
         res.append(sfc.get_term_goal(9, 15))
         res.append(sfc.get_diagnostics())
         res.append(sfc.get_diagnostics_multi([TEST_FILE_PATH]))
-
         assert all(res)
+
+        item = sfc.get_call_hierarchy_items(1, 15)[0]
+        assert item["data"]["name"] == "add_zero_custom"
+        inc = sfc.get_call_hierarchy_incoming(item)
+        out = sfc.get_call_hierarchy_outgoing(item)
+        assert inc == out == []
 
         sfc.update_file([DocumentContentChange("change", (0, 0), (0, 1))])

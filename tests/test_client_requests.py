@@ -114,6 +114,19 @@ class TestLSPClientRequests(unittest.TestCase):
         res2 = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 15)
         self.assertEqual(res, res2)
 
+    def test_call_hierarchy(self):
+        path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
+
+        res = self.lsp.get_call_hierarchy_items(path, 72, 21)
+        assert res[0]["data"]["name"] == "Finset.not_mem_sdiff_of_mem_right"
+        res = self.lsp.get_call_hierarchy_incoming(res[0])
+        assert "from" in res[0]
+
+        res = self.lsp.get_call_hierarchy_items(path, 184, 18)
+        assert res[0]["data"]["name"] == "Finset.cons_sdiff_cons"
+        res = self.lsp.get_call_hierarchy_outgoing(res[0])
+        assert "to" in res[0]
+
     def test_empty_response(self):
         res = self.lsp.get_goal(TEST_FILE_PATH, 0, 0)
         self.assertEqual(res, None)

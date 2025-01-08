@@ -102,6 +102,18 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_folding_range`"""
         return self.client.get_folding_ranges(self.file_path)
 
+    def get_call_hierarchy_items(self, line: int, character: int) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_items`"""
+        return self.client.get_call_hierarchy_items(self.file_path, line, character)
+
+    def get_call_hierarchy_incoming(self, item: dict) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_incoming`"""
+        return self.client.get_call_hierarchy_incoming(item)
+
+    def get_call_hierarchy_outgoing(self, item: dict) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_outgoing`"""
+        return self.client.get_call_hierarchy_outgoing(item)
+
     def get_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_goal`"""
         return self.client.get_goal(self.file_path, line, character)
