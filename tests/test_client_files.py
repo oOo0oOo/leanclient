@@ -6,6 +6,7 @@ import unittest
 
 from leanclient import LeanLSPClient, DocumentContentChange
 
+from leanclient.utils import apply_changes_to_text
 from utils import get_random_fast_mathlib_files, get_random_mathlib_files
 from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 
@@ -50,24 +51,38 @@ class TestLSPClientFiles(unittest.TestCase):
 
     def test_file_update(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
-        diag = self.lsp.open_file(path)
-        assert len(diag) <= 1
+        diags = self.lsp.open_file(path)
+        assert len(diags) <= 1
 
         # Make some random changes
-        random.seed(6.28)
+        # random.seed(6.28)
         changes = []
         t0 = time.time()
+        text = self.lsp.get_file_content(path)
         for _ in range(8):
             line = random.randint(10, 200)
             d = DocumentContentChange(
                 "inv#lid", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
             )
             changes.append(d)
-        diags = self.lsp.update_file(path, changes)
-        self.assertTrue(len(diags) > 0)
+            text = apply_changes_to_text(text, [d])
+        diags2 = self.lsp.update_file(path, changes)
+        self.assertTrue(len(diags2) >= len(diags))
         print(
             f"Updated {len(changes)} changes in one call: {len(changes) / (time.time() - t0):.2f} changes/s"
         )
+
+        new_text = self.lsp.get_file_content(path)
+        self.assertEqual(text, new_text)
+
+        # Rerun with the altered text and compare diagnostics
+        fpath = path.replace(".lean", "_test.lean")
+        with open(TEST_ENV_DIR + fpath, "w") as f:
+            f.write(text)
+        diags3 = self.lsp.open_file(fpath)
+        os.remove(TEST_ENV_DIR + fpath)
+
+        self.assertEqual(diags2, diags3)
 
     def test_file_update_line_by_line(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
@@ -93,7 +108,10 @@ class TestLSPClientFiles(unittest.TestCase):
                 fantasy,
                 [DocumentContentChange(line, [i + start, 0], [i + start, len(line)])],
             )
+            content = self.lsp.get_file_content(fantasy)
+            self.assertEqual(content, text)
             count += len(diag)
+
         self.assertTrue(count > 25)
         self.assertEqual(len(diag), 0)
         speed = len(lines) / (time.time() - t0)

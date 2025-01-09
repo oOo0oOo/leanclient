@@ -6,7 +6,7 @@ import subprocess
 
 import orjson
 
-from .utils import SemanticTokenProcessor, DocumentContentChange
+from .utils import SemanticTokenProcessor, DocumentContentChange, apply_changes_to_text
 from .file_client import SingleFileClient
 
 
@@ -37,7 +37,8 @@ class LeanLSPClient:
         self.len_project_uri = len(self.project_path) + 7
         self.max_opened_files = max_opened_files
         self.request_id = 0
-        self.opened_files = collections.OrderedDict()
+        self.opened_files_diagnostics = collections.OrderedDict()
+        self.opened_files_content = {}
 
         if initial_build:
             subprocess.run(["lake", "build"], cwd=self.project_path, check=True)
@@ -281,11 +282,11 @@ class LeanLSPClient:
                 result = self._read_stdout()
                 responses.append(result)
 
-        diagnostics = {
-            resp["params"]["uri"]: resp["params"]["diagnostics"]
-            for resp in responses
-            if resp.get("method") == "textDocument/publishDiagnostics"
-        }
+        diagnostics = collections.defaultdict(list)
+        for resp in responses:
+            if resp.get("method") == "textDocument/publishDiagnostics":
+                diagnostics[resp["params"]["uri"]] = resp["params"]["diagnostics"]
+
         return [diagnostics[uri] for uri in uris]
 
     def _open_new_files(self, paths: list[str]) -> list:
@@ -300,10 +301,13 @@ class LeanLSPClient:
             list: List of diagnostics for each file.
         """
         uris = self._locals_to_uris(paths)
-        for uri in uris:
+        for path, uri in zip(paths, uris):
             params = {"textDocument": {"uri": uri}}
             with open(self._uri_to_abs(uri), "r") as f:
-                params["textDocument"]["text"] = f.read()
+                txt = f.read()
+
+            self.opened_files_content[path] = txt
+            params["textDocument"]["text"] = txt
             params["textDocument"]["languageId"] = "lean"
             params["textDocument"]["version"] = 1
             self._send_notification("textDocument/didOpen", params)
@@ -327,19 +331,23 @@ class LeanLSPClient:
             )
 
         # Open new files
-        new_files = [p for p in paths if p not in self.opened_files]
+        new_files = [p for p in paths if p not in self.opened_files_diagnostics]
         if new_files:
             diagnostics = self._open_new_files(new_files)
-            self.opened_files.update(zip(new_files, diagnostics))
+            self.opened_files_diagnostics.update(zip(new_files, diagnostics))
 
         # Remove files if over limit
-        remove_count = max(0, len(self.opened_files) - self.max_opened_files)
+        remove_count = max(
+            0, len(self.opened_files_diagnostics) - self.max_opened_files
+        )
         if remove_count > 0:
-            removable_paths = [p for p in self.opened_files if p not in paths]
+            removable_paths = [
+                p for p in self.opened_files_diagnostics if p not in paths
+            ]
             removable_paths = removable_paths[:remove_count]
             self.close_files(removable_paths)
 
-        return [self.opened_files[path] for path in paths]
+        return [self.opened_files_diagnostics[path] for path in paths]
 
     def open_file(self, path: str) -> list:
         """Open a file in the language server or retrieve diagnostics from cache.
@@ -371,7 +379,7 @@ class LeanLSPClient:
         Returns:
             list: Diagnostics of file
         """
-        if path not in self.opened_files:
+        if path not in self.opened_files_diagnostics:
             raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
         uri = self._local_to_uri(path)
         params = {"textDocument": {"uri": uri}}
@@ -380,14 +388,12 @@ class LeanLSPClient:
         params["contentChanges"] = [c.get_dict() for c in changes]
         self._send_notification("textDocument/didChange", params)
 
-        # Simply await the first diagnostics
-        # waitForDiagnostics does not return...
-        while True:
-            resp = self._read_stdout()
-            if resp.get("method") == "textDocument/publishDiagnostics":
-                break
-        diagnostics = resp["params"]["diagnostics"]
-        self.opened_files[path] = resp["params"]["diagnostics"]
+        diagnostics = self._wait_for_diagnostics([uri])[0]
+        self.opened_files_diagnostics[path] = diagnostics
+
+        self.opened_files_content[path] = apply_changes_to_text(
+            self.opened_files_content[path], changes
+        )
         return diagnostics
 
     def close_files(self, paths: list[str], blocking: bool = True):
@@ -400,14 +406,15 @@ class LeanLSPClient:
             blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
         """
         # Only close if file is open
-        paths = [p for p in paths if p in self.opened_files]
+        paths = [p for p in paths if p in self.opened_files_diagnostics]
         uris = self._locals_to_uris(paths)
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
 
         for path in paths:
-            del self.opened_files[path]
+            del self.opened_files_diagnostics[path]
+            del self.opened_files_content[path]
 
         # Wait for published diagnostics
         if blocking:
@@ -428,9 +435,23 @@ class LeanLSPClient:
         Returns:
             list: Diagnostics of file
         """
-        if path in self.opened_files:
-            return self.opened_files[path]
+        if path in self.opened_files_diagnostics:
+            return self.opened_files_diagnostics[path]
         return self.open_file(path)
+
+    def get_file_content(self, path: str) -> str:
+        """Get the content of a file as seen by the language server.
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            str: Content of the file.
+        """
+        if path in self.opened_files_content:
+            return self.opened_files_content[path]
+
+        raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
 
     def get_diagnostics_multi(self, paths: list[str]) -> list:
         """Get diagnostics for a list of files.
@@ -446,9 +467,9 @@ class LeanLSPClient:
         diagnostics = {}
         missing = []
         for path in paths:
-            if path in self.opened_files:
+            if path in self.opened_files_diagnostics:
                 # Store these now, because they might be closed soon?
-                diagnostics[path] = self.opened_files[path]
+                diagnostics[path] = self.opened_files_diagnostics[path]
             else:
                 missing.append(path)
 

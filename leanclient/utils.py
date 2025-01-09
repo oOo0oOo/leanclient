@@ -56,3 +56,18 @@ class SemanticTokenProcessor:
             char = char + d_char if d_line == 0 else d_char
             tokens.append([line, char, length, types[token]])
         return tokens
+
+
+def apply_changes_to_text(text: str, changes: list[DocumentContentChange]) -> str:
+    """Apply changes to a text."""
+    for change in changes:
+        start = get_index_from_line_character(text, *change.start)
+        end = get_index_from_line_character(text, *change.end)
+        text = text[:start] + change.text + text[end:]
+    return text
+
+
+def get_index_from_line_character(text: str, line: int, char: int) -> int:
+    """Convert line and character to flat index."""
+    lines = text.split("\n")
+    return sum(len(lines[i]) + 1 for i in range(line)) + char

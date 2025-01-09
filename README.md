@@ -33,7 +33,7 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 
 ## Key Features
 
-- **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
+- **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 - **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server).
 - **Synchronous**: Requests block until a response is received.
 - **Fast**: Typically more than 99% of time is spent waiting.
@@ -119,6 +119,7 @@ print(results)
 
 Might be implemented in the future:
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
+- `textDocument/codeAction`
 - `textDocument/prepareRename`, `textDocument/rename`
 
 Internal Lean methods:
