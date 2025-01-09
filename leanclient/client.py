@@ -1156,3 +1156,27 @@ class LeanLSPClient:
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},
         )
+
+    # HELPERS
+    def get_env(self, return_dict=True) -> dict | str:
+        """Get the environment variables of the project.
+
+        Args:
+            return_dict (bool): Return as dict or string.
+
+        Returns:
+            dict | str: Environment variables.
+        """
+        response = subprocess.run(
+            ["lake", "env"], cwd=self.project_path, capture_output=True, text=True
+        )
+        if not return_dict:
+            return response.stdout
+
+        env = {}
+        for line in response.stdout.split("\n"):
+            if not line:
+                continue
+            key, value = line.split("=", 1)
+            env[key] = value
+        return env

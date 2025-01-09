@@ -115,13 +115,15 @@ print(results)
 - Allow interaction before `waitForDiagnostics` returns
 
 
-### Missing LSP Methods
+### Missing LSP Interactions
 
 Might be implemented in the future:
-- `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`
+
+Internal Lean methods:
 - `$/lean/ileanInfoUpdate`, `$/lean/ileanInfoFinal`, `$/lean/importClosure`, `$/lean/staleDependency`
+- `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
 
 
 ## Documentation
