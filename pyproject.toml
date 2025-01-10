@@ -11,6 +11,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10"
 orjson = "^3.10.13"
+tqdm = "^4.67.1"
 
 [tool.poetry.group.dev.dependencies]
 gprof2dot = "^2024.6.6"

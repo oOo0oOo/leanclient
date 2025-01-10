@@ -5,6 +5,8 @@ from typing import Callable, Any
 import os
 from pprint import pprint
 
+import tqdm
+
 from leanclient import LeanLSPClient
 from leanclient import SingleFileClient
 
@@ -14,6 +16,11 @@ def _init_worker(project_path, kwargs):
     if "initial_build" not in kwargs:
         kwargs["initial_build"] = False
     client = LeanLSPClient(project_path, **kwargs)
+
+
+def _close_worker():
+    global client
+    client.close()
 
 
 def _worker_task_batched_open(*args, **kwargs):
@@ -87,6 +94,8 @@ class LeanClientPool:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        for _ in range(self.num_workers):
+            self.pool.apply(_close_worker)
         self.pool.close()
         self.pool.join()
 
@@ -117,6 +126,7 @@ class LeanClientPool:
         task: Callable[[SingleFileClient], None],
         file_paths: list,
         batch_size: int = 1,
+        verbose: bool = False
     ) -> list:
         """Parallel file processing.
 
@@ -126,18 +136,34 @@ class LeanClientPool:
             task(callable): The task to execute. Must take a `SingleFileClient` as its only argument.
             file_paths(list): A list of file paths to process.
             batch_size(int, optional): Batching might help in certain cases. Defaults to 1.
+            verbose(bool, optional): Show a progress bar. Defaults to False.
 
         Returns:
             list: The result of the task for each file.
         """
         if batch_size == 1:
             partial_task = partial(_worker_task, task=task)
-            return self.pool.map(partial_task, file_paths)
+            if not verbose:
+                return self.pool.map(partial_task, file_paths)
+            
+            with tqdm.tqdm(total=len(file_paths), desc="Processing files") as pbar:
+                results = []
+                for result in self.pool.imap(partial_task, file_paths):
+                    results.append(result)
+                    pbar.update()
+                return results
 
         batches = (
             file_paths[i : i + batch_size]
             for i in range(0, len(file_paths), batch_size)
         )
         partial_task = partial(_worker_task_batched_open, task=task)
-        results = self.pool.map(partial_task, batches)
-        return list(chain.from_iterable(results))
+        if not verbose:
+            return list(chain.from_iterable(self.pool.map(partial_task, batches)))
+        
+        with tqdm.tqdm(total=len(file_paths), desc="Processing files") as pbar:
+            results = []
+            for batch_result in self.pool.imap(partial_task, batches):
+                results.extend(batch_result)
+                pbar.update(len(batch_result))
+            return results
