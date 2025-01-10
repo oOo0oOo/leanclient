@@ -9,5 +9,6 @@ tests/profile*.png
 docs/build/
 
 examples/LeanProject/
+examples/AnalyseMathlib/
 
 TODO.md
