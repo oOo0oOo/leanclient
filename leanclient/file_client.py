@@ -50,6 +50,10 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics_multi`"""
         return self.client.get_diagnostics_multi(paths)
 
+    def get_file_content(self) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
+        return self.client.get_file_content(self.file_path)
+
     def get_completions(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion`"""
         return self.client.get_completions(self.file_path, line, character)
@@ -121,3 +125,7 @@ class SingleFileClient:
     def get_term_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_term_goal`"""
         return self.client.get_term_goal(self.file_path, line, character)
+
+    def get_env(self, return_dict: bool = True) -> dict | str:
+        """See :meth:`leanclient.client.LeanLSPClient.get_env`"""
+        return self.client.get_env(return_dict)

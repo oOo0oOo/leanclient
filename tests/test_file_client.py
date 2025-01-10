@@ -14,6 +14,18 @@ class TestSingleFileClient(unittest.TestCase):
     def tearDown(self):
         self.client.close()
 
+    def test_method_overlap(self):
+        method_client = dir(LeanLSPClient)
+        method_single = dir(SingleFileClient)
+
+        # Missing methods in single file client
+        missing = [
+            m for m in method_client if m not in method_single and not m.startswith("_")
+        ]
+        ok_missing = ["close", "close_files", "create_file_client", "open_files"]
+        missing = set(missing) - set(ok_missing)
+        assert not missing, f"Missing methods in SingleFileClient: {missing}"
+
     def test_creation(self):
         # Instantiate a SingleFileClient
         sfc = SingleFileClient(self.client, TEST_FILE_PATH)
@@ -48,6 +60,8 @@ class TestSingleFileClient(unittest.TestCase):
         res.append(sfc.get_term_goal(9, 15))
         res.append(sfc.get_diagnostics())
         res.append(sfc.get_diagnostics_multi([TEST_FILE_PATH]))
+        res.append(sfc.get_env())
+        res.append(sfc.get_file_content())
         assert all(res)
 
         item = sfc.get_call_hierarchy_items(1, 15)[0]

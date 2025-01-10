@@ -1179,7 +1179,7 @@ class LeanLSPClient:
         )
 
     # HELPERS
-    def get_env(self, return_dict=True) -> dict | str:
+    def get_env(self, return_dict: bool = True) -> dict | str:
         """Get the environment variables of the project.
 
         Args:
