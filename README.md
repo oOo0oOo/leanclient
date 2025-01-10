@@ -95,8 +95,7 @@ print(results)
 
 ## Currently in Beta
 
-- The API is almost stable.
-- There are missing features.
+- Missing features.
 - Needs more testing with different setups.
 - Any feedback is appreciated!
 
@@ -108,7 +107,6 @@ print(results)
 
 ### Potential Features
 
-- Virtual files (no actual file on disk), only in-memory in lsp and client
 - Use document versions to handle evolving file states
 - Automatic lean env setup for non Debian-based systems
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
