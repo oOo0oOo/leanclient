@@ -47,6 +47,26 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         self.assertEqual(len(diag2[0]), len(diag))
         assert len(diag2[-1]) > 0  # Any diagnostics in the mathlib file
 
+    def test_non_terminating_waitForDiagnostics(self):
+        # Create a file with non-terminating diagnostics (processing: {"kind": 2})
+        content = "/- Unclosed comment"
+        path = "BadFile.lean"
+        with open(TEST_ENV_DIR + path, "w") as f:
+            f.write(content)
+
+        diag = self.lsp.open_file(path)
+        self.assertEqual(diag[0]["message"], "unterminated comment")
+        self.lsp.close_files([path])
+
+        content = "/-! Unterminated comment 2"
+        with open(TEST_ENV_DIR + path, "w") as f:
+            f.write(content)
+
+        diag = self.lsp.open_file(path)
+        self.assertEqual(diag[0]["message"], "unterminated comment")
+
+        os.remove(TEST_ENV_DIR + path)
+
 
 class TestLSPClientErrors(unittest.TestCase):
     def setUp(self):
@@ -92,10 +112,10 @@ class TestLSPClientErrors(unittest.TestCase):
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
-        resp = self.lsp._wait_for_diagnostics(self.uri)
-        exp = "Cannot process request to closed file 'f'"
-        resp = resp[-1]["error"]["message"]
-        self.assertEqual(resp, exp)
+        resp = self.lsp._wait_for_diagnostics([self.uri])
+        exp = "Cannot process request to closed file"
+        resp = resp[0]["error"]["message"]
+        assert resp.startswith(exp)
 
         # Unmute
         sys.stdout.close()

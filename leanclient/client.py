@@ -157,13 +157,18 @@ class LeanLSPClient:
             return stderr.readline().decode("utf-8")
         return ""
 
-    def _send_request_rpc(self, method: str, params: dict, is_notification: bool):
+    def _send_request_rpc(
+        self, method: str, params: dict, is_notification: bool
+    ) -> int | None:
         """Send a JSON RPC request to the language server.
 
         Args:
             method (str): Method name.
             params (dict): Parameters for the method.
             is_notification (bool): Whether the request is a notification.
+
+        Returns:
+            int | None: Id of the request if it is not a notification.
         """
         request = {
             "jsonrpc": "2.0",
@@ -179,6 +184,9 @@ class LeanLSPClient:
         self.stdin.write(header + body)
         self.stdin.flush()
 
+        if not is_notification:
+            return self.request_id - 1
+
     def _send_request(self, method: str, params: dict) -> list[dict]:
         """Send a request to the language server and return all responses.
 
@@ -189,8 +197,7 @@ class LeanLSPClient:
         Returns:
             list[dict]: List of responses in the order they were received.
         """
-        self._send_request_rpc(method, params, is_notification=False)
-        rid = self.request_id - 1
+        rid = self._send_request_rpc(method, params, is_notification=False)
 
         result = self._read_stdout()
         results = [result]
@@ -228,10 +235,12 @@ class LeanLSPClient:
         self._send_request_rpc(method, params, is_notification=True)
 
     # OPEN/CLOSE FILES IN LANGUAGE SERVER
-    def _wait_for_diagnostics(self, uris: list[str]) -> list[dict]:
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list[dict]:
         """Wait until `waitForDiagnostics` returns or an rpc error occurs.
 
         This should only be used right after opening or updating files not to miss any responses.
+        Sometimes `waitForDiagnostics` doesn't return, so we also check for file processing completion.
+        See source for more details.
 
         **Example diagnostics**:
 
@@ -261,31 +270,56 @@ class LeanLSPClient:
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
+            timeout (float): Time to wait for final diagnostics after file has finished. This is a workaround because `waitForDiagnostics` doesnt always terminate. Higher timeout decreases chance of incomplete diagnostics returned. Defaults to 1 second.
 
         Returns:
-            list[dict]: List of diagnostic messages.
+            list[dict]: List of diagnostic messages or errors.
         """
         # Waiting in series; Parallel requests are not reliable?
-        responses = []
-        for uri in uris:
-            responses += self._send_request(
-                "textDocument/waitForDiagnostics", {"uri": uri, "version": 1}
-            )
-            result = responses[-1]
-            while True:
-                # Could also require: result.get("id") == self.request_id - 1
-                # Currently works bc the return value of waitForDiagnostics is `{}` (a bit unusual and therefore unique?)
-                if result.get("result", True) == {}:
-                    break
-                elif "error" in result:
-                    return responses + [result]
-                result = self._read_stdout()
-                responses.append(result)
-
         diagnostics = collections.defaultdict(list)
-        for resp in responses:
-            if resp.get("method") == "textDocument/publishDiagnostics":
-                diagnostics[resp["params"]["uri"]] = resp["params"]["diagnostics"]
+        finished_processing = collections.defaultdict(bool)
+
+        def process_response(res):
+            method = res.get("method")
+            if method == "textDocument/publishDiagnostics":
+                diagnostics[res["params"]["uri"]] = res["params"]["diagnostics"]
+
+            elif method == "$/lean/fileProgress":
+                uri = res["params"]["textDocument"]["uri"]
+                proc = res["params"]["processing"]
+                if res["params"]["processing"] == []:
+                    finished_processing[uri] = True
+                # Fatal error: https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+                if len(proc) > 0 and proc[-1]["kind"] == 2:
+                    finished_processing[uri] = True
+
+        for uri in uris:
+            # Send request for `waitForDiagnostics`
+            rid = self._send_request_rpc(
+                "textDocument/waitForDiagnostics",
+                {"uri": uri, "version": 1},
+                is_notification=False,
+            )
+
+            while True:
+                # Non-blocking read if we have finished processing the file
+                # `waitForDiagnostics` doesn't always return in that case. E.g. "unfinished comment"
+                if finished_processing[uri]:
+                    if select.select([self.stdout], [], [], timeout)[0]:
+                        res = self._read_stdout()
+                    else:
+                        break
+                else:
+                    res = self._read_stdout()
+
+                process_response(res)
+
+                if "error" in res:
+                    diagnostics[uri] = res
+                    break
+
+                if res.get("id") == rid and res.get("result", True) == {}:
+                    break
 
         return [diagnostics[uri] for uri in uris]
 
