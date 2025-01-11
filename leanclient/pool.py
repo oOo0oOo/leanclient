@@ -126,7 +126,7 @@ class LeanClientPool:
         task: Callable[[SingleFileClient], None],
         file_paths: list,
         batch_size: int = 1,
-        verbose: bool = False
+        verbose: bool = False,
     ) -> list:
         """Parallel file processing.
 
@@ -145,7 +145,7 @@ class LeanClientPool:
             partial_task = partial(_worker_task, task=task)
             if not verbose:
                 return self.pool.map(partial_task, file_paths)
-            
+
             with tqdm.tqdm(total=len(file_paths), desc="Processing files") as pbar:
                 results = []
                 for result in self.pool.imap(partial_task, file_paths):
@@ -160,7 +160,7 @@ class LeanClientPool:
         partial_task = partial(_worker_task_batched_open, task=task)
         if not verbose:
             return list(chain.from_iterable(self.pool.map(partial_task, batches)))
-        
+
         with tqdm.tqdm(total=len(file_paths), desc="Processing files") as pbar:
             results = []
             for batch_result in self.pool.imap(partial_task, batches):

@@ -65,10 +65,12 @@ class TestLeanClientPool(unittest.TestCase):
         for num_workers in [1, 4, 8]:
             with LeanClientPool(TEST_ENV_DIR, num_workers=num_workers) as pool:
                 pool.map(empty_task, files)
-    
+
     def test_verbose(self):
         NUM_FILES = 8
         with LeanClientPool(TEST_ENV_DIR) as pool:
-            results = pool.map(get_num_folding_ranges, FAST_MATHLIB_FILES[:NUM_FILES], verbose=True)
+            results = pool.map(
+                get_num_folding_ranges, FAST_MATHLIB_FILES[:NUM_FILES], verbose=True
+            )
             assert all(result > 0 for result in results)
             assert len(results) == NUM_FILES
