@@ -2,7 +2,7 @@
   leanclient
 </h1>
 
-<h4 align="center">Interact with the lean4 language server.</h4>
+<h4 align="center">Interact with the lean4 language server in Python.</h4>
 
 <p align="center">
   <a href="https://pypi.org/project/leanclient/">
@@ -22,10 +22,11 @@
   <a href="#currently-in-beta">Currently in Beta</a> •
   <a href="#documentation">Documentation</a> •
   <a href="#testing">Testing</a> •
-  <a href="#license">License</a>
+  <a href="#related-projects">Related Projects</a> •
+  <a href="#license--citation">License & Citation</a>
 </p>
 
-leanclient is a thin wrapper around the native Lean language server.
+leanclient is a thin Python wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
 
 Check out the [documentation](https://leanclient.readthedocs.io) for more information.
@@ -95,34 +96,43 @@ print(results)
 
 ## Currently in Beta
 
-- Missing features.
 - Needs more testing with different setups.
 - Any feedback is appreciated!
 
 
-### Next Features
+### Implemented LSP Interactions
 
-- Documentation: Real examples
+See the [documentation](https://leanclient.readthedocs.io) for more information on:
 
-
-### Potential Features
-
-- Use document versions to handle evolving file states
-- Automatic lean env setup for non Debian-based systems
-- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
-- Allow interaction before `waitForDiagnostics` returns
+- Opening, updating and closing files.
+- Diagnostic information: Errors, warnings etc
+- Goals and term goal.
+- Call hierarchy: Incoming and outgoing calls.
+- Hover information.
+- Document symbols (theorems, definitions, etc).
+- Semantic tokens, folding ranges, and document highlights.
+- Locations of definitions and type definitions.
+- Locations of declarations and references.
+- Completions, completion item resolve.
 
 
 ### Missing LSP Interactions
 
 Might be implemented in the future:
-- `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/codeAction`
+- `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`
 
 Internal Lean methods:
-- `$/lean/ileanInfoUpdate`, `$/lean/ileanInfoFinal`, `$/lean/importClosure`, `$/lean/staleDependency`
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
+
+
+### Potential Features
+
+- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
+- Automatic testing (lean env setup) for non Debian-based systems
+- Use document versions to handle evolving file states
+- Allow interaction before `waitForDiagnostics` returns
 
 
 ## Documentation
@@ -142,8 +152,37 @@ make test-profile       # Run all tests with cProfile
 ```
 
 
-## License
+## Related Projects
 
-MIT
+### Lean LSP Clients
+
+- [vscode-lean4](https://github.com/leanprover/vscode-lean4)
+- [lean-client-js](https://github.com/leanprover/lean-client-js/)
+- [lean-client-python](https://github.com/leanprover-community/lean-client-python)
+- [communicating-with-lean](https://github.com/jasonrute/communicating-with-lean)
+
+### Lean REPLs
+
+- [LeanDojo](https://github.com/lean-dojo/LeanDojo)
+- [PyPantograph](https://github.com/lenianiva/PyPantograph)
+- [lean-repl-py](https://github.com/sorgfresser/lean-repl-py)
+- [repl](https://github.com/leanprover-community/repl)
+- [minictx-eval](https://github.com/cmu-l3/minictx-eval)
+- [LeanREPL](https://github.com/arthurpaulino/LeanREPL)
+
+
+## License & Citation
+
+**MIT** licensed. See [LICENSE](LICENSE) for more information.
 
 Citing this repository is highly appreciated but not required by the license.
+
+```bibtex
+@software{leanclient2025,
+  author = {Oliver Dressler},
+  title = {{leanclient: Python client to interact with the lean4 language server}},
+  url = {https://github.com/oOo0oOo/leanclient},
+  month = {1},
+  year = {2025}
+}
+```

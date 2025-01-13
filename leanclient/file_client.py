@@ -55,7 +55,7 @@ class SingleFileClient:
         return self.client.get_file_content(self.file_path)
 
     def get_completions(self, line: int, character: int) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_completion`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_completions`"""
         return self.client.get_completions(self.file_path, line, character)
 
     def get_completion_item_resolve(self, item: dict) -> str:
@@ -67,11 +67,11 @@ class SingleFileClient:
         return self.client.get_hover(self.file_path, line, character)
 
     def get_declarations(self, line: int, character: int) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_declaration`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_declarations`"""
         return self.client.get_declarations(self.file_path, line, character)
 
     def get_definitions(self, line: int, character: int) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_definition`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_definitions`"""
         return self.client.get_definitions(self.file_path, line, character)
 
     def get_references(self, line: int, character: int) -> list:
@@ -79,15 +79,15 @@ class SingleFileClient:
         return self.client.get_references(self.file_path, line, character)
 
     def get_type_definitions(self, line: int, character: int) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_type_definition`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_type_definitions`"""
         return self.client.get_type_definitions(self.file_path, line, character)
 
     def get_document_symbols(self) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_document_symbol`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_document_symbols`"""
         return self.client.get_document_symbols(self.file_path)
 
     def get_document_highlights(self, line: int, character: int) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_document_highlight`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_document_highlights`"""
         return self.client.get_document_highlights(self.file_path, line, character)
 
     def get_semantic_tokens(self) -> list:
@@ -103,7 +103,7 @@ class SingleFileClient:
         )
 
     def get_folding_ranges(self) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_folding_range`"""
+        """See :meth:`leanclient.client.LeanLSPClient.get_folding_ranges`"""
         return self.client.get_folding_ranges(self.file_path)
 
     def get_call_hierarchy_items(self, line: int, character: int) -> list:

@@ -77,8 +77,6 @@ Or try it locally:
 Currently in Beta
 -----------------
 
-- The API is almost stable.
-- There are missing features.
 - Needs more testing with different setups.
 - Any feedback is appreciated!
 
