@@ -1,5 +1,6 @@
 import os
 import collections
+import pathlib
 from pprint import pprint
 import select
 import subprocess
@@ -10,6 +11,7 @@ import orjson
 from .utils import SemanticTokenProcessor, DocumentContentChange, apply_changes_to_text
 from .file_client import SingleFileClient
 
+LEN_URI_PREFIX = 7
 
 class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
@@ -35,7 +37,7 @@ class LeanLSPClient:
         self, project_path: str, max_opened_files: int = 8, initial_build: bool = True
     ):
         self.project_path = os.path.abspath(project_path) + "/"
-        self.len_project_uri = len(self.project_path) + 7
+        self.len_project_uri = len(self.project_path) + LEN_URI_PREFIX
         self.max_opened_files = max_opened_files
         self.request_id = 0
         self.opened_files_diagnostics = collections.OrderedDict()
@@ -98,21 +100,22 @@ class LeanLSPClient:
         Returns:
             str: URI representation of the file.
         """
-        return "file://" + self.project_path + local_path
+        return pathlib.Path(self.project_path, local_path).as_uri()
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
         """See :meth:`_local_to_uri`"""
         return [
-            "file://" + self.project_path + local_path for local_path in local_paths
+            pathlib.Path(self.project_path, local_path).as_uri()
+            for local_path in local_paths
         ]
 
     def _uri_to_abs(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        return uri[7:]
+        return uri[LEN_URI_PREFIX:]
 
     def _uri_to_local(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        return uri[self.len_project_uri :]
+        return uri[self.len_project_uri:]
 
     # LANGUAGE SERVER RPC INTERACTION
     def _read_stdout(self) -> dict:
