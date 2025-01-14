@@ -87,53 +87,55 @@ class TestLSPClientBenchmark(unittest.TestCase):
         items = self.lsp.get_call_hierarchy_items(file_path, LINE, COL + 20)
         call_hierarchy_item = items[0]
 
+        results = []
+
         requests = [
-            ("plain_goal", self.lsp.get_goal, (file_path, LINE, COL)),
+            ("get_goal", self.lsp.get_goal, (file_path, LINE, COL)),
             (
-                "plain_term_goal",
+                "get_term_goal",
                 self.lsp.get_term_goal,
                 (file_path, LINE, COL + 20),
             ),
-            ("completion", self.lsp.get_completions, (file_path, LINE, COL + 20)),
+            ("get_completions", self.lsp.get_completions, (file_path, LINE, COL + 20)),
             (
-                "completion_item_resolve",
+                "get_completion_item_resolve",
                 self.lsp.get_completion_item_resolve,
                 (completion_item,),
             ),
-            ("definition", self.lsp.get_definitions, (file_path, LINE, COL)),
-            ("hover", self.lsp.get_hover, (file_path, LINE, COL)),
-            ("declaration", self.lsp.get_declarations, (file_path, LINE, COL)),
-            ("references", self.lsp.get_references, (file_path, LINE, COL + 20)),
+            ("get_definitions", self.lsp.get_definitions, (file_path, LINE, COL)),
+            ("get_hover", self.lsp.get_hover, (file_path, LINE, COL)),
+            ("get_declarations", self.lsp.get_declarations, (file_path, LINE, COL)),
+            ("get_references", self.lsp.get_references, (file_path, LINE, COL + 20)),
             (
-                "type_definition",
+                "get_type_definitions",
                 self.lsp.get_type_definitions,
                 (file_path, LINE, COL + 10),
             ),
             (
-                "document_highlight",
+                "get_document_highlights",
                 self.lsp.get_document_highlights,
                 (file_path, LINE, COL + 20),
             ),
-            ("document_symbol", self.lsp.get_document_symbols, (file_path,)),
-            ("semantic_tokens_full", self.lsp.get_semantic_tokens, (file_path,)),
+            ("get_document_symbols", self.lsp.get_document_symbols, (file_path,)),
+            ("get_semantic_tokens", self.lsp.get_semantic_tokens, (file_path,)),
             (
-                "semantic_tokens_range",
+                "get_semantic_tokens_range",
                 self.lsp.get_semantic_tokens_range,
                 (file_path, 0, 0, LINE, COL),
             ),
-            ("folding_range", self.lsp.get_folding_ranges, (file_path,)),
+            ("get_folding_ranges", self.lsp.get_folding_ranges, (file_path,)),
             (
-                "call hierarchy items",
+                "get_call hierarchy items",
                 self.lsp.get_call_hierarchy_items,
                 (file_path, LINE, COL + 20),
             ),
             (
-                "call hierarchy incoming",
+                "get_call hierarchy incoming",
                 self.lsp.get_call_hierarchy_incoming,
                 (call_hierarchy_item,),
             ),
             (
-                "call hierarchy outgoing",
+                "get_call hierarchy outgoing",
                 self.lsp.get_call_hierarchy_outgoing,
                 (call_hierarchy_item,),
             ),
@@ -147,7 +149,13 @@ class TestLSPClientBenchmark(unittest.TestCase):
                 if not res:
                     print(f"Empty response for {name}: '{res}' type: {type(res)}")
             total_time = time.time() - start_time
-            print(f"{name}: {NUM_REPEATS / (1e-9 + total_time):.2f} requests/s")
+            results.append((name, NUM_REPEATS/total_time))
+        
+        # Print results sorted by fastest to slowest
+        results.sort(key=lambda x: x[1], reverse=True)
+        print("\nResults:")
+        for res in results:
+            print(f"{res[0]}: {res[1]:.2f} queries/s")
 
         # Layout profile using dot and gprof2dot
         if LOCAL_PROFILE:

@@ -85,4 +85,5 @@ Currently in Beta
    :maxdepth: 2
    :caption: Contents
 
+   benchmarks
    api

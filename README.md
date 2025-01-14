@@ -16,16 +16,6 @@
   </a>
 </p>
 
-<p align="center">
-  <a href="#key-features">Key Features</a> •
-  <a href="#quickstart">Quickstart</a> •
-  <a href="#currently-in-beta">Currently in Beta</a> •
-  <a href="#documentation">Documentation</a> •
-  <a href="#testing">Testing</a> •
-  <a href="#related-projects">Related Projects</a> •
-  <a href="#license--citation">License & Citation</a>
-</p>
-
 leanclient is a thin Python wrapper around the native Lean language server.
 It enables interaction with a Lean language server instance running in a subprocess.
 
@@ -140,6 +130,10 @@ Internal Lean methods:
 Read the documentation at [leanclient.readthedocs.io](https://leanclient.readthedocs.io).
 
 Run ``make docs`` to build the documentation locally.
+
+## Benchmarks
+
+See [documentation](https://leanclient.readthedocs.io/en/latest/benchmarks.html) for more information.
 
 
 ## Testing
