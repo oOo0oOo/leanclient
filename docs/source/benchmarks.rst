@@ -137,11 +137,10 @@ Using a LeanClientPool, you can process multiple files in parallel using multipl
   def count_tokens(client):
     return len(client.get_semantic_tokens())
 
-  with LeanClientPool(PROJECT_PATH, num_workers=4, {max_opened_file: 8}) as pool:
+  with LeanClientPool(PROJECT_PATH, num_workers=4) as pool:
     results = pool.map(count_tokens, files, batch_size=4)
 
 The performance increase is dependent on:
 
 - **num_workers**: The number of separate workers with their own lean language server. Scale this with CPU cores.
-- **batch_size**: Processing multiple files in a batch allows the server to open multiple files at once.
-- **max_opened_file**: From LeanLSPClient.__init__(). Requires more memory, keep this larger than the batch_size to prevent closing files in a single batch.
+- **batch_size**: Batching allows the language server to open multiple files in parallel. Typically faster but requires more resources (mainly memory). Beware of large batch_sizes.

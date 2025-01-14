@@ -360,8 +360,8 @@ class LeanLSPClient:
             list: List of diagnostics for each file.
         """
         if len(paths) > self.max_opened_files:
-            print(
-                f"Warning! Should not open more than {self.max_opened_files} files at once."
+            raise RuntimeError(
+                f"Warning! Can not open more than {self.max_opened_files} files at once. Increase LeanLSPClient.max_opened_files or open less files."
             )
 
         # Open new files

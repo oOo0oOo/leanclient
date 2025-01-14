@@ -135,7 +135,7 @@ class LeanClientPool:
         Args:
             task(callable): The task to execute. Must take a `SingleFileClient` as its only argument.
             file_paths(list): A list of file paths to process.
-            batch_size(int, optional): Batching might help in certain cases. Defaults to 1.
+            batch_size(int, optional): Batching allows the language server to open multiple files in parallel. Typically faster but requires more resources (mainly memory). Beware of large batch_sizes. Defaults to 1.
             verbose(bool, optional): Show a progress bar. Defaults to False.
 
         Returns:
