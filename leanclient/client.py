@@ -3,6 +3,7 @@ import collections
 from pprint import pprint
 import select
 import subprocess
+import time
 
 import orjson
 
@@ -60,7 +61,10 @@ class LeanLSPClient:
             print("Process started with stderr message:\n", error)
 
         # Send initialization request, surprisingly no params required
-        results = self._send_request("initialize", {"processId": os.getpid()})
+        project_uri = self._local_to_uri(self.project_path)
+        results = self._send_request(
+            "initialize", {"processId": os.getpid(), "rootUri": project_uri}
+        )
         server_info = results[-1]["result"]
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
@@ -224,6 +228,45 @@ class LeanLSPClient:
         params["textDocument"] = {"uri": self._local_to_uri(path)}
         results = self._send_request(method, params)
         return results[-1]["result"]
+
+    def _send_request_document_retries(
+        self,
+        path: str,
+        method: str,
+        params: dict,
+        max_retries: int = 1,
+        retry_delay: float = 0.0,
+    ) -> dict:
+        """Send request until no new results are found after a number of retries.
+
+        Args:
+            path (str): Relative file path.
+            method (str): Method name.
+            params (dict): Parameters for the method.
+            max_retries (int): Number of times to retry if no new results were found. Defaults to 1.
+            retry_delay (float): Time to wait between retries. Defaults to 0.0.
+
+        Returns:
+            dict: Final response.
+        """
+        prev_results = "Nvr_gnn_gv_y_p"
+        retry_count = 0
+        while True:
+            results = self._send_request_document(
+                path,
+                method,
+                params,
+            )
+            if results == prev_results:
+                retry_count += 1
+                if retry_count > max_retries:
+                    break
+                time.sleep(retry_delay)
+            else:
+                retry_count = 0
+                prev_results = results
+
+        return results
 
     def _send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
@@ -405,6 +448,8 @@ class LeanLSPClient:
 
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
         Raises a FileNotFoundError if the file is not open.
+
+        Use :meth:`get_file_content` to get the current content of a file, as seen by the language server.
 
         Args:
             path (str): Relative file path to update.
@@ -733,7 +778,15 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
-    def get_references(self, path: str, line: int, character: int) -> list:
+    def get_references(
+        self,
+        path: str,
+        line: int,
+        character: int,
+        include_declaration: bool = False,
+        max_retries: int = 3,
+        retry_delay: float = 0.001,
+    ) -> list:
         """Get locations of references to a symbol at a file position.
 
         In LSP, the :guilabel:`textDocument/references` method provides the locations of all references to a symbol at a given cursor position.
@@ -762,17 +815,22 @@ class LeanLSPClient:
             path (str): Relative file path.
             line (int): Line number.
             character (int): Character number.
+            include_declaration (bool): Whether to include the declaration itself in the results. Defaults to False.
+            max_retries (int): Number of times to retry if no new results were found. Defaults to 1.
+            retry_delay (float): Time to wait between retries. Defaults to 0.0.
 
         Returns:
             list: Locations.
         """
-        return self._send_request_document(
+        return self._send_request_document_retries(
             path,
             "textDocument/references",
             {
                 "position": {"line": line, "character": character},
-                "context": {"includeDeclaration": True},
+                "context": {"includeDeclaration": include_declaration},
             },
+            max_retries,
+            retry_delay,
         )
 
     def get_type_definitions(self, path: str, line: int, character: int) -> list:
@@ -1004,6 +1062,10 @@ class LeanLSPClient:
         - LSP Docs: `Prepare Call Hierarchy Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy>`_
         - Lean Source: `Watchdog.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
 
+        Attention:
+
+            Unfortunately, this function is currently **unreliable**!
+
         Example response:
 
         .. code-block:: python
@@ -1045,6 +1107,10 @@ class LeanLSPClient:
 
         - LSP Docs: `Incoming Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls>`_
         - Lean Source: `Watchdog.lean\u200E <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
+
+        Attention:
+
+            Unfortunately, this function is currently **unreliable**!
 
         Example response:
 
@@ -1090,6 +1156,10 @@ class LeanLSPClient:
 
         - LSP Docs: `Outgoing Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls>`_
         - Lean Source: `Watchdog.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
+
+        Attention:
+
+            Unfortunately, this function is currently **unreliable**!
 
         Example response:
 
@@ -1172,7 +1242,7 @@ class LeanLSPClient:
 
         :guilabel:`$/lean/plainTermGoal` is a custom lsp request that returns the term goal at a specified cursor position.
 
-        In the VSCode Lean Infoview, this is shown as ``Expected type``.
+        In the VSCode `Lean Infoview`, this is shown as `Expected type`.
 
         Use :meth:`get_goal` for the full proof goal.
 

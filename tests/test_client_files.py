@@ -86,9 +86,11 @@ class TestLSPClientFiles(unittest.TestCase):
 
     def test_file_update_line_by_line(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
-        path = ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean"
+        path = (
+            ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean"
+        )
         path = ".lake/packages/mathlib/Mathlib/FieldTheory/Galois/GaloisClosure.lean"
-        
+
         with open(TEST_ENV_DIR + path, "r") as f:
             lines = f.readlines()
 

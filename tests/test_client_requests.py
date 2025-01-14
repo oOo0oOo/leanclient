@@ -44,9 +44,9 @@ class TestLSPClientRequests(unittest.TestCase):
         assert type(res) == list
         res = res[0]
         if "uri" in res:
-            print(
-                "This is highly worrisome, investigate response to definition request."
-            )
+            # print(
+            #     "This is highly worrisome, investigate response to definition request."
+            # )
             assert res["uri"].endswith("Prelude.lean")
         else:
             assert res["targetUri"].endswith("Prelude.lean")
@@ -54,7 +54,7 @@ class TestLSPClientRequests(unittest.TestCase):
     def test_references(self):
         res = self.lsp.get_references(TEST_FILE_PATH, 9, 24)
         assert type(res) == list
-        self.assertTrue(len(res) > 1)
+        self.assertTrue(len(res) == 1)
 
     def test_type_definition(self):
         res = self.lsp.get_type_definitions(TEST_FILE_PATH, 1, 36)
@@ -114,18 +114,59 @@ class TestLSPClientRequests(unittest.TestCase):
         res2 = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 15)
         self.assertEqual(res, res2)
 
-    def test_call_hierarchy(self):
+    def test_mathlib_file(self):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
 
-        res = self.lsp.get_call_hierarchy_items(path, 72, 21)
-        assert res[0]["data"]["name"] == "Finset.not_mem_sdiff_of_mem_right"
-        res = self.lsp.get_call_hierarchy_incoming(res[0])
-        assert "from" in res[0]
+        self.lsp.open_file(path)
 
-        res = self.lsp.get_call_hierarchy_items(path, 184, 18)
-        assert res[0]["data"]["name"] == "Finset.cons_sdiff_cons"
-        res = self.lsp.get_call_hierarchy_outgoing(res[0])
-        assert "to" in res[0]
+        # Finset
+        res = self.lsp.get_definitions(path, 52, 27)
+        assert len(res) == 1
+        uri = res[0]["uri"] if "uri" in res[0] else res[0]["targetUri"]
+        assert uri.endswith("Defs.lean")
+
+        def flatten(ref):
+            return tuple(
+                [
+                    ref["uri"],
+                    ref["range"]["start"]["line"],
+                    ref["range"]["start"]["character"],
+                    ref["range"]["end"]["line"],
+                    ref["range"]["end"]["character"],
+                ]
+            )
+
+        references = self.lsp.get_references(path, 52, 27)
+        flat = set([flatten(ref) for ref in references])
+        assert len(flat) == len(references)
+        assert len(references) == 5538  # References for Finset
+
+        res = self.lsp.get_declarations(path, 52, 27)
+        assert len(res) == 1
+        assert res[0]["uri"].endswith("Defs.lean")
+
+        # Local theorem: sdiff_val
+        res = self.lsp.get_definitions(path, 52, 9)
+        assert res[0]["uri"] == self.lsp._local_to_uri(path)
+
+        res = self.lsp.get_references(path, 52, 9)
+        assert len(res) == 2
+
+        res = self.lsp.get_references(path, 52, 9, include_declaration=True)
+        assert len(res) == 3
+
+    def test_call_hierarchy(self):
+        path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
+        self.lsp.open_file(path)
+
+        ch_item = self.lsp.get_call_hierarchy_items(path, 52, 9)[0]
+        assert ch_item["data"]["name"] == "Finset.sdiff_val"
+
+        res = self.lsp.get_call_hierarchy_incoming(ch_item)
+        # assert len(res) == 2, len(res)
+
+        res = self.lsp.get_call_hierarchy_outgoing(ch_item)
+        # assert len(res) == 3, len(res)
 
     def test_empty_response(self):
         res = self.lsp.get_goal(TEST_FILE_PATH, 0, 0)

@@ -149,8 +149,8 @@ class TestLSPClientBenchmark(unittest.TestCase):
                 if not res:
                     print(f"Empty response for {name}: '{res}' type: {type(res)}")
             total_time = time.time() - start_time
-            results.append((name, NUM_REPEATS/total_time))
-        
+            results.append((name, NUM_REPEATS / total_time))
+
         # Print results sorted by fastest to slowest
         results.sort(key=lambda x: x[1], reverse=True)
         print("\nResults:")
