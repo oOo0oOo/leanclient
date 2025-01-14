@@ -1,8 +1,6 @@
 API
 ===
 
-Client
-------
 
 .. automodule:: leanclient.client
    :members:
@@ -13,8 +11,6 @@ Client
 |
 |
 
-Single File Client
-------------------
 
 .. automodule:: leanclient.file_client
    :members:
@@ -25,8 +21,6 @@ Single File Client
 |
 |
 
-Lean Client Pool
-----------------
 
 .. automodule:: leanclient.pool
    :members:
@@ -36,7 +30,8 @@ Lean Client Pool
 |
 |
 
-Utils
+
+utils
 -----
 
 .. automodule:: leanclient.utils

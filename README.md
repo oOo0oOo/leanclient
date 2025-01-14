@@ -27,7 +27,7 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 - **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 - **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server).
 - **Synchronous**: Requests block until a response is received.
-- **Fast**: Typically more than 99% of time is spent waiting.
+- **Fast**: Typically more than 95% of time is spent waiting.
 - **Parallel**: Easy batch processing of files using all your cores.
 
 
@@ -97,7 +97,6 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Opening, updating and closing files.
 - Diagnostic information: Errors, warnings etc
 - Goals and term goal.
-- Call hierarchy: Incoming and outgoing calls.
 - Hover information.
 - Document symbols (theorems, definitions, etc).
 - Semantic tokens, folding ranges, and document highlights.
@@ -108,6 +107,8 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 
 ### Missing LSP Interactions
 
+- Call hierarchy is currently not reliable.
+
 Might be implemented in the future:
 - `textDocument/codeAction`
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
@@ -115,10 +116,12 @@ Might be implemented in the future:
 
 Internal Lean methods:
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
+- `$/lean/staleDependency`
 
 
 ### Potential Features
 
+- Choose between `lean --server` and `lake serve`
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Automatic testing (lean env setup) for non Debian-based systems
 - Use document versions to handle evolving file states

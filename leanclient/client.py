@@ -819,8 +819,8 @@ class LeanLSPClient:
             line (int): Line number.
             character (int): Character number.
             include_declaration (bool): Whether to include the declaration itself in the results. Defaults to False.
-            max_retries (int): Number of times to retry if no new results were found. Defaults to 1.
-            retry_delay (float): Time to wait between retries. Defaults to 0.0.
+            max_retries (int): Number of times to retry if no new results were found. Defaults to 3.
+            retry_delay (float): Time to wait between retries. Defaults to 0.001.
 
         Returns:
             list: Locations.

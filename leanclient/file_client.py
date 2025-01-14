@@ -74,9 +74,9 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_definitions`"""
         return self.client.get_definitions(self.file_path, line, character)
 
-    def get_references(self, line: int, character: int) -> list:
+    def get_references(self, line: int, character: int, include_declaration: bool = False, max_retries: int = 3, retry_delay: float = 0.001) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_references`"""
-        return self.client.get_references(self.file_path, line, character)
+        return self.client.get_references(self.file_path, line, character, include_declaration, max_retries, retry_delay)
 
     def get_type_definitions(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_type_definitions`"""
