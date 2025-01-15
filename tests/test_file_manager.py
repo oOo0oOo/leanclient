@@ -4,18 +4,32 @@ from pprint import pprint
 import time
 import unittest
 
-from leanclient import LeanLSPClient, DocumentContentChange
+from leanclient import DocumentContentChange
+from leanclient.base_client import BaseLeanLSPClient
+from leanclient.file_manager import LSPFileManager
 
 from leanclient.utils import apply_changes_to_text
-from tests.utils import read_stdout_timeout
-from utils import get_random_fast_mathlib_files, get_random_mathlib_files
+from tests.utils import (
+    read_stdout_timeout,
+    get_random_fast_mathlib_files,
+    get_random_mathlib_files,
+)
+
 from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 
 
-class TestLSPClientFiles(unittest.TestCase):
+class WrappedFileManager(LSPFileManager, BaseLeanLSPClient):
+    def __init__(self, *args, **kwargs):
+        BaseLeanLSPClient.__init__(self, *args, **kwargs)
+        LSPFileManager.__init__(self)
+
+
+class TestLSPFileManager(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        cls.lsp = WrappedFileManager(
+            TEST_ENV_DIR, initial_build=False, print_warnings=False
+        )
 
     @classmethod
     def tearDownClass(cls):

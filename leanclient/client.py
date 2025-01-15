@@ -1,5 +1,7 @@
 from pprint import pprint
 
+from leanclient.single_file_client import SingleFileClient
+
 from .utils import experimental
 from .base_client import BaseLeanLSPClient
 from .file_manager import LSPFileManager
@@ -8,8 +10,8 @@ from .file_manager import LSPFileManager
 class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
-    It interacts with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
-    This wrapper is blocking, it always waits until the language server responds.
+    It allows interaction with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
+    This wrapper is blocking, it waits until the language server responds.
 
     NOTE:
         Your **project_path** is the root folder of a Lean project where `lakefile.toml` is located.
@@ -35,6 +37,17 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     ):
         BaseLeanLSPClient.__init__(self, project_path, initial_build, print_warnings)
         LSPFileManager.__init__(self, max_opened_files)
+
+    def create_file_client(self, file_path: str) -> SingleFileClient:
+        """Create a SingleFileClient for a file.
+
+        Args:
+            file_path (str): Relative file path.
+
+        Returns:
+            SingleFileClient: A client for interacting with a single file.
+        """
+        return SingleFileClient(self, file_path)
 
     def get_completions(self, path: str, line: int, character: int) -> list:
         """Get completion items at a file position.

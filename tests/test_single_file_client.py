@@ -2,8 +2,8 @@ from pprint import pprint
 import unittest
 
 from leanclient import SingleFileClient, LeanLSPClient
-
 from leanclient.utils import DocumentContentChange
+
 from run_tests import TEST_ENV_DIR, TEST_FILE_PATH
 
 

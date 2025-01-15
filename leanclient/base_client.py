@@ -1,26 +1,20 @@
 import os
-import collections
 import pathlib
 from pprint import pprint
 import subprocess
-import time
 
 import select
 import orjson
 
 from .utils import SemanticTokenProcessor
-from .single_file_client import SingleFileClient
 
 LEN_URI_PREFIX = 7
 
 
 class BaseLeanLSPClient:
-    """BaseLeanLSPClient is managing RPC communication and file syncing.
+    """BaseLeanLSPClient runs a language server in a subprocess.
 
-    It interacts with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
-    This wrapper is blocking, it always waits until the language server responds.
-
-    See :meth:`leanclient.client.LeanLSPClient` for details.
+    See :meth:`leanclient.client.LeanLSPClient` for more information.
     """
 
     def __init__(
@@ -117,8 +111,7 @@ class BaseLeanLSPClient:
     def _read_stdout(self) -> dict:
         """Read the next message from the language server.
 
-        This is the main blocking function in this synchronous client:
-
+        This is the main blocking function in this synchronous client.
 
         Returns:
             dict: JSON response from the language server.
@@ -210,63 +203,6 @@ class BaseLeanLSPClient:
 
         return results
 
-    def _send_request_document(self, path: str, method: str, params: dict) -> dict:
-        """Send request about a document and return the final response.
-
-        This function drops all intermediate responses since we typically don't need them.
-
-        Args:
-            path (str): Relative file path.
-            method (str): Method name.
-            params (dict): Parameters for the method.
-
-        Returns:
-            dict: Final response.
-        """
-        self.open_file(path)
-        params["textDocument"] = {"uri": self._local_to_uri(path)}
-        results = self._send_request(method, params)
-        return results[-1]["result"]
-
-    def _send_request_document_retries(
-        self,
-        path: str,
-        method: str,
-        params: dict,
-        max_retries: int = 1,
-        retry_delay: float = 0.0,
-    ) -> dict:
-        """Send request until no new results are found after a number of retries.
-
-        Args:
-            path (str): Relative file path.
-            method (str): Method name.
-            params (dict): Parameters for the method.
-            max_retries (int): Number of times to retry if no new results were found. Defaults to 1.
-            retry_delay (float): Time to wait between retries. Defaults to 0.0.
-
-        Returns:
-            dict: Final response.
-        """
-        prev_results = "Nvr_gnn_gv_y_p"
-        retry_count = 0
-        while True:
-            results = self._send_request_document(
-                path,
-                method,
-                params,
-            )
-            if results == prev_results:
-                retry_count += 1
-                if retry_count > max_retries:
-                    break
-                time.sleep(retry_delay)
-            else:
-                retry_count = 0
-                prev_results = results
-
-        return results
-
     def _send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
 
@@ -275,100 +211,6 @@ class BaseLeanLSPClient:
             params (dict): Parameters for the method.
         """
         self._send_request_rpc(method, params, is_notification=True)
-
-    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 3) -> list[dict]:
-        """Wait until `waitForDiagnostics` returns or an rpc error occurs.
-
-        This should only be used right after opening or updating files not to miss any responses.
-        Sometimes `waitForDiagnostics` doesn't return, so we also check for file processing completion.
-        See source for more details.
-
-        **Example diagnostics**:
-
-        .. code-block:: python
-
-            [
-                {
-                    'message': "declaration uses 'sorry'",
-                    'severity': 2,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}},
-                    'fullRange': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}}
-                },
-                {
-                    'message': "unexpected end of input; expected ':'",
-                    'severity': 1,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}},
-                    'fullRange': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}}
-                },
-                # ...
-            ]
-
-        Args:
-            uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for final diagnostics after file has finished. This is a workaround because `waitForDiagnostics` doesnt always terminate. Higher timeout decreases chance of incomplete diagnostics returned.
-
-        Returns:
-            list[dict]: List of diagnostic messages or errors.
-        """
-        # Waiting in series; Parallel requests are not reliable?
-        diagnostics = collections.defaultdict(list)
-
-        for uri in uris:
-            # Send request for `waitForDiagnostics`
-            rid = self._send_request_rpc(
-                "textDocument/waitForDiagnostics",
-                {"uri": uri, "version": 1},
-                is_notification=False,
-            )
-
-            while True:
-                # Non-blocking read if we have finished processing the file
-                # `waitForDiagnostics` doesn't always return in that case. E.g. "unfinished comment"
-                if select.select([self.stdout], [], [], timeout)[0]:
-                    res = self._read_stdout()
-                else:
-                    print(f"Timed out after {timeout}s!!!")
-                    break
-
-                # Capture diagnostics
-                method = res.get("method", "")
-                if method == "textDocument/publishDiagnostics":
-                    diagnostics[res["params"]["uri"]] = res["params"]["diagnostics"]
-                    continue
-
-                # Fatal error: https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
-                # elif method == "$/lean/fileProgress":
-                #     proc = res["params"]["processing"]
-                #     if len(proc) > 0 and proc[-1]["kind"] == 2:
-                #         break
-
-                # RPC error
-                if "error" in res:
-                    diagnostics[uri] = res
-                    break
-
-                # `waitForDiagnostics` has returned
-                if res.get("id") == rid and res.get("result", True) == {}:
-                    break
-
-        return [diagnostics[uri] for uri in uris]
-
-    def create_file_client(self, file_path: str) -> SingleFileClient:
-        """Create a SingleFileClient for a file.
-
-        Args:
-            file_path (str): Relative file path.
-
-        Returns:
-            SingleFileClient: A client for interacting with a single file.
-        """
-        return SingleFileClient(self, file_path)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:
