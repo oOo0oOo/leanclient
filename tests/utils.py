@@ -1,8 +1,11 @@
 import os
+from pprint import pprint
+import select
 import subprocess
 import cProfile
 import random
 
+from leanclient import LeanLSPClient
 from run_tests import TEST_ENV_DIR, FAST_MATHLIB_FILES
 
 
@@ -33,6 +36,17 @@ def get_random_fast_mathlib_files(num: int, seed: int = None) -> list[str]:
     else:
         random.seed()
     return random.sample(FAST_MATHLIB_FILES, num)
+
+
+# Read a bit longer from stdout
+def read_stdout_timeout(client: LeanLSPClient, timeout: float = 2) -> str:
+    print(f"Printing stdout for {timeout}s.")
+    while True:
+        if select.select([client.stdout], [], [], timeout)[0]:
+            res = client._read_stdout()
+        else:
+            break
+        pprint(res)
 
 
 # Profiling. This requires `gprof2dot` and `dot` to be installed.

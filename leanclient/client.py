@@ -13,6 +13,7 @@ from .file_client import SingleFileClient
 
 LEN_URI_PREFIX = 7
 
+
 class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
@@ -62,11 +63,16 @@ class LeanLSPClient:
         if error:
             print("Process started with stderr message:\n", error)
 
-        # Send initialization request, surprisingly no params required
+        # Options can be found here:
+        # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
         project_uri = self._local_to_uri(self.project_path)
-        results = self._send_request(
-            "initialize", {"processId": os.getpid(), "rootUri": project_uri}
-        )
+        params = {
+            "processId": os.getpid(),
+            "rootUri": project_uri,
+            "initializationOptions": {"editDelay": 1},
+        }
+
+        results = self._send_request("initialize", params)
         server_info = results[-1]["result"]
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
@@ -115,7 +121,7 @@ class LeanLSPClient:
 
     def _uri_to_local(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        return uri[self.len_project_uri:]
+        return uri[self.len_project_uri :]
 
     # LANGUAGE SERVER RPC INTERACTION
     def _read_stdout(self) -> dict:
@@ -190,6 +196,9 @@ class LeanLSPClient:
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.stdin.write(header + body)
         self.stdin.flush()
+
+        # pprint("REQUEST:")
+        # pprint(request)
 
         if not is_notification:
             return self.request_id - 1
@@ -281,7 +290,7 @@ class LeanLSPClient:
         self._send_request_rpc(method, params, is_notification=True)
 
     # OPEN/CLOSE FILES IN LANGUAGE SERVER
-    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list[dict]:
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 3) -> list[dict]:
         """Wait until `waitForDiagnostics` returns or an rpc error occurs.
 
         This should only be used right after opening or updating files not to miss any responses.
@@ -316,28 +325,13 @@ class LeanLSPClient:
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for final diagnostics after file has finished. This is a workaround because `waitForDiagnostics` doesnt always terminate. Higher timeout decreases chance of incomplete diagnostics returned. Defaults to 1 second.
+            timeout (float): Time to wait for final diagnostics after file has finished. This is a workaround because `waitForDiagnostics` doesnt always terminate. Higher timeout decreases chance of incomplete diagnostics returned.
 
         Returns:
             list[dict]: List of diagnostic messages or errors.
         """
         # Waiting in series; Parallel requests are not reliable?
         diagnostics = collections.defaultdict(list)
-        finished_processing = collections.defaultdict(bool)
-
-        def process_response(res):
-            method = res.get("method")
-            if method == "textDocument/publishDiagnostics":
-                diagnostics[res["params"]["uri"]] = res["params"]["diagnostics"]
-
-            elif method == "$/lean/fileProgress":
-                uri = res["params"]["textDocument"]["uri"]
-                proc = res["params"]["processing"]
-                if res["params"]["processing"] == []:
-                    finished_processing[uri] = True
-                # Fatal error: https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
-                if len(proc) > 0 and proc[-1]["kind"] == 2:
-                    finished_processing[uri] = True
 
         for uri in uris:
             # Send request for `waitForDiagnostics`
@@ -350,22 +344,39 @@ class LeanLSPClient:
             while True:
                 # Non-blocking read if we have finished processing the file
                 # `waitForDiagnostics` doesn't always return in that case. E.g. "unfinished comment"
-                if finished_processing[uri]:
-                    if select.select([self.stdout], [], [], timeout)[0]:
-                        res = self._read_stdout()
-                    else:
-                        break
-                else:
+                if select.select([self.stdout], [], [], timeout)[0]:
                     res = self._read_stdout()
+                else:
+                    print(f"Timed out after {timeout}s!!!")
+                    break
 
-                process_response(res)
+                # Capture diagnostics
+                method = res.get("method", "")
+                if method == "textDocument/publishDiagnostics":
+                    diagnostics[res["params"]["uri"]] = res["params"]["diagnostics"]
+                    continue
 
+                # Fatal error: https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+                # elif method == "$/lean/fileProgress":
+                #     proc = res["params"]["processing"]
+                #     if len(proc) > 0 and proc[-1]["kind"] == 2:
+                #         break
+
+                # RPC error
                 if "error" in res:
                     diagnostics[uri] = res
                     break
 
+                # `waitForDiagnostics` has returned
                 if res.get("id") == rid and res.get("result", True) == {}:
                     break
+
+                # if method != "$/lean/fileProgress":
+                #     if "method" in res:
+                #         print(f"UNHANDLED: {res["method"]}")
+                #     else:
+                #         print(f"XXXXXXXXXXXXXXXXXX\nUNHANDLED!")
+                #         pprint(res)
 
         return [diagnostics[uri] for uri in uris]
 
@@ -382,14 +393,19 @@ class LeanLSPClient:
         """
         uris = self._locals_to_uris(paths)
         for path, uri in zip(paths, uris):
-            params = {"textDocument": {"uri": uri}}
             with open(self._uri_to_abs(uri), "r") as f:
                 txt = f.read()
-
             self.opened_files_content[path] = txt
-            params["textDocument"]["text"] = txt
-            params["textDocument"]["languageId"] = "lean"
-            params["textDocument"]["version"] = 1
+
+            params = {
+                "textDocument": {
+                    "uri": uri,
+                    "text": txt,
+                    "languageId": "lean",
+                    "version": 1,
+                },
+                "dependencyBuildMode": "always",
+            }
             self._send_notification("textDocument/didOpen", params)
 
         return self._wait_for_diagnostics(uris)
@@ -447,12 +463,10 @@ class LeanLSPClient:
 
         Note:
 
-            Changes are not written to disk! Will be implemented in the future.
+            Changes are not written to disk! Use :meth:`get_file_content` to get the current content of a file, as seen by the language server.
 
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
         Raises a FileNotFoundError if the file is not open.
-
-        Use :meth:`get_file_content` to get the current content of a file, as seen by the language server.
 
         Args:
             path (str): Relative file path to update.
@@ -464,18 +478,34 @@ class LeanLSPClient:
         if path not in self.opened_files_diagnostics:
             raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
         uri = self._local_to_uri(path)
-        params = {"textDocument": {"uri": uri}}
-        params["textDocument"]["languageId"] = "lean"
-        params["textDocument"]["version"] = 1
-        params["contentChanges"] = [c.get_dict() for c in changes]
-        self._send_notification("textDocument/didChange", params)
+
+        text = self.opened_files_content[path]
+        text = apply_changes_to_text(text, changes)
+        self.opened_files_content[path] = text
+
+        # TODO: Make any of these work instead of the nuclear version of reloading the file
+        # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
+        # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [c.get_dict() for c in changes]})
+        # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [{"text": text}]})
+        # params = ("workspace/applyEdit", {"changes": [{"textDocument": {"uri": uri, "version": 1}, "edits": [c.get_dict() for c in changes]}]})
+        # params = ("workspace/didChangeWatchedFiles", {"changes": [{"uri": uri, "type": 2}]})
+
+        params = (
+            "textDocument/didOpen",
+            {
+                "textDocument": {
+                    "uri": uri,
+                    "text": text,
+                    "languageId": "lean",
+                    "version": 1,
+                }
+            },
+        )
+
+        self._send_notification(*params)
 
         diagnostics = self._wait_for_diagnostics([uri])[0]
         self.opened_files_diagnostics[path] = diagnostics
-
-        self.opened_files_content[path] = apply_changes_to_text(
-            self.opened_files_content[path], changes
-        )
         return diagnostics
 
     def close_files(self, paths: list[str], blocking: bool = True):

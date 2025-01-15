@@ -70,14 +70,15 @@ if __name__ == "__main__":
 
     # Collect tests
     white_list = [
-        "test_client_requests.TestLSPClientRequests.test_mathlib_file",
-        "test_client_requests.TestLSPClientRequests.test_mathlib_file",
-        "test_client_requests",
-        "test_client_errors",
-        "test_file_client",
+        # "test_client_requests.TestLSPClientRequests.test_mathlib_file",
+        # "test_client_requests.TestLSPClientRequests.test_mathlib_file",
+        # "test_client_requests",
+        # "test_client_errors",
+        # "test_file_client",
         "test_client_files",
-        "test_pool",
-        "test_client_benchmark",
+        # "test_pool",
+        # "test_client_benchmark",
+        # "test_client_benchmark.TestLSPClientBenchmark.test_bench_opening_files",
     ]
 
     if not white_list:

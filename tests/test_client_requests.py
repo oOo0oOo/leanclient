@@ -155,7 +155,9 @@ class TestLSPClientRequests(unittest.TestCase):
         res = self.lsp.get_references(path, 52, 9, include_declaration=True)
         assert len(res) == 3
 
-        res = self.lsp.get_references(path, 52, 9, include_declaration=True, max_retries=1, retry_delay=0)
+        res = self.lsp.get_references(
+            path, 52, 9, include_declaration=True, max_retries=1, retry_delay=0
+        )
         assert len(res) == 3
 
     def test_call_hierarchy(self):
