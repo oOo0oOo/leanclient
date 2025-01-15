@@ -1,4 +1,5 @@
 # Varia to be sorted later...
+from functools import wraps
 from typing import NamedTuple
 
 
@@ -71,3 +72,22 @@ def get_index_from_line_character(text: str, line: int, char: int) -> int:
     """Convert line and character to flat index."""
     lines = text.split("\n")
     return sum(len(lines[i]) + 1 for i in range(line)) + char
+
+
+def experimental(func):
+    """Decorator to mark a method as experimental."""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if self.print_warnings:
+            print(
+                f"Warning: {func.__name__}() is experimental and not reliable! Set print_warnings=False to mute."
+            )
+        return func(self, *args, **kwargs)
+
+    # Change __doc__ to include a sphinx warning
+    warning = "\n        .. admonition:: Experimental\n\n            This method is still experimental and not reliable.\n"
+    doc_lines = wrapper.__doc__.split("\n")
+    doc_lines.insert(1, warning)
+    wrapper.__doc__ = "\n".join(doc_lines)
+    return wrapper

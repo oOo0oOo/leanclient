@@ -19,7 +19,9 @@ EXP_DIAGNOSTICS = [
 
 class TestLSPClientDiagnostics(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
+        self.lsp = LeanLSPClient(
+            TEST_ENV_DIR, initial_build=False, print_warnings=False
+        )
 
     def tearDown(self):
         self.lsp.close()
@@ -70,7 +72,9 @@ class TestLSPClientDiagnostics(unittest.TestCase):
 
 class TestLSPClientErrors(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
+        self.lsp = LeanLSPClient(
+            TEST_ENV_DIR, initial_build=False, print_warnings=False
+        )
         self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
 
     def tearDown(self):
@@ -204,10 +208,12 @@ class TestLSPClientErrors(unittest.TestCase):
 
     def test_invalid_root(self):
         with self.assertRaises(FileNotFoundError, msg=f"Path: invalid_path"):
-            LeanLSPClient("invalid_path", initial_build=False)
+            LeanLSPClient("invalid_path", initial_build=False, print_warnings=False)
 
         with self.assertRaises(NotADirectoryError, msg=f"Path: invalid_path"):
-            LeanLSPClient("leanclient/client.py", initial_build=False)
+            LeanLSPClient(
+                "leanclient/client.py", initial_build=False, print_warnings=False
+            )
 
         # Valid but not a lean project
         with self.assertRaises(Exception, msg=f"Path: leanclient/"):

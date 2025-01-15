@@ -11,7 +11,7 @@ from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 class TestLSPClientRequests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
+        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
 
     @classmethod
     def tearDownClass(cls):
@@ -214,11 +214,11 @@ class TestLSPClientRequests(unittest.TestCase):
 
 class TestClientBasics(unittest.TestCase):
     def test_initial_build(self):
-        lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=True)
+        lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=True, print_warnings=False)
         lsp.close()
 
     def test_get_env(self):
-        lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
+        lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
         env = lsp.get_env()
         exp = [
             "ELAN",

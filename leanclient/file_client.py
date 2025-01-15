@@ -1,4 +1,4 @@
-from leanclient.utils import DocumentContentChange
+from leanclient.utils import DocumentContentChange, experimental
 
 
 class SingleFileClient:
@@ -16,6 +16,7 @@ class SingleFileClient:
     def __init__(self, client, file_path: str):
         self.client = client
         self.file_path = file_path
+        self.print_warnings = client.print_warnings
 
     def open_file(self) -> list:
         """Open the file.
@@ -38,6 +39,7 @@ class SingleFileClient:
         """
         return self.client.close_files([self.file_path], blocking)
 
+    @experimental
     def update_file(self, changes: list[DocumentContentChange]) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
@@ -120,14 +122,17 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_folding_ranges`"""
         return self.client.get_folding_ranges(self.file_path)
 
+    @experimental
     def get_call_hierarchy_items(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_items`"""
         return self.client.get_call_hierarchy_items(self.file_path, line, character)
 
+    @experimental
     def get_call_hierarchy_incoming(self, item: dict) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_incoming`"""
         return self.client.get_call_hierarchy_incoming(item)
 
+    @experimental
     def get_call_hierarchy_outgoing(self, item: dict) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_outgoing`"""
         return self.client.get_call_hierarchy_outgoing(item)

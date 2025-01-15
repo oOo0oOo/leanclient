@@ -15,7 +15,7 @@ from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 class TestLSPClientFiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
+        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
 
     @classmethod
     def tearDownClass(cls):

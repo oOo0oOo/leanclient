@@ -8,7 +8,12 @@ import time
 
 import orjson
 
-from .utils import SemanticTokenProcessor, DocumentContentChange, apply_changes_to_text
+from .utils import (
+    SemanticTokenProcessor,
+    DocumentContentChange,
+    apply_changes_to_text,
+    experimental,
+)
 from .file_client import SingleFileClient
 
 LEN_URI_PREFIX = 7
@@ -32,14 +37,20 @@ class LeanLSPClient:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once.
         initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
+        print_warnings (bool): Whether to print warnings about experimental features.
     """
 
     def __init__(
-        self, project_path: str, max_opened_files: int = 8, initial_build: bool = True
+        self,
+        project_path: str,
+        max_opened_files: int = 8,
+        initial_build: bool = True,
+        print_warnings: bool = True,
     ):
+        self.max_opened_files = max_opened_files
+        self.print_warnings = print_warnings
         self.project_path = os.path.abspath(project_path) + "/"
         self.len_project_uri = len(self.project_path) + LEN_URI_PREFIX
-        self.max_opened_files = max_opened_files
         self.request_id = 0
         self.opened_files_diagnostics = collections.OrderedDict()
         self.opened_files_content = {}
@@ -196,9 +207,6 @@ class LeanLSPClient:
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.stdin.write(header + body)
         self.stdin.flush()
-
-        # pprint("REQUEST:")
-        # pprint(request)
 
         if not is_notification:
             return self.request_id - 1
@@ -458,6 +466,7 @@ class LeanLSPClient:
         """
         return self.open_files([path])[0]
 
+    @experimental
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
 
@@ -1084,6 +1093,7 @@ class LeanLSPClient:
         """
         return self._send_request_document(path, "textDocument/foldingRange", {})
 
+    @experimental
     def get_call_hierarchy_items(self, path: str, line: int, character: int) -> list:
         """Get call hierarchy items at a file position.
 
@@ -1094,10 +1104,6 @@ class LeanLSPClient:
 
         - LSP Docs: `Prepare Call Hierarchy Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy>`_
         - Lean Source: `Watchdog.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
-
-        Attention:
-
-            Unfortunately, this function is currently **unreliable**!
 
         Example response:
 
@@ -1130,6 +1136,7 @@ class LeanLSPClient:
             {"position": {"line": line, "character": character}},
         )
 
+    @experimental
     def get_call_hierarchy_incoming(self, item: dict) -> list:
         """Get call hierarchy items that call a symbol.
 
@@ -1140,10 +1147,6 @@ class LeanLSPClient:
 
         - LSP Docs: `Incoming Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls>`_
         - Lean Source: `Watchdog.lean\u200E <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
-
-        Attention:
-
-            Unfortunately, this function is currently **unreliable**!
 
         Example response:
 
@@ -1179,6 +1182,7 @@ class LeanLSPClient:
             {"item": item},
         )
 
+    @experimental
     def get_call_hierarchy_outgoing(self, item: dict) -> list:
         """Get outgoing call hierarchy items for a given item.
 
@@ -1189,10 +1193,6 @@ class LeanLSPClient:
 
         - LSP Docs: `Outgoing Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls>`_
         - Lean Source: `Watchdog.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
-
-        Attention:
-
-            Unfortunately, this function is currently **unreliable**!
 
         Example response:
 
