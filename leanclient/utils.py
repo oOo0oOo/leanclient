@@ -1,6 +1,5 @@
 # Varia to be sorted later...
 from functools import wraps
-import pathlib
 from typing import NamedTuple
 
 
@@ -82,12 +81,12 @@ def experimental(func):
     def wrapper(self, *args, **kwargs):
         if self.print_warnings:
             print(
-                f"Warning: {func.__name__}() is experimental and not reliable! Set print_warnings=False to mute."
+                f"Warning: {func.__name__}() is experimental! Set print_warnings=False to mute."
             )
         return func(self, *args, **kwargs)
 
     # Change __doc__ to include a sphinx warning
-    warning = "\n        .. admonition:: Experimental\n\n            This method is still experimental and not reliable.\n"
+    warning = "\n        .. admonition:: Experimental\n\n            This method is experimental. Use with caution.\n"
     doc_lines = wrapper.__doc__.split("\n")
     doc_lines.insert(1, warning)
     wrapper.__doc__ = "\n".join(doc_lines)

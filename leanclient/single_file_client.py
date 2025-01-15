@@ -39,7 +39,6 @@ class SingleFileClient:
         """
         return self.client.close_files([self.file_path], blocking)
 
-    @experimental
     def update_file(self, changes: list[DocumentContentChange]) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)

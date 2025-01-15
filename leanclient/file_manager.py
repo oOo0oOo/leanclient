@@ -70,6 +70,8 @@ class LSPFileManager(BaseLeanLSPClient):
         # Waiting in series; Parallel requests are not reliable?
         diagnostics = collections.defaultdict(list)
 
+        times = []
+
         for uri in uris:
             # Send request for `waitForDiagnostics`
             rid = self._send_request_rpc(
@@ -81,8 +83,10 @@ class LSPFileManager(BaseLeanLSPClient):
             while True:
                 # Non-blocking read if we have finished processing the file
                 # `waitForDiagnostics` doesn't always return e.g. "unfinished comment"
+                t0 = time.time()
                 if select.select([self.stdout], [], [], timeout)[0]:
                     res = self._read_stdout()
+                    times.append(time.time() - t0)
                 else:
                     # print(f"Timed out after {timeout}s. Consider increasing timeout.")
                     break
@@ -107,6 +111,9 @@ class LSPFileManager(BaseLeanLSPClient):
                 # `waitForDiagnostics` has returned
                 if res.get("id") == rid and res.get("result", True) == {}:
                     break
+
+        # times.sort()  # Some stats
+        # print(f"Min: {min(times):.3f}s, 5%: {times[int(len(times) * 0.05)]:.3f}s, Avg: {sum(times) / len(times):.3f}s, 99%: {times[int(len(times) * 0.99)]:.3f}s, Max: {max(times):.3f}s, Total: {sum(times):.3f}s, Count: {len(times)}")
 
         return [diagnostics[uri] for uri in uris]
 
@@ -251,7 +258,6 @@ class LSPFileManager(BaseLeanLSPClient):
         """
         return self.open_files([path])[0]
 
-    @experimental
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
         """Update a file in the language server.
 

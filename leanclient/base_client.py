@@ -53,7 +53,9 @@ class BaseLeanLSPClient:
         params = {
             "processId": os.getpid(),
             "rootUri": project_uri,
-            "initializationOptions": {"editDelay": 1},
+            "initializationOptions": {
+                "editDelay": 1
+            },  # It seems like this has no effect.
         }
 
         results = self._send_request("initialize", params)

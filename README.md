@@ -116,6 +116,7 @@ Might be implemented in the future:
 
 Internal Lean methods:
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
+- Interactive diagnostics
 - `$/lean/staleDependency`
 
 
