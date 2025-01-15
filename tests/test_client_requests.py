@@ -17,6 +17,14 @@ class TestLSPClientRequests(unittest.TestCase):
     def tearDownClass(cls):
         cls.lsp.close()
 
+    # Takes long but might be worth it
+    # def setUp(self):
+    #     self.lsp = LeanLSPClient(
+    #         TEST_ENV_DIR, initial_build=False, print_warnings=False
+    #     )
+    # def tearDown(self):
+    #     self.lsp.close()
+
     def test_completion(self):
         result = self.lsp.get_completions(TEST_FILE_PATH, 9, 15)
         assert type(result) == list

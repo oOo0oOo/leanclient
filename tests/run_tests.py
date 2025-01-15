@@ -1,4 +1,3 @@
-import os
 import subprocess
 import unittest
 import sys
@@ -49,7 +48,7 @@ FAST_MATHLIB_FILES = [
 
 
 if __name__ == "__main__":
-    from utils import start_profiler, stop_profiler
+    from tests.utils import start_profiler, stop_profiler
 
     # Setup environment
     cmd = [
@@ -73,8 +72,8 @@ if __name__ == "__main__":
         "test_base_client",
         "test_client_requests",
         "test_client_errors",
-        "test_single_file_client",
         "test_file_manager",
+        "test_single_file_client",
         "test_pool",
         "test_client_benchmark",
     ]

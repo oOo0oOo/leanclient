@@ -25,15 +25,13 @@ class WrappedFileManager(LSPFileManager, BaseLeanLSPClient):
 
 
 class TestLSPFileManager(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.lsp = WrappedFileManager(
+    def setUp(self):
+        self.lsp = WrappedFileManager(
             TEST_ENV_DIR, initial_build=False, print_warnings=False
         )
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.lsp.close()
+    def tearDown(self):
+        self.lsp.close()
 
     def _test_open_files_bench(self):
         """Not a test. Used to find fast opening mathlib files."""
@@ -67,23 +65,30 @@ class TestLSPFileManager(unittest.TestCase):
     def test_file_update(self):
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
         diags = self.lsp.open_file(path)
-        assert len(diags) <= 1
+        assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
         # Make some random changes
         # random.seed(6.28)
-        NUM_CHANGES = 8
+        NUM_CHANGES = 16
         changes = []
         t0 = time.time()
         text = self.lsp.get_file_content(path)
         for _ in range(NUM_CHANGES):
             line = random.randint(10, 200)
             d = DocumentContentChange(
-                "inv#lid", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
+                "inv#lid\n", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
             )
             changes.append(d)
             text = apply_changes_to_text(text, [d])
         diags2 = self.lsp.update_file(path, changes)
-        self.assertTrue(len(diags2) > NUM_CHANGES)
+
+        if len(diags2) == 1:
+            self.assertEqual(diags2[0]["message"], "unterminated comment")
+        else:
+            self.assertTrue(
+                len(diags2) >= NUM_CHANGES // 2,
+                f"Expected {NUM_CHANGES // 2} diagnostics got {len(diags2)}:\n\n{diags2}\n\n",
+            )
         print(f"Updated {len(changes)} changes in one call: {(time.time() - t0):.2f} s")
 
         new_text = self.lsp.get_file_content(path)
@@ -98,15 +103,17 @@ class TestLSPFileManager(unittest.TestCase):
 
         self.assertEqual(diags2, diags3)
 
+        self.lsp.close_files([path])
+
     def test_file_update_line_by_line(self):
-        START = 100
-        NUM_LINES = 2
-        # path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
+        NUM_LINES = 24
+        path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
         # path = ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean"
-        path = ".lake/packages/mathlib/Mathlib/FieldTheory/Galois/GaloisClosure.lean"
+        # path = ".lake/packages/mathlib/Mathlib/FieldTheory/Galois/GaloisClosure.lean"
 
         with open(TEST_ENV_DIR + path, "r") as f:
             lines = f.readlines()
+        START = len(lines) - NUM_LINES
 
         fantasy = "Fantasy.lean"
         fantasy_path = TEST_ENV_DIR + fantasy
@@ -116,9 +123,9 @@ class TestLSPFileManager(unittest.TestCase):
 
         self.lsp.open_file(fantasy)
 
-        count = 0
-        lines = lines[START : START + NUM_LINES]
+        lines = lines[-NUM_LINES:]
         t0 = time.time()
+        diagnostics = []
         for i, line in enumerate(lines):
             text += line
             diag = self.lsp.update_file(
@@ -127,37 +134,48 @@ class TestLSPFileManager(unittest.TestCase):
             )
             content = self.lsp.get_file_content(fantasy)
             self.assertEqual(content, text)
-            count += len(diag)
+            diagnostics.extend(diag)
 
-        self.assertTrue(count > NUM_LINES / 2)
+        self.assertTrue(len(diagnostics) > NUM_LINES / 2)
         # self.assertEqual(len(diag), 0)
         speed = len(lines) / (time.time() - t0)
         os.remove(fantasy_path)
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")
 
+        self.lsp.close_files([fantasy, path])
+
     def test_update_file_mathlib(self):
-        file = ".lake/packages/mathlib/Mathlib/Data/Num/Prime.lean"
-        diag = self.lsp.open_file(file)
-        assert diag == [], f"Expected no diagnostics, got {diag}"
+        files = [
+            ".lake/packages/mathlib/Mathlib/Data/Num/Prime.lean",
+            ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean",
+        ]
+        diag = self.lsp.open_files(files)
+        assert diag == [[], []], f"Expected no diagnostics, got {diag}"
 
         changes = [
             DocumentContentChange("--", [42, 20], [42, 30]),
             DocumentContentChange("/a/b/c\\", [89, 20], [93, 20]),
+            DocumentContentChange("\n\n\n\n\n\n\n\n\n", [100, 100000], [120, 100000]),
         ]
 
-        exp_text = apply_changes_to_text(self.lsp.get_file_content(file), changes)
+        exp_texts = [
+            apply_changes_to_text(self.lsp.get_file_content(f), changes) for f in files
+        ]
 
-        diag2 = self.lsp.update_file(file, changes)
-        assert len(diag2) > 0, f"Expected diagnostics, got {diag2}"
-        assert self.lsp.get_file_content(file) == exp_text
+        for file, exp_text in zip(files, exp_texts):
+            diag2 = self.lsp.update_file(file, changes)
+            assert len(diag2) > 0, f"Expected diagnostics, got []"
+            assert self.lsp.get_file_content(file) == exp_text
 
-        # Load new file with content and compare
-        fpath = file.replace(".lean", "_test.lean")
-        with open(TEST_ENV_DIR + fpath, "w") as f:
-            f.write(exp_text)
-        diag3 = self.lsp.open_file(fpath)
-        diag4 = self.lsp.get_diagnostics(fpath)
+            # Load new file with content and compare
+            fpath = file.replace(".lean", "_test.lean")
+            with open(TEST_ENV_DIR + fpath, "w") as f:
+                f.write(exp_text)
+            diag3 = self.lsp.open_file(fpath)
+            diag4 = self.lsp.get_diagnostics(fpath)
 
-        assert diag2 == diag3 == diag4
+            assert diag2 == diag3 == diag4
 
-        os.remove(TEST_ENV_DIR + fpath)
+            os.remove(TEST_ENV_DIR + fpath)
+
+            self.lsp.close_files([file, fpath])

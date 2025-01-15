@@ -80,11 +80,11 @@ class LSPFileManager(BaseLeanLSPClient):
 
             while True:
                 # Non-blocking read if we have finished processing the file
-                # `waitForDiagnostics` doesn't always return in that case. E.g. "unfinished comment"
+                # `waitForDiagnostics` doesn't always return e.g. "unfinished comment"
                 if select.select([self.stdout], [], [], timeout)[0]:
                     res = self._read_stdout()
                 else:
-                    print(f"Timed out after {timeout}s!!!")
+                    # print(f"Timed out after {timeout}s. Consider increasing timeout.")
                     break
 
                 # Capture diagnostics
@@ -156,6 +156,11 @@ class LSPFileManager(BaseLeanLSPClient):
         self.open_file(path)
         params["textDocument"] = {"uri": self._local_to_uri(path)}
         results = self._send_request(method, params)
+
+        # if len(results) > 1:
+        #     print(f"Warning! Dropping {len(results) - 1} intermediate responses.")
+        #     pprint(results[:-1])
+
         return results[-1]["result"]
 
     def _send_request_document_retries(
@@ -272,22 +277,17 @@ class LSPFileManager(BaseLeanLSPClient):
         text = apply_changes_to_text(text, changes)
         self.opened_files_content[path] = text
 
-        # TODO: Make any of these work instead of the nuclear version of reloading the file
-        # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
-        # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [c.get_dict() for c in changes]})
+        # TODO: Any of these useful?
         # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [{"text": text}]})
+        # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
         # params = ("workspace/applyEdit", {"changes": [{"textDocument": {"uri": uri, "version": 1}, "edits": [c.get_dict() for c in changes]}]})
         # params = ("workspace/didChangeWatchedFiles", {"changes": [{"uri": uri, "type": 2}]})
 
         params = (
-            "textDocument/didOpen",
+            "textDocument/didChange",
             {
-                "textDocument": {
-                    "uri": uri,
-                    "text": text,
-                    "languageId": "lean",
-                    "version": 1,
-                }
+                "textDocument": {"uri": uri, "version": 1, "languageId": "lean"},
+                "contentChanges": [c.get_dict() for c in changes],
             },
         )
 
