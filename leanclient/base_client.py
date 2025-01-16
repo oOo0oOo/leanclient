@@ -241,7 +241,6 @@ class BaseLeanLSPClient:
         Returns:
             list: List of diagnostic messages or errors.
         """
-        # TODO: Investigate why this breaks spectacularly between 0.79 and 0.8
         TIMEOUT_SHORT = 0.01
 
         # Request waitForDiagnostics for each file

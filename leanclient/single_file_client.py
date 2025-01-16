@@ -143,7 +143,3 @@ class SingleFileClient:
     def get_term_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_term_goal`"""
         return self.client.get_term_goal(self.file_path, line, character)
-
-    def get_env(self, return_dict: bool = True) -> dict | str:
-        """See :meth:`leanclient.client.LeanLSPClient.get_env`"""
-        return self.client.get_env(return_dict)

@@ -7,13 +7,13 @@ Thin Wrapper
 leanclient is a thin wrapper around the native Lean language server and uses few resources.
 It is synchronous (blocking), therefore waits for a server response before returning.
 
-See this profile of a benchmark run, where 96% of the time is spent waiting for a server response with some additional waiting during initialization and calls to _wait_for_diagnostics:
+See this profile of a benchmark run, where 98% of the time is spent waiting for a server response (`select.select` and `_io.BufferedReader.readline`).
 
 .. image:: profile_benchmark.png
    :alt: Profiling test_client_benchmark.py
    :align: center
 
-See `larger image <https://github.com/oOo0oOo/leanclient/blob/main/docs/source/profile_benchmark.png>`_.
+`Open larger image <https://raw.githubusercontent.com/oOo0oOo/leanclient/refs/heads/main/docs/source/profile_benchmark.png>`_.
 
 Therefore, these benchmarks are essentially **measuring the performance of the Lean language server**.
 
@@ -24,6 +24,8 @@ Opening a File
 Opening a file in leanclient is completed, when a full diagnostic report (errors, warnings, ...) is received.
 This is highly dependent on the size and complexity of the file.
 Comparable to the yellow loading bar, when opening a file in VSCode.
+
+**Note:** Opening multiple files using `LeanLSPClient.open_files` is typically faster than opening them sequentially.
 
 .. list-table:: Loading Times for a Selection of Mathlib Files
    :header-rows: 1
@@ -86,6 +88,8 @@ Again, this is highly dependent on the file and location in the file.
 
 An empty response (e.g. querying a goal outside a theorem) is typically very fast.
 
+As a benchmark, we repeat the same query 32 times:
+
 .. list-table:: Query Performance (non-empty response)
    :header-rows: 1
 
@@ -113,12 +117,12 @@ An empty response (e.g. querying a goal outside a theorem) is typically very fas
      - 235.36
    * - get_call hierarchy items
      - 229.16
-   * - get_references
-     - 224.06
    * - get_semantic_tokens_range
      - 92.00
    * - get_semantic_tokens
      - 64.16
+   * - get_references
+     - 52.03
    * - get_call hierarchy outgoing
      - 37.94
    * - get_document_highlights

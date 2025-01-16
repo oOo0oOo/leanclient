@@ -12,6 +12,13 @@ test:
 test-profile:
 	poetry run python tests/run_tests.py --profile
 
+test-all:
+	poetry run python tests/run_tests.py --all
+
+update-benchmark:
+	poetry run python tests/run_tests.py --profile --benchmark
+	cp tests/profile.png docs/source/profile_benchmark.png
+
 docs:
 	poetry run sphinx-build -b html docs/source/ docs/build/
 

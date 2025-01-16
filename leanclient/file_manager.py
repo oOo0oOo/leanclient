@@ -122,6 +122,9 @@ class LSPFileManager(BaseLeanLSPClient):
         This function maintains a cache of opened files and their diagnostics.
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
 
+        Note:
+            Opening multiple files is typically faster than opening them sequentially.
+
         Args:
             paths (list[str]): List of relative file paths to open.
 

@@ -1,7 +1,6 @@
 __pycache__/
 
 dist/
-poetry.lock
 
 .test_env/
 tests/profile*.png
