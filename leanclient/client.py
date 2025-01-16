@@ -88,7 +88,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Completion items.
         """
-        resp = self._send_request_document(
+        resp = self._send_request(
             path,
             "textDocument/completion",
             {"position": {"line": line, "character": character}},
@@ -123,7 +123,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         """
         uri = item["data"]["params"]["textDocument"]["uri"]
-        return self._send_request_document(
+        return self._send_request(
             self._uri_to_local(uri), "completionItem/resolve", item
         )["detail"]
 
@@ -161,7 +161,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             dict: Hover information or None if no hover information is available.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/hover",
             {"position": {"line": line, "character": character}},
@@ -205,7 +205,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/declaration",
             {"position": {"line": line, "character": character}},
@@ -250,7 +250,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/definition",
             {"position": {"line": line, "character": character}},
@@ -300,7 +300,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request_document_retries(
+        return self._send_request_retry(
             path,
             "textDocument/references",
             {
@@ -349,7 +349,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/typeDefinition",
             {"position": {"line": line, "character": character}},
@@ -386,7 +386,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             list: Document highlights.
         """
 
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/documentHighlight",
             {"position": {"line": line, "character": character}},
@@ -427,7 +427,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Document symbols.
         """
-        return self._send_request_document(path, "textDocument/documentSymbol", {})
+        return self._send_request(path, "textDocument/documentSymbol", {})
 
     def get_semantic_tokens(self, path: str) -> list:
         """Get semantic tokens for the entire document.
@@ -460,7 +460,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Semantic tokens.
         """
-        res = self._send_request_document(path, "textDocument/semanticTokens/full", {})
+        res = self._send_request(path, "textDocument/semanticTokens/full", {})
         return self.token_processor(res["data"])
 
     def get_semantic_tokens_range(
@@ -485,7 +485,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Semantic tokens.
         """
-        res = self._send_request_document(
+        res = self._send_request(
             path,
             "textDocument/semanticTokens/range",
             {
@@ -527,7 +527,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             list: Folding ranges.
 
         """
-        return self._send_request_document(path, "textDocument/foldingRange", {})
+        return self._send_request(path, "textDocument/foldingRange", {})
 
     @experimental
     def get_call_hierarchy_items(self, path: str, line: int, character: int) -> list:
@@ -566,7 +566,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Call hierarchy items.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "textDocument/prepareCallHierarchy",
             {"position": {"line": line, "character": character}},
@@ -612,7 +612,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Incoming call hierarchy items.
         """
-        return self._send_request_document(
+        return self._send_request(
             self._uri_to_local(item["uri"]),
             "callHierarchy/incomingCalls",
             {"item": item},
@@ -657,7 +657,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Outgoing call hierarchy items.
         """
-        return self._send_request_document(
+        return self._send_request(
             self._uri_to_local(item["uri"]),
             "callHierarchy/outgoingCalls",
             {"item": item},
@@ -700,7 +700,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             dict | None: Proof goals at the position.
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "$/lean/plainGoal",
             {"position": {"line": line, "character": character}},
@@ -745,7 +745,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
 
         """
-        return self._send_request_document(
+        return self._send_request(
             path,
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},

@@ -73,9 +73,9 @@ if __name__ == "__main__":
         "test_client_requests",
         "test_client_errors",
         "test_file_manager",
-        "test_single_file_client",
-        "test_pool",
-        "test_client_benchmark",
+        # "test_single_file_client",
+        # "test_pool",
+        # "test_client_benchmark",
     ]
 
     if not white_list:

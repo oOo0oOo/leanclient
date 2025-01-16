@@ -63,7 +63,7 @@ class TestLSPFileManager(unittest.TestCase):
         self.assertEqual(diags, diags2)
 
     def test_file_update(self):
-        path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
+        path = get_random_fast_mathlib_files(1, 42)[0]
         diags = self.lsp.open_file(path)
         assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
@@ -74,7 +74,7 @@ class TestLSPFileManager(unittest.TestCase):
         t0 = time.time()
         text = self.lsp.get_file_content(path)
         for _ in range(NUM_CHANGES):
-            line = random.randint(10, 200)
+            line = random.randint(10, 50)
             d = DocumentContentChange(
                 "inv#lid\n", [line, random.randint(0, 4)], [line, random.randint(4, 8)]
             )

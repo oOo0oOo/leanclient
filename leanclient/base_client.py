@@ -8,7 +8,13 @@ import orjson
 
 from .utils import SemanticTokenProcessor
 
+
 LEN_URI_PREFIX = 7
+IGNORED_METHODS = {
+    "workspace/didChangeWatchedFiles",
+    "workspace/semanticTokens/refresh",
+    "client/registerCapability",
+}
 
 
 class BaseLeanLSPClient:
@@ -47,19 +53,21 @@ class BaseLeanLSPClient:
         if error:
             print("Process started with stderr message:\n", error)
 
-        # Options can be found here:
+        # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
-        project_uri = self._local_to_uri(self.project_path)
-        params = {
-            "processId": os.getpid(),
-            "rootUri": project_uri,
-            "initializationOptions": {
-                "editDelay": 1
-            },  # It seems like this has no effect.
-        }
+        self._send_request_rpc(
+            "initialize",
+            {
+                "processId": os.getpid(),
+                "rootUri": self._local_to_uri(self.project_path),
+                "initializationOptions": {
+                    "editDelay": 1  # It seems like this has no effect.
+                },
+            },
+            is_notification=False,
+        )
+        server_info = self._read_stdout()["result"]
 
-        results = self._send_request("initialize", params)
-        server_info = results[-1]["result"]
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
@@ -133,13 +141,7 @@ class BaseLeanLSPClient:
         # Parse message
         content_length = int(header.split(":")[1])
         next(self.stdout)
-        resp = orjson.loads(self.stdout.read(content_length))
-
-        # Display RPC error messages (from language server)
-        if "error" in resp:
-            print("RPC Error Message\n", resp)
-
-        return resp
+        return orjson.loads(self.stdout.read(content_length))
 
     def _read_stderr_non_blocking(self, timeout: float = 0.00001) -> str:
         """Read the next message from the language server's stderr.
@@ -185,26 +187,6 @@ class BaseLeanLSPClient:
         if not is_notification:
             return self.request_id - 1
 
-    def _send_request(self, method: str, params: dict) -> list[dict]:
-        """Send a request to the language server and return all responses.
-
-        Args:
-            method (str): Method name.
-            params (dict): Parameters for the method.
-
-        Returns:
-            list[dict]: List of responses in the order they were received.
-        """
-        rid = self._send_request_rpc(method, params, is_notification=False)
-
-        result = self._read_stdout()
-        results = [result]
-        while result.get("id") != rid and "error" not in result:
-            result = self._read_stdout()
-            results.append(result)
-
-        return results
-
     def _send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
 
@@ -213,6 +195,121 @@ class BaseLeanLSPClient:
             params (dict): Parameters for the method.
         """
         self._send_request_rpc(method, params, is_notification=True)
+
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list:
+        """Wait until `waitForDiagnostics` returns or an rpc error occurs.
+
+        This should only be used right after opening or updating files not to miss any responses.
+        Returns either diagnostics or an error dict for each file.
+
+        Sometimes `waitForDiagnostics` doesn't return. We need to check for "rpc errors", "fatal errors" and use a timeout..
+        See source for more details.
+
+        **Example diagnostics**:
+
+        .. code-block:: python
+
+            [
+            # For each file:
+            [
+                {
+                    'message': "declaration uses 'sorry'",
+                    'severity': 2,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}},
+                    'fullRange': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}}
+                },
+                {
+                    'message': "unexpected end of input; expected ':'",
+                    'severity': 1,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}},
+                    'fullRange': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}}
+                },
+                # ...
+            ], #...
+            ]
+
+        Args:
+            uris (list[str]): List of URIs to wait for diagnostics on.
+            timeout (float): Time to wait for diagnostics. Rarely exceeded.
+
+        Returns:
+            list: List of diagnostic messages or errors.
+        """
+        # TODO: Investigate why this breaks spectacularly between 0.79 and 0.8
+        TIMEOUT_SHORT = 0.01
+
+        # Request waitForDiagnostics for each file
+        rid_to_uri = {}
+        for uri in uris:
+            rid = self._send_request_rpc(
+                "textDocument/waitForDiagnostics",
+                {"uri": uri, "version": 1},
+                is_notification=False,
+            )
+            rid_to_uri[rid] = uri
+
+        num_missing = len(uris)
+        errored = set()
+        diagnostics = {}
+        while num_missing > 0:
+            # Non-blocking read, `waitForDiagnostics` doesn't always return e.g. "unfinished comment"
+            # Timeout is shortened if all remaining files have errored
+            tmt = TIMEOUT_SHORT if len(errored) == num_missing else timeout
+            if select.select([self.stdout], [], [], tmt)[0]:
+                res = self._read_stdout()
+            else:
+                break
+
+            method = res.get("method")
+
+            # Capture diagnostics
+            if method == "textDocument/publishDiagnostics":
+                uri = res["params"]["uri"]
+
+                # Don't overwrite errors
+                if uri in diagnostics and uri in errored:
+                    continue
+
+                diagnostics[uri] = res["params"]["diagnostics"]
+                continue
+
+            # `waitForDiagnostics` has returned
+            elif res.get("result", True) == {}:
+                num_missing -= 1
+                continue
+
+            # RPC error
+            elif "error" in res:
+                uri = rid_to_uri.get(res.get("id"))
+                if uri:
+                    diagnostics[uri] = res
+                errored.add(uri)
+                continue
+
+            if method in IGNORED_METHODS:
+                continue
+
+            # assert res.get("method") == "$/lean/fileProgress", res
+
+            # Check for fatalError from fileProgress. See here:
+            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+            proc = res["params"]["processing"]
+            if proc and proc[-1]["kind"] == 2:
+                uri = rid_to_uri.get(res.get("id"))
+                if uri:
+                    errored.add(uri)
+                    if not diagnostics.get(uri):
+                        msg = f"leanclient: Received LeanFileProgressKind.fatalError from language server."
+                        res["error"] = {"message": msg}
+                        diagnostics[uri] = res
+
+        return [diagnostics.get(uri, []) for uri in uris]
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:
