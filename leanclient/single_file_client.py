@@ -143,3 +143,17 @@ class SingleFileClient:
     def get_term_goal(self, line: int, character: int) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.get_term_goal`"""
         return self.client.get_term_goal(self.file_path, line, character)
+
+    @experimental
+    def get_code_actions(
+        self, start_line: int, start_character: int, end_line: int, end_character: int
+    ) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_code_actions`"""
+        return self.client.get_code_actions(
+            self.file_path, start_line, start_character, end_line, end_character
+        )
+
+    @experimental
+    def get_code_action_resolve(self, code_action: dict) -> dict:
+        """See :meth:`leanclient.client.LeanLSPClient.get_code_action_resolve`"""
+        return self.client.get_code_action_resolve(code_action)

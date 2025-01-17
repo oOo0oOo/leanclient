@@ -122,6 +122,15 @@ class TestLSPClientRequests(unittest.TestCase):
         res2 = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 15)
         self.assertEqual(res, res2)
 
+    def test_code_actions(self):
+        res = self.lsp.get_code_actions(TEST_FILE_PATH, 12, 8, 12, 18)
+        assert type(res) == list
+        assert len(res) == 0
+
+    def test_code_action_resolve(self):
+        res = self.lsp.get_code_action_resolve({"title": "Test"})
+        assert res["error"]["message"].startswith("Cannot process request")
+
     def test_mathlib_file(self):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
 

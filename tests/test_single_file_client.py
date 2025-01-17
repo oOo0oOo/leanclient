@@ -78,3 +78,5 @@ class TestSingleFileClient(unittest.TestCase):
         assert inc == out == []
 
         sfc.update_file([DocumentContentChange("change", (0, 0), (0, 1))])
+        res = sfc.get_code_actions(0, 0, 10, 10)
+        res = sfc.get_code_action_resolve({})

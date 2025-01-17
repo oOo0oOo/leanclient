@@ -2,7 +2,7 @@ from pprint import pprint
 
 from leanclient.single_file_client import SingleFileClient
 
-from .utils import experimental
+from .utils import experimental, get_diagnostics_in_range
 from .base_client import BaseLeanLSPClient
 from .file_manager import LSPFileManager
 
@@ -750,3 +750,87 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             "$/lean/plainTermGoal",
             {"position": {"line": line, "character": character}},
         )
+
+    @experimental
+    def get_code_actions(
+        self,
+        path: str,
+        start_line: int,
+        start_character: int,
+        end_line: int,
+        end_character: int,
+        max_retries: int = 3,
+        retry_delay: float = 0.001,
+    ) -> list:
+        """Get code actions for a text range.
+
+        The :guilabel:`textDocument/codeAction` method in LSP returns a list of commands that can be executed to fix or improve the code.
+
+        More information:
+
+        - LSP Docs: `Code Action Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeAction>`_
+        - Lean Source: `Basic.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L116>`_
+
+        Args:
+            path (str): Relative file path.
+            start_line (int): Start line.
+            start_character (int): Start character.
+            end_line (int): End line.
+            end_character (int): End character.
+            max_retries (int): Number of times to retry if no new results were found. Defaults to 3.
+            retry_delay (float): Time to wait between retries. Defaults to 0.001.
+
+        Returns:
+            list: Code actions.
+        """
+        return self._send_request_retry(
+            path,
+            "textDocument/codeAction",
+            {
+                "range": {
+                    "start": {"line": start_line, "character": start_character},
+                    "end": {"line": end_line, "character": end_character},
+                },
+                "context": {
+                    "diagnostics": get_diagnostics_in_range(
+                        self.get_diagnostics(path), start_line, end_line
+                    ),
+                    "triggerKind": 1,  # Doesn't come up in lean4 repo. 1 = Invoked: Completion was triggered by typing an identifier (24x7 code complete), manual invocation (e.g Ctrl+Space) or via API.
+                },
+            },
+            max_retries,
+            retry_delay,
+        )
+
+    @experimental
+    def get_code_action_resolve(self, code_action: dict) -> dict:
+        """Resolve a code action.
+
+        Calls the :guilabel:`codeAction/resolve` method.
+
+        More information:
+
+        - LSP Docs: `Code Action Resolve Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeAction_resolve>`_
+        - Lean Source: `Basic.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
+
+        Args:
+            code_action (dict): Code action.
+
+        Returns:
+            dict: Resolved code action.
+        """
+        try:
+            # Hoping for the best
+            uri = code_action["edit"]["changes"].keys()[0]
+            self.open_file(uri)
+        except:
+            pass
+
+        rid = self._send_request_rpc("codeAction/resolve", code_action, False)
+        for __ in range(100):  # Just in case
+            res = self._read_stdout()
+            if "error" in res:
+                return res
+            elif res.get("id") == rid:
+                return res.get("result")
+        return code_action

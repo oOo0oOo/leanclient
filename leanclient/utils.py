@@ -74,6 +74,29 @@ def get_index_from_line_character(text: str, line: int, char: int) -> int:
     return sum(len(lines[i]) + 1 for i in range(line)) + char
 
 
+def get_diagnostics_in_range(
+    diagnostics: list,
+    start_line: int,
+    end_line: int,
+) -> list:
+    """Find overlapping diagnostics for a range of lines.
+
+    Args:
+        diagnostics (list): List of diagnostics.
+        start_line (int): Start line.
+        end_line (int): End line.
+
+    Returns:
+        list: Overlapping diagnostics.
+    """
+    return [
+        diag
+        for diag in diagnostics
+        if diag["range"]["start"]["line"] <= end_line
+        and diag["range"]["end"]["line"] >= start_line
+    ]
+
+
 def experimental(func):
     """Decorator to mark a method as experimental."""
 
