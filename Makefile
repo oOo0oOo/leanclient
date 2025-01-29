@@ -20,6 +20,7 @@ update-benchmark:
 	cp tests/profile.png docs/source/profile_benchmark.png
 
 docs:
+	rm -rf docs/build/
 	poetry run sphinx-build -b html docs/source/ docs/build/
 
 publish:
