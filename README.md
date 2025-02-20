@@ -21,7 +21,6 @@ It enables interaction with a Lean language server instance running in a subproc
 
 Check out the [documentation](https://leanclient.readthedocs.io) for more information.
 
-
 ## Key Features
 
 - **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
@@ -29,7 +28,6 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 - **Synchronous**: Requests block until a response is received.
 - **Fast**: Typically more than 95% of time is spent waiting.
 - **Parallel**: Easy batch processing of files using all your cores.
-
 
 ## Quickstart
 
@@ -83,13 +81,6 @@ with lc.LeanClientPool(PROJECT_PATH, num_workers=8) as pool:
 print(results)
 ```
 
-
-## Currently in Beta
-
-- Needs more testing with different setups.
-- Any feedback is appreciated!
-
-
 ### Implemented LSP Interactions
 
 See the [documentation](https://leanclient.readthedocs.io) for more information on:
@@ -104,21 +95,21 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Locations of declarations and references.
 - Completions, completion item resolve.
 
-
 ### Missing LSP Interactions
 
 - Call hierarchy is currently not reliable.
 
 Might be implemented in the future:
+
 - `textDocument/codeAction`
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`
 
 Internal Lean methods:
+
 - `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
 - Interactive diagnostics
 - `$/lean/staleDependency`
-
 
 ### Potential Features
 
@@ -127,7 +118,6 @@ Internal Lean methods:
 - Automatic testing (lean env setup) for non Debian-based systems
 - Use document versions to handle evolving file states
 - Allow interaction before `waitForDiagnostics` returns
-
 
 ## Documentation
 
@@ -139,7 +129,6 @@ Run ``make docs`` to build the documentation locally.
 
 See [documentation](https://leanclient.readthedocs.io/en/latest/benchmarks.html) for more information.
 
-
 ## Testing
 
 ```bash
@@ -148,7 +137,6 @@ make install            # Installs python package and dev dependencies
 make test               # Run all tests, also installs fresh lean env if not found
 make test-profile       # Run all tests with cProfile
 ```
-
 
 ## Related Projects
 
@@ -167,7 +155,8 @@ make test-profile       # Run all tests with cProfile
 - [repl](https://github.com/leanprover-community/repl)
 - [minictx-eval](https://github.com/cmu-l3/minictx-eval)
 - [LeanREPL](https://github.com/arthurpaulino/LeanREPL)
-
+- [LeanTool](https://github.com/GasStationManager/LeanTool)
+- [itp-interface](https://github.com/trishullab/itp-interface)
 
 ## License & Citation
 
