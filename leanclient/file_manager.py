@@ -1,7 +1,7 @@
 import collections
 from pprint import pprint
-
 import time
+import urllib.parse
 
 from .utils import DocumentContentChange, apply_changes_to_text
 from .base_client import BaseLeanLSPClient
@@ -137,6 +137,8 @@ class LSPFileManager(BaseLeanLSPClient):
             raise RuntimeError(
                 f"Warning! Can not open more than {self.max_opened_files} files at once. Increase LeanLSPClient.max_opened_files or open less files."
             )
+
+        paths = [urllib.parse.unquote(p) for p in paths]
 
         # Open new files
         new_files = [p for p in paths if p not in self.opened_files_diagnostics]
