@@ -72,7 +72,9 @@ class LSPFileManager(BaseLeanLSPClient):
         rid = self._send_request_rpc(method, params, is_notification=False)
 
         result = self._read_stdout()
-        while result.get("id") != rid and "error" not in result:
+        while result.get("method") == "workspace/semanticTokens/refresh" or (
+            result.get("id") != rid and "error" not in result
+        ):
             # Ignore some messages from `workspace/semanticTokens/refresh` and the like
             result = self._read_stdout()
         return result.get("result", result)
