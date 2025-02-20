@@ -55,7 +55,7 @@ PROJECT_PATH = "path/to/your/lean/project/root/"
 client = lc.LeanLSPClient(PROJECT_PATH)
 
 # Query a lean file in your project
-file_path = "MyProject/Basic.lean"
+file_path = "MyProject/Basic.lean")
 result = client.get_goal(file_path, line=1, character=2)
 print(result)
 
@@ -63,6 +63,13 @@ print(result)
 sfc = client.create_file_client(file_path)
 result = sfc.get_term_goal(line=1, character=2)
 print(result)
+
+# Make a change to the document.
+change = lc.DocumentContentChange(text="-- Adding a comment at the head of the file\n", start=[0, 0], end=[0, 0])
+sfc.update_file(changes=[change])
+
+# Check the document content as seen by the LSP (changes are not written to disk).
+print(sfc.get_file_content())
 
 # Use a LeanClientPool for easy parallel processing multiple files.
 files = ["MyProject/Basic.lean", "Main.lean"]
@@ -85,7 +92,8 @@ print(results)
 
 See the [documentation](https://leanclient.readthedocs.io) for more information on:
 
-- Opening, updating and closing files.
+- Opening and closing files.
+- Updating (adding/removing) code from an open file.
 - Diagnostic information: Errors, warnings etc
 - Goals and term goal.
 - Hover information.
@@ -97,7 +105,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 
 ### Missing LSP Interactions
 
-- Call hierarchy is currently not reliable.
+- "Call hierarchy" and "code action" is currently not reliable.
 
 Might be implemented in the future:
 
@@ -114,10 +122,10 @@ Internal Lean methods:
 ### Potential Features
 
 - Choose between `lean --server` and `lake serve`
+- Allow interaction before `waitForDiagnostics` returns.
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Automatic testing (lean env setup) for non Debian-based systems
 - Use document versions to handle evolving file states
-- Allow interaction before `waitForDiagnostics` returns
 
 ## Documentation
 
