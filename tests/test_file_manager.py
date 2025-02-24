@@ -179,3 +179,38 @@ class TestLSPFileManager(unittest.TestCase):
             os.remove(TEST_ENV_DIR + fpath)
 
             self.lsp.close_files([file, fpath])
+
+    def test_update_try_tactics(self):
+
+        file_path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Covering/OneDim.lean"
+        diag_init = self.lsp.open_file(file_path)
+        assert diag_init == [], f"Expected no diagnostics, got {diag_init}"
+
+        # [(26, 61) , (27, 50), (42, 39)]
+        line, character = (26, 61)
+        tactics = ["simp", "aesop", "norm_num", "omega", "linarith"]
+        l_tactic = len("linarith")
+        messages = {}
+        for tactic in tactics:
+            change = DocumentContentChange(
+                start=[line, character],
+                end=[line, character + l_tactic],
+                text=tactic,
+            )
+            l_tactic = len(tactic)
+            messages[tactic] = self.lsp.update_file(
+                file_path,
+                [change],
+            )
+
+        exp_len = {
+            "aesop": 0,
+            "linarith": 0,
+            "ring": 1,
+            "norm_num": 1,
+            "omega": 1,
+            "simp": 1,
+        }
+
+        for tactic in tactics:
+            assert len(messages[tactic]) == exp_len[tactic], f"{messages}"

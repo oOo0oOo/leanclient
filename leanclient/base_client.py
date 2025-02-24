@@ -25,10 +25,7 @@ class BaseLeanLSPClient:
     """
 
     def __init__(
-        self,
-        project_path: str,
-        initial_build: bool = True,
-        print_warnings: bool = True,
+        self, project_path: str, initial_build: bool = True, print_warnings: bool = True
     ):
         self.print_warnings = print_warnings
         self.project_path = os.path.abspath(project_path) + "/"
@@ -173,14 +170,16 @@ class BaseLeanLSPClient:
         Returns:
             int | None: Id of the request if it is not a notification.
         """
+        if not is_notification:
+            request_id = self.request_id
+            self.request_id += 1
+
         request = {
             "jsonrpc": "2.0",
             "method": method,
             "params": params,
-            **({"id": self.request_id} if not is_notification else {}),
+            **({"id": request_id} if not is_notification else {}),
         }
-        if not is_notification:
-            self.request_id += 1
 
         body = orjson.dumps(request)
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
@@ -188,7 +187,7 @@ class BaseLeanLSPClient:
         self.stdin.flush()
 
         if not is_notification:
-            return self.request_id - 1
+            return request_id
 
     def _send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
@@ -200,12 +199,14 @@ class BaseLeanLSPClient:
         self._send_request_rpc(method, params, is_notification=True)
 
     def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list:
-        """Wait until `waitForDiagnostics` returns or an rpc error occurs.
+        """Wait until file is loaded or an rpc error occurs.
 
         This should only be used right after opening or updating files not to miss any responses.
-        Returns either diagnostics or an error dict for each file.
+        Returns either diagnostics or an [{error dict}] for each file.
 
-        Sometimes `waitForDiagnostics` doesn't return. We need to check for "rpc errors", "fatal errors" and use a timeout..
+        Checks `waitForDiagnostics` and `fileProgress` for each file.
+
+        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
         See source for more details.
 
         **Example diagnostics**:
@@ -256,13 +257,18 @@ class BaseLeanLSPClient:
             )
             rid_to_uri[rid] = uri
 
-        num_missing = len(uris)
+        num_missing_processing = len(uris)
+        num_missing_wait = len(uris)
         errored = set()
         diagnostics = {}
-        while num_missing > 0:
-            # Non-blocking read, `waitForDiagnostics` doesn't always return e.g. "unfinished comment"
+        while num_missing_processing > 0 or num_missing_wait > 0:
+            # Non-blocking read, `waitForDiagnostics` or `processing == []` doesn't always return e.g. "unfinished comment"
             # Timeout is shortened if all remaining files have errored
-            tmt = TIMEOUT_SHORT if len(errored) == num_missing else timeout
+            num_errors = len(errored)
+            short = (
+                num_errors >= num_missing_processing and num_errors >= num_missing_wait
+            )
+            tmt = TIMEOUT_SHORT if short else timeout
             if select.select([self.stdout], [], [], tmt)[0]:
                 res = self._read_stdout()
             else:
@@ -273,43 +279,38 @@ class BaseLeanLSPClient:
             # Capture diagnostics
             if method == "textDocument/publishDiagnostics":
                 uri = res["params"]["uri"]
-
-                # Don't overwrite errors
-                if uri in diagnostics and uri in errored:
-                    continue
-
                 diagnostics[uri] = res["params"]["diagnostics"]
                 continue
 
             # `waitForDiagnostics` has returned
             elif res.get("result", True) == {}:
-                num_missing -= 1
+                num_missing_wait -= 1
                 continue
 
-            # RPC error
+            # RPC error (only from `waitForDiagnostics`)
+            # These can lead to confusing BUGS, remove?
             elif "error" in res:
                 uri = rid_to_uri.get(res.get("id"))
                 if uri:
-                    diagnostics[uri] = res
+                    diagnostics[uri] = [res]
                 errored.add(uri)
                 continue
 
-            if method in IGNORED_METHODS:
+            elif method in IGNORED_METHODS:
                 continue
-
-            # assert res.get("method") == "$/lean/fileProgress", res
 
             # Check for fatalError from fileProgress. See here:
             # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
             proc = res["params"]["processing"]
-            if proc and proc[-1]["kind"] == 2:
-                uri = rid_to_uri.get(res.get("id"))
-                if uri:
-                    errored.add(uri)
-                    if not diagnostics.get(uri):
-                        msg = f"leanclient: Received LeanFileProgressKind.fatalError from language server."
-                        res["error"] = {"message": msg}
-                        diagnostics[uri] = res
+            if proc == []:
+                num_missing_processing -= 1
+            elif proc and proc[-1]["kind"] == 2:
+                uri = res["params"]["textDocument"]["uri"]
+                errored.add(uri)
+                if not diagnostics.get(uri):
+                    msg = f"leanclient: Received LeanFileProgressKind.fatalError from language server."
+                    res["error"] = {"message": msg}
+                    diagnostics[uri] = [res]
 
         return [diagnostics.get(uri, []) for uri in uris]
 
