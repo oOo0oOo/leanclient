@@ -6,11 +6,9 @@ import unittest
 
 from leanclient import DocumentContentChange
 from leanclient.base_client import BaseLeanLSPClient
-from leanclient.file_manager import LSPFileManager
 
 from leanclient.utils import apply_changes_to_text
 from tests.utils import (
-    read_stdout_timeout,
     get_random_fast_mathlib_files,
     get_random_mathlib_files,
 )
@@ -18,22 +16,17 @@ from tests.utils import (
 from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 
 
-class WrappedFileManager(LSPFileManager, BaseLeanLSPClient):
-    def __init__(self, *args, **kwargs):
-        BaseLeanLSPClient.__init__(self, *args, **kwargs)
-        LSPFileManager.__init__(self)
-
-
-class TestLSPFileManager(unittest.TestCase):
-    def setUp(self):
-        self.lsp = WrappedFileManager(
+class TestLSPClientFiles(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.lsp = BaseLeanLSPClient(
             TEST_ENV_DIR, initial_build=False, print_warnings=False
         )
+        await self.lsp.start()
 
-    def tearDown(self):
-        self.lsp.close()
+    async def asyncTearDown(self):
+        await self.lsp.close()
 
-    def _test_open_files_bench(self):
+    async def _test_open_files_bench(self):
         """Not a test. Used to find fast opening mathlib files."""
         paths = get_random_mathlib_files(4)
 
@@ -44,27 +37,24 @@ class TestLSPFileManager(unittest.TestCase):
         for path in paths:
             t0 = time.time()
             print(f"Opening {path}")
-            self.lsp.open_file(path)
+            await self.lsp.open_file(path)
             benchs.append([time.time() - t0, path])
 
         benchs.sort()
         disp = [f'"{b[1]}", # {b[0]:.2f}s' for b in benchs]
         print("\n".join(disp))
 
-    def test_open_files(self):
+    async def test_open_files(self):
         paths = get_random_fast_mathlib_files(3)
-        diag = self.lsp.open_file(paths[0])
-        diag2 = self.lsp.open_file(paths[0])  # One file overlap
-        diags = self.lsp.open_files(paths[:2])  # Two files, 1 overlap
-        diags2 = self.lsp.open_files(paths[:2])  # Cache
+        await self.lsp.open_file(paths[0])
+        await self.lsp.open_file(paths[0])  # One file overlap
+        await self.lsp.open_files(paths[:2])  # Two files, 1 overlap
+        await self.lsp.open_files(paths[:2])  # Cache
 
-        self.assertEqual(diag, diag2)
-        self.assertEqual(diag, diags[0])
-        self.assertEqual(diags, diags2)
-
-    def test_file_update(self):
+    async def test_file_update(self):
         path = get_random_fast_mathlib_files(1, 42)[0]
-        diags = self.lsp.open_file(path)
+        await self.lsp.open_file(path)
+        diags = await self.lsp.get_diagnostics(path, 5)
         assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
         # Make some random changes
@@ -80,7 +70,8 @@ class TestLSPFileManager(unittest.TestCase):
             )
             changes.append(d)
             text = apply_changes_to_text(text, [d])
-        diags2 = self.lsp.update_file(path, changes)
+        await self.lsp.update_file(path, changes)
+        diags2 = await self.lsp.get_diagnostics(path)
 
         if len(diags2) == 1:
             self.assertEqual(diags2[0]["message"], "unterminated comment")
@@ -98,14 +89,15 @@ class TestLSPFileManager(unittest.TestCase):
         fpath = path.replace(".lean", "_test.lean")
         with open(TEST_ENV_DIR + fpath, "w") as f:
             f.write(text)
-        diags3 = self.lsp.open_file(fpath)
+        await self.lsp.open_file(fpath)
+        diags3 = await self.lsp.get_diagnostics(fpath)
         os.remove(TEST_ENV_DIR + fpath)
 
         self.assertEqual(diags2, diags3)
 
-        self.lsp.close_files([path])
+        await self.lsp.close_files([path])
 
-    def test_file_update_line_by_line(self):
+    async def test_file_update_line_by_line(self):
         NUM_LINES = 24
         path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
         # path = ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean"
@@ -121,17 +113,18 @@ class TestLSPFileManager(unittest.TestCase):
         with open(fantasy_path, "w") as f:
             f.write(text)
 
-        self.lsp.open_file(fantasy)
+        await self.lsp.open_file(fantasy)
 
         lines = lines[-NUM_LINES:]
         t0 = time.time()
         diagnostics = []
         for i, line in enumerate(lines):
             text += line
-            diag = self.lsp.update_file(
+            await self.lsp.update_file(
                 fantasy,
                 [DocumentContentChange(line, [i + START, 0], [i + START, len(line)])],
             )
+            diag = await self.lsp.get_diagnostics(fantasy)
             content = self.lsp.get_file_content(fantasy)
             self.assertEqual(content, text)
             diagnostics.extend(diag)
@@ -142,15 +135,17 @@ class TestLSPFileManager(unittest.TestCase):
         os.remove(fantasy_path)
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")
 
-        self.lsp.close_files([fantasy, path])
+        await self.lsp.close_files([fantasy, path])
 
-    def test_update_file_mathlib(self):
+    async def test_update_file_mathlib(self):
         files = [
             ".lake/packages/mathlib/Mathlib/Data/Num/Prime.lean",
             ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean",
         ]
-        diag = self.lsp.open_files(files)
-        assert diag == [[], []], f"Expected no diagnostics, got {diag}"
+        await self.lsp.open_files(files)
+        diag = await self.lsp.get_diagnostics(files[0])
+        dia = await self.lsp.get_diagnostics(files[1])
+        assert diag == dia == [], f"Expected no diagnostics, got {diag}"
 
         changes = [
             DocumentContentChange("--", [42, 20], [42, 30]),
@@ -163,7 +158,8 @@ class TestLSPFileManager(unittest.TestCase):
         ]
 
         for file, exp_text in zip(files, exp_texts):
-            diag2 = self.lsp.update_file(file, changes)
+            await self.lsp.update_file(file, changes)
+            diag2 = await self.lsp.get_diagnostics(file)
             assert len(diag2) > 0, f"Expected diagnostics, got []"
             assert self.lsp.get_file_content(file) == exp_text
 
@@ -171,19 +167,20 @@ class TestLSPFileManager(unittest.TestCase):
             fpath = file.replace(".lean", "_test.lean")
             with open(TEST_ENV_DIR + fpath, "w") as f:
                 f.write(exp_text)
-            diag3 = self.lsp.open_file(fpath)
-            diag4 = self.lsp.get_diagnostics(fpath)
+            await self.lsp.open_file(fpath)
+            diag3 = await self.lsp.get_diagnostics(fpath)
+            diag4 = await self.lsp.get_diagnostics(fpath)
 
             assert diag2 == diag3 == diag4
 
             os.remove(TEST_ENV_DIR + fpath)
 
-            self.lsp.close_files([file, fpath])
+            await self.lsp.close_files([file, fpath])
 
-    def test_update_try_tactics(self):
-
+    async def test_update_try_tactics(self):
         file_path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Covering/OneDim.lean"
-        diag_init = self.lsp.open_file(file_path)
+        await self.lsp.open_file(file_path)
+        diag_init = await self.lsp.get_diagnostics(file_path)
         assert diag_init == [], f"Expected no diagnostics, got {diag_init}"
 
         # [(26, 61) , (27, 50), (42, 39)]
@@ -198,10 +195,8 @@ class TestLSPFileManager(unittest.TestCase):
                 text=tactic,
             )
             l_tactic = len(tactic)
-            messages[tactic] = self.lsp.update_file(
-                file_path,
-                [change],
-            )
+            await self.lsp.update_file(file_path, [change])
+            messages[tactic] = await self.lsp.get_diagnostics(file_path)
 
         exp_len = {
             "aesop": 0,

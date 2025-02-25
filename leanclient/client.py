@@ -4,10 +4,9 @@ from leanclient.single_file_client import SingleFileClient
 
 from .utils import experimental, get_diagnostics_in_range
 from .base_client import BaseLeanLSPClient
-from .file_manager import LSPFileManager
 
 
-class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
+class LeanLSPClient(BaseLeanLSPClient):
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
     It allows interaction with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
@@ -35,8 +34,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         initial_build: bool = True,
         print_warnings: bool = True,
     ):
-        BaseLeanLSPClient.__init__(self, project_path, initial_build, print_warnings)
-        LSPFileManager.__init__(self, max_opened_files)
+        BaseLeanLSPClient.__init__(
+            self, project_path, max_opened_files, initial_build, print_warnings
+        )
 
     def create_file_client(self, file_path: str) -> SingleFileClient:
         """Create a SingleFileClient for a file.
