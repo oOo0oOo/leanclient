@@ -102,10 +102,10 @@ def experimental(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        if self.print_warnings:
-            print(
-                f"Warning: {func.__name__}() is experimental! Set print_warnings=False to mute."
-            )
+        # if self.print_warnings:
+        #     print(
+        #         f"Warning: {func.__name__}() is experimental! Set print_warnings=False to mute."
+        #     )
         return func(self, *args, **kwargs)
 
     # Change __doc__ to include a sphinx warning

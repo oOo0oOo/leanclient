@@ -72,7 +72,7 @@ class BaseLeanLSPClient:
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
-        initial = await self._send_request_rpc(
+        initial = await self.send_request_rpc(
             "initialize",
             {
                 "processId": os.getpid(),
@@ -87,7 +87,7 @@ class BaseLeanLSPClient:
         legend = initial["result"]["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
-        await self._send_notification("initialized", {})
+        await self.send_notification("initialized", {})
 
     async def close(self, timeout: float = 2):
         """Always close the client when done!
@@ -217,7 +217,7 @@ class BaseLeanLSPClient:
         data = await self.stdout.read(content_length)
         return orjson.loads(data)
 
-    async def _send_request_rpc(
+    async def send_request_rpc(
         self, method: str, params: dict, is_notification: bool
     ) -> dict | None:
         """Send a JSON RPC request to the language server.
@@ -247,14 +247,14 @@ class BaseLeanLSPClient:
             self.pending[request_id] = future
             return await future
 
-    async def _send_notification(self, method: str, params: dict):
+    async def send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
 
         Args:
             method (str): Method name.
             params (dict): Parameters for the method.
         """
-        await self._send_request_rpc(method, params, is_notification=True)
+        await self.send_request_rpc(method, params, is_notification=True)
 
     # FILE MANAGEMENT
     async def _open_new_files(self, paths: list[str]):
@@ -281,9 +281,9 @@ class BaseLeanLSPClient:
                 "dependencyBuildMode": "always",
             }
 
-            await self._send_notification("textDocument/didOpen", params)
+            await self.send_notification("textDocument/didOpen", params)
 
-    async def _send_request(self, path: str, method: str, params: dict) -> dict:
+    async def send_request(self, path: str, method: str, params: dict) -> dict:
         """Send request about a document and return a response or and error.
 
         Args:
@@ -296,45 +296,40 @@ class BaseLeanLSPClient:
         """
         await self.open_file(path)
         params["textDocument"] = {"uri": self._local_to_uri(path)}
-        result = await self._send_request_rpc(method, params, is_notification=False)
+        result = await self.send_request_rpc(method, params, is_notification=False)
         return result.get("result", result)
 
-    async def _send_request_retry(
+    async def send_request_timeout(
         self,
         path: str,
         method: str,
         params: dict,
-        max_retries: int = 1,
-        retry_delay: float = 0.0,
+        timeout: float = 0.01,
     ) -> dict:
-        """Send requests until no new results are found after a number of retries.
+        """Send requests until the result is stable for at least `timeout` seconds.
 
         Args:
             path (str): Relative file path.
             method (str): Method name.
             params (dict): Parameters for the method.
-            max_retries (int): Number of times to retry if no new results were found. Defaults to 1.
-            retry_delay (float): Time to wait between retries. Defaults to 0.0.
+            timeout (float): Stability timeout in seconds. Defaults to 0.3.
 
         Returns:
             dict: Final response.
         """
-        prev_results = "Nvr_gnn_gv_y_p"
-        retry_count = 0
+        await self.open_file(path)
+
+        results = []
         while True:
-            results = await self._send_request(
-                path,
-                method,
-                params,
-            )
-            if results == prev_results:
-                retry_count += 1
-                if retry_count > max_retries:
-                    break
-                await asyncio.sleep(retry_delay)
-            else:
-                retry_count = 0
-                prev_results = results
+            try:
+                results = await asyncio.wait_for(
+                    self.send_request(path, method, params), timeout=timeout
+                )
+            except asyncio.TimeoutError:
+                return results
+
+            if results:
+                break
 
         return results
 
@@ -422,7 +417,7 @@ class BaseLeanLSPClient:
             },
         )
 
-        await self._send_notification(*params)
+        await self.send_notification(*params)
 
     async def close_files(self, paths: list[str]):
         """Close files in the language server.
@@ -437,7 +432,7 @@ class BaseLeanLSPClient:
         uris = self._locals_to_uris(paths)
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
-            await self._send_notification("textDocument/didClose", params)
+            await self.send_notification("textDocument/didClose", params)
 
         for path in paths:
             del self.files_finished[path]
@@ -493,12 +488,11 @@ class BaseLeanLSPClient:
         return self.files_diagnostics[path]
 
     async def wait_for_file(self, path: str, timeout: float = 0.3):
-        if path not in self.files_finished:
-            await self.open_file(path)
+        await self.open_file(path)
 
         # Wait for diagnostics
         uri = self._local_to_uri(path)
-        await self._send_request_rpc(
+        await self.send_request_rpc(
             "textDocument/waitForDiagnostics",
             {"uri": uri, "version": 1},
             is_notification=False,
