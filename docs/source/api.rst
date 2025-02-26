@@ -13,6 +13,16 @@ API
 |
 |
 
+.. automodule:: leanclient.async_client
+   :members:
+   :undoc-members:
+   :private-members:
+   :show-inheritance:
+   :inherited-members:
+
+|
+|
+|
 
 .. automodule:: leanclient.single_file_client
    :members:

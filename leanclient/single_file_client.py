@@ -36,6 +36,7 @@ class SingleFileClient:
         return self.client.close_files([self.file_path])
 
     def wait_for_file(self, timeout: float = 2):
+        """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         return self.client.wait_for_file(self.file_path, timeout)
 
     def update_file(self, changes: list[DocumentContentChange]) -> list:
@@ -70,6 +71,7 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_definitions`"""
         return self.client.get_definitions(self.file_path, line, character)
 
+    @experimental
     def get_references(
         self,
         line: int,

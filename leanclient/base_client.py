@@ -49,6 +49,10 @@ class BaseLeanLSPClient:
         self.loop = asyncio.get_event_loop()
 
     async def start(self):
+        """Start the language server process and initialize it.
+
+        This is required before most other methods can be called.
+        """
         if self.initial_build:
             build_proc = await asyncio.create_subprocess_exec(
                 "lake", "build", cwd=self.project_path
@@ -96,7 +100,7 @@ class BaseLeanLSPClient:
         Terminates the language server process and close all pipes.
 
         Args:
-            timeout (float): Time to wait until the process is killed. Defaults to 2.
+            timeout (float): Time to wait until the process is killed. Defaults to 2 seconds.
         """
         # await self._send_request_rpc("shutdown", {}, is_notification=False)
 
@@ -480,54 +484,31 @@ class BaseLeanLSPClient:
             del self.files_content[path]
             del self.files_last_update[path]
 
-    async def get_diagnostics(self, path: str) -> list | None:
+    async def get_diagnostics(self, path: str, timeout: float) -> list | None:
         """Wait until file is loaded or errors, then return diagnostics.
-
-        Checks `waitForDiagnostics` and `fileProgress` for each file.
-
-        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
-        See source for more details.
-
-        **Example diagnostics**:
-
-        .. code-block:: python
-
-            [
-            # For each file:
-            [
-                {
-                    'message': "declaration uses 'sorry'",
-                    'severity': 2,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}},
-                    'fullRange': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}}
-                },
-                {
-                    'message': "unexpected end of input; expected ':'",
-                    'severity': 1,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}},
-                    'fullRange': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}}
-                },
-                # ...
-            ], #...
-            ]
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for diagnostics. Rarely exceeded.
+            timeout (float): Time to wait for diagnostics.
 
         Returns:
             list | None: List of diagnostic messages or errors. None if no diagnostics were received.
         """
-        await self.wait_for_file(path)
+        await self.wait_for_file(path, timeout)
         return self.files_diagnostics[path]
 
     async def wait_for_file(self, path: str, timeout: float = 3):
+        """Wait for a file to finish processing.
+
+        Checks `waitForDiagnostics` and `fileProgress`.
+
+        Sometimes either of these can fail, so we need a timeout..
+        See source for more details.
+
+        Args:
+            path (str): Relative file path.
+            timeout (float): Time to wait for diagnostics.
+        """
         await self.open_file(path)
 
         timed_out = False
@@ -535,7 +516,7 @@ class BaseLeanLSPClient:
         # Wait for file to finish processing with timeout
         if not self.files_finished[path]:
             duration = 0
-            while duration < timeout:
+            while duration < timeout / 2:
                 await asyncio.sleep(0.001)
                 if self.files_finished[path]:
                     break
@@ -558,7 +539,7 @@ class BaseLeanLSPClient:
                     {"uri": uri, "version": 1},
                     is_notification=False,
                 ),
-                timeout=timeout,
+                timeout=timeout / 2,
             )
         except asyncio.TimeoutError:
             print(

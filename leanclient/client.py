@@ -41,31 +41,8 @@ class LeanLSPClient:
         self._call_async(self.client.start)
 
     def _call_async(self, func, *args, **kwargs):
+        """Helper: Call an async function using the event loop."""
         return self.loop.run_until_complete(func(*args, **kwargs))
-
-    def close(self):
-        self._call_async(self.client.close)
-
-    def wait_for_file(self, path: str, timeout: float = 5):
-        self._call_async(self.client.wait_for_file, path, timeout)
-
-    def open_file(self, path: str):
-        self._call_async(self.client.open_file, path)
-
-    def open_files(self, paths: list[str]):
-        self._call_async(self.client.open_files, paths)
-
-    def update_file(self, path: str, changes: list[DocumentContentChange]):
-        self._call_async(self.client.update_file, path, changes)
-
-    def close_files(self, paths: list[str]):
-        self._call_async(self.client.close_files, paths)
-
-    def get_diagnostics(self, path: str) -> list:
-        return self._call_async(self.client.get_diagnostics, path)
-
-    def get_file_content(self, path: str) -> str:
-        return self.client.get_file_content(path)
 
     def create_file_client(self, file_path: str) -> SingleFileClient:
         """Create a SingleFileClient for a file.
@@ -77,6 +54,128 @@ class LeanLSPClient:
             SingleFileClient: A client for interacting with a single file.
         """
         return SingleFileClient(self, file_path)
+
+    def close(self, timeout: float = 2):
+        """Always close the client when done!
+
+        Terminates the language server process and close all pipes.
+
+        Args:
+            timeout (float): Time to wait until the process is killed. Defaults to 2 seconds.
+        """
+        self._call_async(self.client.close, timeout)
+
+    def wait_for_file(self, path: str, timeout: float = 3):
+        """Wait for a file to be fully loaded.
+
+        Internally we check for fileProgress to be finished and `waitForDiagnostic` to return.
+        Still, a timeout is required to prevent infinite waiting.
+
+        Args:
+            path (str): Relative file path.
+            timeout (float): Time to wait. Defaults to 3 seconds.
+        """
+        self._call_async(self.client.wait_for_file, path, timeout)
+
+    def open_file(self, path: str):
+        """Open a file in the language server.
+
+        This is usually called automatically when a method is called that requires an open file.
+
+        Args:
+            path (str): Relative file path to open.
+        """
+        self._call_async(self.client.open_file, path)
+
+    def open_files(self, paths: list[str]):
+        """Open multiple files in the language server.
+
+        Opening multiple files at once can be faster than opening them one by one.
+
+        Args:
+            paths (list): List of relative file paths to open.
+        """
+        self._call_async(self.client.open_files, paths)
+
+    def update_file(self, path: str, changes: list[DocumentContentChange]):
+        """Apply changes to a file in the language server.
+
+        Note:
+
+            Changes are not written to disk! Use :meth:`get_file_content` to get the current content of a file, as seen by the language server.
+
+        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+        Raises a FileNotFoundError if the file is not open.
+
+        Args:
+            path (str): Relative file path to update.
+            changes (list[DocumentContentChange]): List of changes to apply.
+        """
+        self._call_async(self.client.update_file, path, changes)
+
+    def close_files(self, paths: list[str]):
+        """Close files in the language server.
+
+        Calling this manually is optional, files are automatically closed when max_opened_files is reached.
+
+        Args:
+            paths (list[str]): List of relative file paths to close.
+        """
+        self._call_async(self.client.close_files, paths)
+
+    def get_diagnostics(self, path: str, timeout: float = 3) -> list:
+        """Wait until file is loaded or errors, then return diagnostics.
+
+        Checks `waitForDiagnostics` and `fileProgress` for each file.
+
+        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
+        See source for more details.
+
+        **Example diagnostics**:
+
+        .. code-block:: python
+
+            [
+                {
+                    'message': "declaration uses 'sorry'",
+                    'severity': 2,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}},
+                    'fullRange': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}}
+                },
+                {
+                    'message': "unexpected end of input; expected ':'",
+                    'severity': 1,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}},
+                    'fullRange': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}}
+                },
+                # ...
+            ]
+
+        Args:
+            path str: Relative file path.
+            timeout (float): Timeout for fileProgress and waitForDiagnostics each. Defaults to 3 seconds.
+
+        Returns:
+            list | None: List of diagnostic messages or errors. None if no diagnostics were received.
+        """
+        return self._call_async(self.client.get_diagnostics, path, timeout)
+
+    def get_file_content(self, path: str) -> str:
+        """Get the content of a file as seen by the language server.
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            str: Content of the file.
+        """
+        return self.client.get_file_content(path)
 
     def get_completions(self, path: str, line: int, character: int) -> list:
         """Get completion items at a file position.
@@ -265,6 +364,7 @@ class LeanLSPClient:
         """
         return self._call_async(self.client.get_definitions, path, line, character)
 
+    @experimental
     def get_references(
         self,
         path: str,

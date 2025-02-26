@@ -1,4 +1,5 @@
 # Varia to be sorted later...
+import asyncio
 from functools import wraps
 from typing import NamedTuple
 
@@ -99,18 +100,31 @@ def get_diagnostics_in_range(
 
 def experimental(func):
     """Decorator to mark a method as experimental."""
+    if asyncio.iscoroutinefunction(func):
 
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        # if self.print_warnings:
-        #     print(
-        #         f"Warning: {func.__name__}() is experimental! Set print_warnings=False to mute."
-        #     )
-        return func(self, *args, **kwargs)
+        @wraps(func)
+        async def async_wrapper(self, *args, **kwargs):
+            return await func(self, *args, **kwargs)
 
-    # Change __doc__ to include a sphinx warning
-    warning = "\n        .. admonition:: Experimental\n\n            This method is experimental. Use with caution.\n"
-    doc_lines = wrapper.__doc__.split("\n")
-    doc_lines.insert(1, warning)
-    wrapper.__doc__ = "\n".join(doc_lines)
-    return wrapper
+        warning = (
+            "\n        .. admonition:: Experimental\n\n"
+            "            This method is experimental. Use with caution.\n"
+        )
+        doc_lines = async_wrapper.__doc__.split("\n")
+        doc_lines.insert(1, warning)
+        async_wrapper.__doc__ = "\n".join(doc_lines)
+        return async_wrapper
+    else:
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            return func(self, *args, **kwargs)
+
+        warning = (
+            "\n        .. admonition:: Experimental\n\n"
+            "            This method is experimental. Use with caution.\n"
+        )
+        doc_lines = wrapper.__doc__.split("\n")
+        doc_lines.insert(1, warning)
+        wrapper.__doc__ = "\n".join(doc_lines)
+        return wrapper
