@@ -1,7 +1,4 @@
-import asyncio
 from pprint import pprint
-
-from leanclient.single_file_client import SingleFileClient
 
 from .utils import DocumentContentChange, experimental, get_diagnostics_in_range
 from .base_client import BaseLeanLSPClient

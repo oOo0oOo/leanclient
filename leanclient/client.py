@@ -1,4 +1,3 @@
-import asyncio
 from pprint import pprint
 
 from leanclient.async_client import AsyncLeanLSPClient

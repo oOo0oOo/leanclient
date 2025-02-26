@@ -1,8 +1,6 @@
-import asyncio
 import os
 import random
 from pprint import pprint
-import time
 import unittest
 
 from leanclient.async_client import AsyncLeanLSPClient
