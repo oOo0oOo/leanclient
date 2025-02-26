@@ -11,9 +11,7 @@ class TestLSPClientRequestsAsync(unittest.IsolatedAsyncioTestCase):
     # Unfortunately no @classmethod for async tests
     # Setup takes a long time...
     async def asyncSetUp(self):
-        self.lsp = AsyncLeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False
-        )
+        self.lsp = AsyncLeanLSPClient(TEST_ENV_DIR, initial_build=False)
         await self.lsp.start()
 
     async def asyncTearDown(self):

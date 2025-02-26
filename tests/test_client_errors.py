@@ -24,9 +24,7 @@ EXP_DIAGNOSTICS = [
 
 class TestLSPClientDiagnostics(unittest.TestCase):
     def setUp(self):
-        self.lsp = LeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False
-        )
+        self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     def tearDown(self):
         self.lsp.close()
@@ -72,7 +70,7 @@ class TestLSPClientDiagnostics(unittest.TestCase):
 class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
     # def setUp(self):
     #     self.client = LeanLSPClient(
-    #         TEST_ENV_DIR, initial_build=False, print_warnings=False
+    #         TEST_ENV_DIR, initial_build=False
     #     )
     #     self.lsp = self.client.client.lsp
     #     self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
@@ -81,9 +79,7 @@ class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
     #     self.client.close()
 
     async def asyncSetUp(self):
-        self.client = AsyncLeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False
-        )
+        self.client = AsyncLeanLSPClient(TEST_ENV_DIR, initial_build=False)
         await self.client.start()
         self.lsp = self.client.lsp
         self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
@@ -217,12 +213,10 @@ class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
 
     def test_invalid_root(self):
         with self.assertRaises(FileNotFoundError, msg=f"Path: invalid_path"):
-            LeanLSPClient("invalid_path", initial_build=False, print_warnings=False)
+            LeanLSPClient("invalid_path", initial_build=False)
 
         with self.assertRaises(NotADirectoryError, msg=f"Path: invalid_path"):
-            LeanLSPClient(
-                "leanclient/client.py", initial_build=False, print_warnings=False
-            )
+            LeanLSPClient("leanclient/client.py", initial_build=False)
 
         # Valid but not a lean project
         # with self.assertRaises(Exception, msg=f"Path: leanclient/"):
@@ -234,7 +228,7 @@ class TestSFCErrors(unittest.TestCase):
         # Check SingleFileClient
         path = get_random_fast_mathlib_files(1, 42)[0]
 
-        client = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        client = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
         sfc = client.create_file_client(path)
 
         # Wrong input types
@@ -253,7 +247,7 @@ class TestSFCErrors(unittest.TestCase):
         # sfc = None
         # # Raising exceptions crashes lake
         # for pos in invalid[:1]:
-        #     lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        #     lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
         #     with self.assertRaises(EOFError):
         #         lsp.get_declarations(path, **pos)
         #     lsp.close()

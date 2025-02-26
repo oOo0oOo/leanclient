@@ -18,9 +18,7 @@ from run_tests import FAST_MATHLIB_FILES, TEST_ENV_DIR
 
 class TestLSPClientFiles(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.lsp = BaseLeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False
-        )
+        self.lsp = BaseLeanLSPClient(TEST_ENV_DIR, initial_build=False)
         await self.lsp.start()
 
     async def asyncTearDown(self):

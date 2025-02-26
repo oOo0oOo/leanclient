@@ -7,12 +7,12 @@ from run_tests import TEST_ENV_DIR
 
 class TestBaseClient(unittest.IsolatedAsyncioTestCase):
     async def test_initial_build(self):
-        lsp = BaseLeanLSPClient(TEST_ENV_DIR, initial_build=True, print_warnings=False)
+        lsp = BaseLeanLSPClient(TEST_ENV_DIR, initial_build=True)
         await lsp.start()
         await lsp.close()
 
     async def test_get_env(self):
-        lsp = BaseLeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        lsp = BaseLeanLSPClient(TEST_ENV_DIR, initial_build=False)
         await lsp.start()
         env = await lsp.get_env()
         exp = [

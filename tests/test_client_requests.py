@@ -14,7 +14,7 @@ from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 class TestLSPClientRequests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        cls.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     @classmethod
     def tearDownClass(cls):
@@ -23,7 +23,7 @@ class TestLSPClientRequests(unittest.TestCase):
     # Takes long but might be worth it
     # def setUp(self):
     #     self.lsp = LeanLSPClient(
-    #         TEST_ENV_DIR, initial_build=False, print_warnings=False
+    #         TEST_ENV_DIR, initial_build=False
     #     )
 
     # def tearDown(self):

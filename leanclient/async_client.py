@@ -14,18 +14,9 @@ class AsyncLeanLSPClient:
     """
 
     def __init__(
-        self,
-        project_path: str,
-        max_opened_files: int = 8,
-        initial_build: bool = True,
-        print_warnings: bool = True,
+        self, project_path: str, initial_build: bool = True, max_opened_files: int = 8
     ):
-        self.lsp = BaseLeanLSPClient(
-            project_path,
-            max_opened_files=max_opened_files,
-            initial_build=initial_build,
-            print_warnings=print_warnings,
-        )
+        self.lsp = BaseLeanLSPClient(project_path, initial_build, max_opened_files)
         self.loop = self.lsp.loop
 
     async def start(self):
@@ -63,9 +54,9 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.close_files`"""
         await self.lsp.close_files(paths)
 
-    async def get_diagnostics(self, path: str) -> list:
+    async def get_diagnostics(self, path: str, timeout: float = 3) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
-        return await self.lsp.get_diagnostics(path)
+        return await self.lsp.get_diagnostics(path, timeout)
 
     def get_file_content(self, path: str) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""

@@ -9,9 +9,7 @@ from run_tests import TEST_ENV_DIR, TEST_FILE_PATH
 
 class TestSingleFileClient(unittest.TestCase):
     def setUp(self):
-        self.client = LeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False
-        )
+        self.client = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     def tearDown(self):
         self.client.close()

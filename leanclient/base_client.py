@@ -30,11 +30,9 @@ class BaseLeanLSPClient:
     def __init__(
         self,
         project_path: str,
-        max_opened_files: int = 8,
         initial_build: bool = True,
-        print_warnings: bool = True,
+        max_opened_files: int = 8,
     ):
-        self.print_warnings = print_warnings
         self.project_path = os.path.abspath(project_path) + "/"
         self.len_project_uri = len(self.project_path) + LEN_URI_PREFIX
         self.initial_build = initial_build
@@ -484,12 +482,12 @@ class BaseLeanLSPClient:
             del self.files_content[path]
             del self.files_last_update[path]
 
-    async def get_diagnostics(self, path: str, timeout: float) -> list | None:
+    async def get_diagnostics(self, path: str, timeout: float = 3) -> list | None:
         """Wait until file is loaded or errors, then return diagnostics.
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for diagnostics.
+            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
 
         Returns:
             list | None: List of diagnostic messages or errors. None if no diagnostics were received.
@@ -507,7 +505,7 @@ class BaseLeanLSPClient:
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait for diagnostics.
+            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
         """
         await self.open_file(path)
 

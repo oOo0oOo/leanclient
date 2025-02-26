@@ -22,21 +22,17 @@ class LeanLSPClient:
 
     Args:
         project_path (str): Path to the root folder of a Lean project.
-        max_opened_files (int): Maximum number of files to keep open at once.
         initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
-        print_warnings (bool): Whether to print warnings about experimental features.
+        max_opened_files (int): Maximum number of files to keep open at once.
     """
 
     def __init__(
         self,
         project_path: str,
-        max_opened_files: int = 8,
         initial_build: bool = True,
-        print_warnings: bool = True,
+        max_opened_files: int = 8,
     ):
-        self.client = AsyncLeanLSPClient(
-            project_path, max_opened_files, initial_build, print_warnings
-        )
+        self.client = AsyncLeanLSPClient(project_path, initial_build, max_opened_files)
         self.loop = self.client.loop
         self._call_async(self.client.start)
 
