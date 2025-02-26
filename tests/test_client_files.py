@@ -54,7 +54,7 @@ class TestLSPClientFiles(unittest.IsolatedAsyncioTestCase):
     async def test_file_update(self):
         path = get_random_fast_mathlib_files(1, 42)[0]
         await self.lsp.open_file(path)
-        diags = await self.lsp.get_diagnostics(path, 5)
+        diags = await self.lsp.get_diagnostics(path)
         assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
         # Make some random changes

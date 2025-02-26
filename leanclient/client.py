@@ -1,12 +1,13 @@
+import asyncio
 from pprint import pprint
 
+from leanclient.async_client import AsyncLeanLSPClient
 from leanclient.single_file_client import SingleFileClient
 
-from .utils import experimental, get_diagnostics_in_range
-from .base_client import BaseLeanLSPClient
+from .utils import DocumentContentChange, experimental
 
 
-class LeanLSPClient(BaseLeanLSPClient):
+class LeanLSPClient:
     """LeanLSPClient is a thin wrapper around the Lean language server.
 
     It allows interaction with a subprocess running `lake serve` via the `Language Server Protocol (LSP) <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/>`_.
@@ -34,9 +35,38 @@ class LeanLSPClient(BaseLeanLSPClient):
         initial_build: bool = True,
         print_warnings: bool = True,
     ):
-        BaseLeanLSPClient.__init__(
-            self, project_path, max_opened_files, initial_build, print_warnings
+        self.client = AsyncLeanLSPClient(
+            project_path, max_opened_files, initial_build, print_warnings
         )
+        self.loop = self.client.loop
+        self._call_async(self.client.start)
+
+    def _call_async(self, func, *args, **kwargs):
+        return self.loop.run_until_complete(func(*args, **kwargs))
+
+    def close(self):
+        self._call_async(self.client.close)
+
+    def wait_for_file(self, path: str, timeout: float = 5):
+        self._call_async(self.client.wait_for_file, path, timeout)
+
+    def open_file(self, path: str):
+        self._call_async(self.client.open_file, path)
+
+    def open_files(self, paths: list[str]):
+        self._call_async(self.client.open_files, paths)
+
+    def update_file(self, path: str, changes: list[DocumentContentChange]):
+        self._call_async(self.client.update_file, path, changes)
+
+    def close_files(self, paths: list[str]):
+        self._call_async(self.client.close_files, paths)
+
+    def get_diagnostics(self, path: str) -> list:
+        return self._call_async(self.client.get_diagnostics, path)
+
+    def get_file_content(self, path: str) -> str:
+        return self.client.get_file_content(path)
 
     def create_file_client(self, file_path: str) -> SingleFileClient:
         """Create a SingleFileClient for a file.
@@ -88,12 +118,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Completion items.
         """
-        resp = self._send_request(
-            path,
-            "textDocument/completion",
-            {"position": {"line": line, "character": character}},
-        )
-        return resp["items"]  # NOTE: We discard `isIncomplete` for now
+        return self._call_async(self.client.get_completions, path, line, character)
 
     def get_completion_item_resolve(self, item: dict) -> str:
         """Resolve a completion item.
@@ -122,10 +147,7 @@ class LeanLSPClient(BaseLeanLSPClient):
             str: Additional detail about the completion item.
 
         """
-        uri = item["data"]["params"]["textDocument"]["uri"]
-        return self._send_request(
-            self._uri_to_local(uri), "completionItem/resolve", item
-        )["detail"]
+        return self._call_async(self.client.get_completion_item_resolve, item)
 
     def get_hover(self, path: str, line: int, character: int) -> dict | None:
         """Get hover information at a cursor position.
@@ -161,11 +183,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             dict: Hover information or None if no hover information is available.
         """
-        return self._send_request(
-            path,
-            "textDocument/hover",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_hover, path, line, character)
 
     def get_declarations(self, path: str, line: int, character: int) -> list:
         """Get locations of declarations at a file position.
@@ -205,11 +223,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request(
-            path,
-            "textDocument/declaration",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_declarations, path, line, character)
 
     def get_definitions(self, path: str, line: int, character: int) -> list:
         """Get location of symbol definition at a file position.
@@ -250,11 +264,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request(
-            path,
-            "textDocument/definition",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_definitions, path, line, character)
 
     def get_references(
         self,
@@ -262,8 +272,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         line: int,
         character: int,
         include_declaration: bool = False,
-        max_retries: int = 3,
-        retry_delay: float = 0.001,
+        timeout: float = 0.01,
     ) -> list:
         """Get locations of references to a symbol at a file position.
 
@@ -300,15 +309,13 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request_retry(
+        return self._call_async(
+            self.client.get_references,
             path,
-            "textDocument/references",
-            {
-                "position": {"line": line, "character": character},
-                "context": {"includeDeclaration": include_declaration},
-            },
-            max_retries,
-            retry_delay,
+            line,
+            character,
+            include_declaration,
+            timeout,
         )
 
     def get_type_definitions(self, path: str, line: int, character: int) -> list:
@@ -349,11 +356,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Locations.
         """
-        return self._send_request(
-            path,
-            "textDocument/typeDefinition",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_type_definitions, path, line, character)
 
     def get_document_highlights(self, path: str, line: int, character: int) -> list:
         """Get highlight ranges for a symbol at a file position.
@@ -385,11 +388,8 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Document highlights.
         """
-
-        return self._send_request(
-            path,
-            "textDocument/documentHighlight",
-            {"position": {"line": line, "character": character}},
+        return self._call_async(
+            self.client.get_document_highlights, path, line, character
         )
 
     def get_document_symbols(self, path: str) -> list:
@@ -427,7 +427,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Document symbols.
         """
-        return self._send_request(path, "textDocument/documentSymbol", {})
+        return self._call_async(self.client.get_document_symbols, path)
 
     def get_semantic_tokens(self, path: str) -> list:
         """Get semantic tokens for the entire document.
@@ -460,8 +460,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Semantic tokens.
         """
-        res = self._send_request(path, "textDocument/semanticTokens/full", {})
-        return self.token_processor(res["data"])
+        return self._call_async(self.client.get_semantic_tokens, path)
 
     def get_semantic_tokens_range(
         self,
@@ -485,17 +484,14 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Semantic tokens.
         """
-        res = self._send_request(
+        return self._call_async(
+            self.client.get_semantic_tokens_range,
             path,
-            "textDocument/semanticTokens/range",
-            {
-                "range": {
-                    "start": {"line": start_line, "character": start_character},
-                    "end": {"line": end_line, "character": end_character},
-                }
-            },
+            start_line,
+            start_character,
+            end_line,
+            end_character,
         )
-        return self.token_processor(res["data"])
 
     def get_folding_ranges(self, path: str) -> list:
         """Get folding ranges in a document.
@@ -527,7 +523,7 @@ class LeanLSPClient(BaseLeanLSPClient):
             list: Folding ranges.
 
         """
-        return self._send_request(path, "textDocument/foldingRange", {})
+        return self._call_async(self.client.get_folding_ranges, path)
 
     @experimental
     def get_call_hierarchy_items(self, path: str, line: int, character: int) -> list:
@@ -566,10 +562,8 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Call hierarchy items.
         """
-        return self._send_request(
-            path,
-            "textDocument/prepareCallHierarchy",
-            {"position": {"line": line, "character": character}},
+        return self._call_async(
+            self.client.get_call_hierarchy_items, path, line, character
         )
 
     @experimental
@@ -612,11 +606,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Incoming call hierarchy items.
         """
-        return self._send_request(
-            self._uri_to_local(item["uri"]),
-            "callHierarchy/incomingCalls",
-            {"item": item},
-        )
+        return self._call_async(self.client.get_call_hierarchy_incoming, item)
 
     @experimental
     def get_call_hierarchy_outgoing(self, item: dict) -> list:
@@ -657,11 +647,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Outgoing call hierarchy items.
         """
-        return self._send_request(
-            self._uri_to_local(item["uri"]),
-            "callHierarchy/outgoingCalls",
-            {"item": item},
-        )
+        return self._call_async(self.client.get_call_hierarchy_outgoing, item)
 
     def get_goal(self, path: str, line: int, character: int) -> dict | None:
         """Get proof goal at a file position.
@@ -700,11 +686,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             dict | None: Proof goals at the position.
         """
-        return self._send_request(
-            path,
-            "$/lean/plainGoal",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_goal, path, line, character)
 
     def get_term_goal(self, path: str, line: int, character: int) -> dict | None:
         """Get term goal at a file position.
@@ -745,11 +727,7 @@ class LeanLSPClient(BaseLeanLSPClient):
 
 
         """
-        return self._send_request(
-            path,
-            "$/lean/plainTermGoal",
-            {"position": {"line": line, "character": character}},
-        )
+        return self._call_async(self.client.get_term_goal, path, line, character)
 
     @experimental
     def get_code_actions(
@@ -759,8 +737,7 @@ class LeanLSPClient(BaseLeanLSPClient):
         start_character: int,
         end_line: int,
         end_character: int,
-        max_retries: int = 3,
-        retry_delay: float = 0.001,
+        timeout: float = 0.01,
     ) -> list:
         """Get code actions for a text range.
 
@@ -783,23 +760,14 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             list: Code actions.
         """
-        return self._send_request_retry(
+        return self._call_async(
+            self.client.get_code_actions,
             path,
-            "textDocument/codeAction",
-            {
-                "range": {
-                    "start": {"line": start_line, "character": start_character},
-                    "end": {"line": end_line, "character": end_character},
-                },
-                "context": {
-                    "diagnostics": get_diagnostics_in_range(
-                        self.get_diagnostics(path), start_line, end_line
-                    ),
-                    "triggerKind": 1,  # Doesn't come up in lean4 repo. 1 = Invoked: Completion was triggered by typing an identifier (24x7 code complete), manual invocation (e.g Ctrl+Space) or via API.
-                },
-            },
-            max_retries,
-            retry_delay,
+            start_line,
+            start_character,
+            end_line,
+            end_character,
+            timeout,
         )
 
     @experimental
@@ -819,18 +787,4 @@ class LeanLSPClient(BaseLeanLSPClient):
         Returns:
             dict: Resolved code action.
         """
-        try:
-            # Hoping for the best
-            uri = code_action["edit"]["changes"].keys()[0]
-            self.open_file(uri)
-        except:
-            pass
-
-        rid = self._send_request_rpc("codeAction/resolve", code_action, False)
-        for __ in range(100):  # Just in case
-            res = self._read_stdout()
-            if "error" in res:
-                return res
-            elif res.get("id") == rid:
-                return res.get("result")
-        return code_action
+        return self._call_async(self.client.get_code_action_resolve, code_action)

@@ -1,6 +1,6 @@
 from functools import partial
 from itertools import chain
-from multiprocessing import Pool
+from multiprocessing import Pool, current_process
 from typing import Callable, Any
 import os
 from pprint import pprint
@@ -11,26 +11,31 @@ from leanclient import LeanLSPClient
 from leanclient import SingleFileClient
 
 
+clients = {}
+
+
 def _init_worker(project_path, kwargs):
-    global client
     if "initial_build" not in kwargs:
         kwargs["initial_build"] = False
-    client = LeanLSPClient(project_path, **kwargs)
+    clients[current_process().pid] = LeanLSPClient(project_path, **kwargs)
 
 
 def _close_worker():
-    global client
-    client.close()
+    client = clients.pop(current_process().pid, None)
+    if client:
+        client.close()
 
 
 def _worker_task_batched_open(*args, **kwargs):
     task = kwargs["task"]
     file_paths = args[0]
+    client = clients[current_process().pid]
     client.open_files(file_paths)
     return [task(client.create_file_client(path)) for path in file_paths]
 
 
 def _worker_task(*args, **kwargs):
+    client = clients[current_process().pid]
     return kwargs["task"](client.create_file_client(args[0]))
 
 

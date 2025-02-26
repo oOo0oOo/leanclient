@@ -46,6 +46,7 @@ class BaseLeanLSPClient:
         self.files_last_update = {}  # Time of last update to the diagnostics
         self.files_content = {}
         self.max_opened_files = max_opened_files
+        self.loop = asyncio.get_event_loop()
 
     async def start(self):
         if self.initial_build:
@@ -67,8 +68,8 @@ class BaseLeanLSPClient:
         self.stdout = self.process.stdout
         self.stderr = self.process.stderr
 
-        self.tasks.add(asyncio.create_task(self._run_stdout()))
-        self.tasks.add(asyncio.create_task(self._run_stderr()))
+        self.tasks.add(self.loop.create_task(self._run_stdout()))
+        self.tasks.add(self.loop.create_task(self._run_stderr()))
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
@@ -101,14 +102,19 @@ class BaseLeanLSPClient:
 
         for task in self.tasks:
             task.cancel()
+        await asyncio.gather(*self.tasks)
 
         self.stdin.close()
+
+        for future in self.pending.values():
+            future.cancel()
+
         wait = self.process.wait()
 
         try:
             await asyncio.wait_for(wait, timeout=timeout)
         except asyncio.TimeoutError:
-            self.process.kill()
+            await self.process.kill()
 
     # URI HANDLING
     def _local_to_uri(self, local_path: str) -> str:
@@ -151,47 +157,53 @@ class BaseLeanLSPClient:
 
         This is the main blocking function.
         """
-        while True:
-            message = await self._read_stdout()
+        while self.process:
+            try:
+                message = await self._read_stdout()
+            except (asyncio.CancelledError, ValueError):
+                break
 
             method = message.get("method", "")
 
             if method in IGNORED_METHODS:
-                continue
+                pass
 
-            if method == "textDocument/publishDiagnostics":
+            elif method == "textDocument/publishDiagnostics":
                 path = self._uri_to_local(message["params"]["uri"])
                 self.files_diagnostics[path] = message["params"]["diagnostics"]
                 self.files_last_update[path] = time.time()
-                continue
 
-            if method == "$/lean/fileProgress":
+            elif method == "$/lean/fileProgress":
                 proc = message["params"]["processing"]
                 path = self._uri_to_local(message["params"]["textDocument"]["uri"])
+                self.files_last_update[path] = time.time()
+
                 if proc == []:
                     self.files_finished[path] = True
 
                 # Check for fatalError from fileProgress. See here:
                 # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
                 elif proc and proc[-1]["kind"] == 2:
-                    # print("Fatal error in file:", path)
                     msg = "leanclient: Received LeanFileProgressKind.fatalError from language server."
                     message["error"] = {"message": msg}
                     self.files_diagnostics[path] = [message]
                     self.files_finished[path] = True
 
-                self.files_last_update[path] = time.time()
-                continue
-
-            if "id" in message and message["id"] in self.pending:
-                self.pending.pop(message["id"]).set_result(message)
+            elif "id" in message and message["id"] in self.pending:
+                future = self.pending.pop(message["id"])
+                if not future.cancelled():
+                    future.set_result(message)
             else:
-                print("Response without matching request:", message)
+                # print("Response without matching request:", message)
+                pass
 
     async def _run_stderr(self):
         """Loop: Read and print error messages from lake process stderr."""
-        while True:
-            line = await self.stderr.readline()
+        while self.process:
+            try:
+                line = await self.stderr.readline()
+            except asyncio.CancelledError:
+                break
             if not line:
                 break
             print("lake stderr:", line)
@@ -208,13 +220,19 @@ class BaseLeanLSPClient:
 
         # Handle EOF: Return contents of stderr (non-blocking using select)
         if not header:
-            self.close()
+            await self.close()
             raise EOFError(f"Language server has closed.")
 
         # Parse message
         content_length = int(header.decode("ascii").split(":")[1])
         await self.stdout.readline()  # Skip the empty line
         data = await self.stdout.read(content_length)
+
+        # Check if the data length matches the expected content length
+        # This is relevant during closing
+        if len(data) != content_length:
+            return {}
+
         return orjson.loads(data)
 
     async def send_request_rpc(
@@ -243,7 +261,7 @@ class BaseLeanLSPClient:
         await self.stdin.drain()
 
         if not is_notification:
-            future = asyncio.get_running_loop().create_future()
+            future = self.loop.create_future()
             self.pending[request_id] = future
             return await future
 
@@ -299,39 +317,61 @@ class BaseLeanLSPClient:
         result = await self.send_request_rpc(method, params, is_notification=False)
         return result.get("result", result)
 
-    async def send_request_timeout(
+    async def send_request_retry(
         self,
         path: str,
         method: str,
         params: dict,
         timeout: float = 0.01,
-    ) -> dict:
+        retries: int = 4,
+    ) -> dict | None:
         """Send requests until the result is stable for at least `timeout` seconds.
 
         Args:
             path (str): Relative file path.
             method (str): Method name.
             params (dict): Parameters for the method.
-            timeout (float): Stability timeout in seconds. Defaults to 0.3.
+            timeout (float): No new results in X seconds. Defaults to 0.3.
+            retries (int): Number of retries (only timeouts count). Defaults to 2.
 
         Returns:
-            dict: Final response.
+            dict | None: Final response or None.
         """
         await self.open_file(path)
-
-        results = []
+        prev_results = "Nvr_gnn_gv_y_p"
+        retry_count = 0
         while True:
-            try:
-                results = await asyncio.wait_for(
-                    self.send_request(path, method, params), timeout=timeout
-                )
-            except asyncio.TimeoutError:
-                return results
+            results = await self.send_request(path, method, params)
 
-            if results:
-                break
+            if results == prev_results:
+                retry_count += 1
+                if retry_count >= retries:
+                    break
+                await asyncio.sleep(timeout)
+            else:
+                prev_results = results
+                retry_count = 0
 
         return results
+
+    async def send_request_timeout(
+        self,
+        path: str,
+        method: str,
+        params: dict,
+        timeout: float = 5,
+    ) -> dict | None:
+        await self.open_file(path)
+        try:
+            result = await asyncio.wait_for(
+                self.send_request(path, method, params), timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            print(
+                f"Warning: send_request_timeout for {method} for {path} after {timeout}s."
+            )
+            return None
+        return result
 
     async def open_files(self, paths: list[str]):
         """Open files in the language server and return diagnostics.
@@ -440,7 +480,7 @@ class BaseLeanLSPClient:
             del self.files_content[path]
             del self.files_last_update[path]
 
-    async def get_diagnostics(self, path: str, timeout: float = 0.3) -> list | None:
+    async def get_diagnostics(self, path: str) -> list | None:
         """Wait until file is loaded or errors, then return diagnostics.
 
         Checks `waitForDiagnostics` and `fileProgress` for each file.
@@ -484,30 +524,47 @@ class BaseLeanLSPClient:
         Returns:
             list | None: List of diagnostic messages or errors. None if no diagnostics were received.
         """
-        await self.wait_for_file(path, timeout)
+        await self.wait_for_file(path)
         return self.files_diagnostics[path]
 
-    async def wait_for_file(self, path: str, timeout: float = 0.3):
+    async def wait_for_file(self, path: str, timeout: float = 3):
         await self.open_file(path)
 
-        # Wait for diagnostics
+        timed_out = False
+
+        # Wait for file to finish processing with timeout
+        if not self.files_finished[path]:
+            duration = 0
+            while duration < timeout:
+                await asyncio.sleep(0.001)
+                if self.files_finished[path]:
+                    break
+                duration = time.time() - self.files_last_update[path]
+            else:
+                timed_out = True
+                print(
+                    f"Warning: Timed out waiting for diagnostics (finish processing) after {duration:.1f}s for {path}."
+                )
+
+        # Wait for diagnostics with timeout
+        if timed_out:
+            timeout = 0.5
+
         uri = self._local_to_uri(path)
-        await self.send_request_rpc(
-            "textDocument/waitForDiagnostics",
-            {"uri": uri, "version": 1},
-            is_notification=False,
-        )
-
-        if self.files_finished[path]:
-            return
-
-        duration = 0
-        while duration < timeout:
-            await asyncio.sleep(0.01)
-            # Last chance for diagnostics to arrive
-            if self.files_finished[path] and duration > timeout / 2:
-                break
-            duration = time.time() - self.files_last_update[path]
+        try:
+            await asyncio.wait_for(
+                self.send_request_rpc(
+                    "textDocument/waitForDiagnostics",
+                    {"uri": uri, "version": 1},
+                    is_notification=False,
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            print(
+                f"Warning: Timed out waiting for diagnostics (waitForDiagnostics) after {timeout:}s for {path}."
+            )
+            pass
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.

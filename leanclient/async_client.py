@@ -3,7 +3,7 @@ from pprint import pprint
 
 from leanclient.single_file_client import SingleFileClient
 
-from .utils import experimental, get_diagnostics_in_range
+from .utils import DocumentContentChange, experimental, get_diagnostics_in_range
 from .base_client import BaseLeanLSPClient
 
 
@@ -15,12 +15,13 @@ class AsyncLeanLSPClient:
         initial_build: bool = True,
         print_warnings: bool = True,
     ):
-        # BaseLeanLSPClient.__init__(
-        #     self, project_path, max_opened_files, initial_build, print_warnings
-        # )
         self.lsp = BaseLeanLSPClient(
-            project_path, initial_build=initial_build, print_warnings=print_warnings
+            project_path,
+            max_opened_files=max_opened_files,
+            initial_build=initial_build,
+            print_warnings=print_warnings,
         )
+        self.loop = self.lsp.loop
 
     async def start(self):
         await self.lsp.start()
@@ -31,16 +32,37 @@ class AsyncLeanLSPClient:
     async def send_request(self, path: str, method: str, params: dict) -> dict:
         return await self.lsp.send_request(path, method, params)
 
-    def create_file_client(self, file_path: str) -> SingleFileClient:
-        """Create a SingleFileClient for a file.
+    async def wait_for_file(self, path: str, timeout: float = 5):
+        await self.lsp.wait_for_file(path, timeout)
 
-        Args:
-            file_path (str): Relative file path.
+    async def open_file(self, path: str):
+        await self.lsp.open_file(path)
 
-        Returns:
-            SingleFileClient: A client for interacting with a single file.
-        """
-        return SingleFileClient(self, file_path)
+    async def open_files(self, paths: list[str]):
+        await self.lsp.open_files(paths)
+
+    async def update_file(self, path: str, changes: list[DocumentContentChange]):
+        await self.lsp.update_file(path, changes)
+
+    async def close_files(self, paths: list[str]):
+        await self.lsp.close_files(paths)
+
+    async def get_diagnostics(self, path: str) -> list:
+        return await self.lsp.get_diagnostics(path)
+
+    def get_file_content(self, path: str) -> str:
+        return self.lsp.get_file_content(path)
+
+    # def create_file_client(self, file_path: str) -> SingleFileClient:
+    #     """Create a SingleFileClient for a file.
+
+    #     Args:
+    #         file_path (str): Relative file path.
+
+    #     Returns:
+    #         SingleFileClient: A client for interacting with a single file.
+    #     """
+    #     return SingleFileClient(self, file_path)
 
     async def get_completions(self, path: str, line: int, character: int) -> list:
         """Get completion items at a file position.
@@ -257,6 +279,7 @@ class AsyncLeanLSPClient:
         character: int,
         include_declaration: bool = False,
         timeout: float = 0.01,
+        retries: int = 5,
     ) -> list:
         """Get locations of references to a symbol at a file position.
 
@@ -287,14 +310,13 @@ class AsyncLeanLSPClient:
             line (int): Line number.
             character (int): Character number.
             include_declaration (bool): Whether to include the declaration itself in the results. Defaults to False.
-            max_retries (int): Number of times to retry if no new results were found. Defaults to 3.
-            retry_delay (float): Time to wait between retries. Defaults to 0.001.
+            timeout (float): Time since the last new result. Defaults to 0.3
 
         Returns:
             list: Locations.
         """
         await self.lsp.wait_for_file(path)
-        return await self.lsp.send_request_timeout(
+        return await self.lsp.send_request_retry(
             path,
             "textDocument/references",
             {
@@ -302,7 +324,16 @@ class AsyncLeanLSPClient:
                 "context": {"includeDeclaration": include_declaration},
             },
             timeout,
+            retries,
         )
+        # return await self.lsp.send_request(
+        #     path,
+        #     "textDocument/references",
+        #     {
+        #         "position": {"line": line, "character": character},
+        #         "context": {"includeDeclaration": include_declaration},
+        #     },
+        # )
 
     async def get_type_definitions(self, path: str, line: int, character: int) -> list:
         """Get locations of type definition of a symbol at a file position.
@@ -759,7 +790,8 @@ class AsyncLeanLSPClient:
         start_character: int,
         end_line: int,
         end_character: int,
-        timeout: float = 0.01,
+        timeout: float = 3,
+        retries: int = 4,
     ) -> list:
         """Get code actions for a text range.
 
@@ -776,7 +808,7 @@ class AsyncLeanLSPClient:
             start_character (int): Start character.
             end_line (int): End line.
             end_character (int): End character.
-            timeout (float): Timeout in seconds. Defaults to 0.01.
+            timeout (float): Time since the last new result. Defaults to 0.3
 
         Returns:
             list: Code actions.

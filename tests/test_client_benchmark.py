@@ -28,9 +28,8 @@ class TestLSPClientBenchmark(unittest.TestCase):
             profiler = start_profiler()
 
         t0 = time.time()
-        diagnostics = self.lsp.open_files(files)
-        # for file in files:
-        #     self.lsp.open_file(file)
+        self.lsp.open_files(files)
+        diagnostics = [self.lsp.get_diagnostics(f) for f in files]
         duration = time.time() - t0
 
         self.assertEqual(len(diagnostics), NUM_FILES)
@@ -52,12 +51,13 @@ class TestLSPClientBenchmark(unittest.TestCase):
 
         # Load overlapping files
         EXTRA_FILES = 2
-        if self.lsp.max_opened_files > NUM_FILES:
+        if self.lsp.client.lsp.max_opened_files > NUM_FILES:
             msg = f"TEST WARNING: Decrease `max_opened_files` to {NUM_FILES} to test overlapping files."
             print(msg)
         new_files = all_files[NUM_FILES - EXTRA_FILES : NUM_FILES + EXTRA_FILES]
         t0 = time.time()
-        diagnostics2 = self.lsp.open_files(new_files)
+        self.lsp.open_files(new_files)
+        diagnostics2 = [self.lsp.get_diagnostics(f) for f in new_files]
         extra_duration = time.time() - t0
         self.assertEqual(diagnostics[-EXTRA_FILES:], diagnostics2[:EXTRA_FILES])
         msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"

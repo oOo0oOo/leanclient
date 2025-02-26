@@ -16,7 +16,6 @@ class SingleFileClient:
     def __init__(self, client, file_path: str):
         self.client = client
         self.file_path = file_path
-        self.print_warnings = client.print_warnings
 
     def open_file(self) -> list:
         """Open the file.
@@ -29,15 +28,15 @@ class SingleFileClient:
         """
         return self.client.open_file(self.file_path)
 
-    def close_file(self, blocking: bool = True):
+    def close_file(self):
         """Close the file.
 
         Calling this manually is optional, files are automatically closed when max_opened_files is reached.
-
-        Args:
-            blocking(bool): Not blocking can be risky if you close files frequently or reopen them.
         """
-        return self.client.close_files([self.file_path], blocking)
+        return self.client.close_files([self.file_path])
+
+    def wait_for_file(self, timeout: float = 2):
+        return self.client.wait_for_file(self.file_path, timeout)
 
     def update_file(self, changes: list[DocumentContentChange]) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
@@ -46,10 +45,6 @@ class SingleFileClient:
     def get_diagnostics(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(self.file_path)
-
-    def get_diagnostics_multi(self, paths: list[str]) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics_multi`"""
-        return self.client.get_diagnostics_multi(paths)
 
     def get_file_content(self) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
@@ -80,8 +75,7 @@ class SingleFileClient:
         line: int,
         character: int,
         include_declaration: bool = False,
-        max_retries: int = 3,
-        retry_delay: float = 0.001,
+        timeout: float = 3,
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_references`"""
         return self.client.get_references(
@@ -89,8 +83,7 @@ class SingleFileClient:
             line,
             character,
             include_declaration,
-            max_retries,
-            retry_delay,
+            timeout,
         )
 
     def get_type_definitions(self, line: int, character: int) -> list:

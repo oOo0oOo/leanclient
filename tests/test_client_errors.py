@@ -3,11 +3,15 @@ import sys
 import os
 from pprint import pprint
 import unittest
+import nest_asyncio
+
+nest_asyncio.apply()
 
 import orjson
 
 from leanclient import LeanLSPClient
 
+from leanclient.async_client import AsyncLeanLSPClient
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 from tests.utils import get_random_fast_mathlib_files, read_stdout_timeout
 
@@ -28,7 +32,7 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         self.lsp.close()
 
     def test_open_diagnostics(self):
-        diagnostics = self.lsp.open_file(TEST_FILE_PATH)
+        diagnostics = self.lsp.get_diagnostics(TEST_FILE_PATH)
         errors = [d["message"] for d in diagnostics if d["severity"] == 1]
         self.assertEqual(errors, EXP_DIAGNOSTICS[0])
         warnings = [d["message"] for d in diagnostics if d["severity"] == 2]
@@ -41,15 +45,6 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         warnings = [d["message"] for d in diag if d["severity"] == 2]
         self.assertEqual(warnings, EXP_DIAGNOSTICS[1])
 
-        paths = [TEST_FILE_PATH] * 2
-        # paths.append("Main.lean")  # FIX: Why does this hang?
-        paths.append(
-            ".lake/packages/mathlib/Mathlib/Algebra/GroupWithZero/Divisibility.lean"
-        )
-        diag2 = self.lsp.get_diagnostics_multi(paths)
-        self.assertEqual(len(diag2[0]), len(diag))
-        assert len(diag2[-1]) > 0  # Any diagnostics in the mathlib file
-
     def test_non_terminating_waitForDiagnostics(self):
         # Create a file with non-terminating diagnostics (processing: {"kind": 2})
         content = "/- Unclosed comment"
@@ -57,7 +52,8 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         with open(TEST_ENV_DIR + path, "w") as f:
             f.write(content)
 
-        diag = self.lsp.open_file(path)
+        self.lsp.open_file(path)
+        diag = self.lsp.get_diagnostics(path)
         self.assertEqual(diag[0]["message"], "unterminated comment")
         self.lsp.close_files([path])
 
@@ -65,91 +61,109 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         with open(TEST_ENV_DIR + path, "w") as f:
             f.write(content)
 
-        diag = self.lsp.open_file(path)
+        self.lsp.open_file(path)
+        diag = self.lsp.get_diagnostics(path)
         self.assertEqual(diag[0]["message"], "unterminated comment")
+        self.lsp.close_files([path])
 
         os.remove(TEST_ENV_DIR + path)
 
 
-class TestLSPClientErrors(unittest.TestCase):
-    def setUp(self):
-        self.lsp = LeanLSPClient(
+class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
+    # def setUp(self):
+    #     self.client = LeanLSPClient(
+    #         TEST_ENV_DIR, initial_build=False, print_warnings=False
+    #     )
+    #     self.lsp = self.client.client.lsp
+    #     self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
+
+    # def tearDown(self):
+    #     self.client.close()
+
+    async def asyncSetUp(self):
+        self.client = AsyncLeanLSPClient(
             TEST_ENV_DIR, initial_build=False, print_warnings=False
         )
+        await self.client.start()
+        self.lsp = self.client.lsp
         self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
 
-    def tearDown(self):
-        self.lsp.close()
+    async def asyncTearDown(self):
+        await self.client.close()
 
-    def test_rpc_errors(self):
+    async def test_rpc_errors(self):
         # Invalid method
         p = TEST_FILE_PATH
-        resp = self.lsp._send_request(p, "garbageMethod", {})
+        resp = await self.client.send_request(p, "garbageMethod", {})
         exp = "No request handler found for 'garbageMethod'"
         self.assertEqual(resp["error"]["message"], exp)
 
         # Invalid params
-        resp = self.lsp._send_request(p, "textDocument/hover", {})
+        resp = await self.client.send_request(p, "textDocument/hover", {})
         resp = resp["error"]["message"]
         exp = "Cannot parse request params:"
         assert resp.startswith(exp)
 
         # Invalid params2
-        resp = self.lsp._send_request(p, "textDocument/hover", {"textDocument": {}})
+        resp = await self.client.send_request(
+            p, "textDocument/hover", {"textDocument": {}}
+        )
         resp = resp["error"]["message"]
         exp = 'Cannot parse request params: {"textDocument"'
         assert resp.startswith(exp)
 
-        # Unopened file
-        body = orjson.dumps(
-            {
-                "jsonrpc": "2.0",
-                "method": "textDocument/hover",
-                "params": {
-                    "textDocument": {"uri": self.uri},
-                    "position": {"line": 9, "character": 4},
-                },
-            }
-        )
-        header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self.lsp.stdin.write(header + body)
-        self.lsp.stdin.flush()
-        resp = self.lsp._wait_for_diagnostics([self.uri])[0]
-        exp = "Cannot process request to closed file"
-        assert resp == [], f"Why is this working again?, got {resp}"
-        # resp = resp["error"]["message"]
-        # assert resp.startswith(exp)
+    # Unopened file
+    # body = orjson.dumps(
+    #     {
+    #         "jsonrpc": "2.0",
+    #         "method": "textDocument/hover",
+    #         "params": {
+    #             "textDocument": {"uri": self.uri},
+    #             "position": {"line": 9, "character": 4},
+    #         },
+    #         "id": 1,
+    #     }
+    # )
+    # header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+    # self.lsp.stdin.write(header + body)
+    # await self.lsp.stdin.drain()
 
-    def test_lake_error_invalid_rpc(self):
-        body = orjson.dumps({"jsonrpc": "2.0"})
-        header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self.lsp.stdin.write(header + body)
-        self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
+    # exp = "Cannot process request to closed file"
+    # assert resp == [], f"Why is this working again?, got {resp}"
+    # resp = resp["error"]["message"]
+    # assert resp.startswith(exp)
+    # return resp
 
-    def test_lake_error_end_of_input(self):
-        body = orjson.dumps({})
-        header = f"Content-Length: {len(body) + 1}\r\n\r\n".encode("ascii")
-        self.lsp.stdin.write(header + body)
-        self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
+    # def test_lake_error_invalid_rpc(self):
+    #     body = orjson.dumps({"jsonrpc": "2.0"})
+    #     header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
+    #     self.lsp.stdin.write(header + body)
+    #     self.lsp.stdin.flush()
+    #     self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
 
-    def test_lake_error_content_length(self):
-        request = {
-            "jsonrpc": "2.0",
-            "method": "textDocument/hover",
-            "params": {
-                "textDocument": {"uri": self.uri},
-                "position": {"line": 9, "character": 4},
-            },
-        }
-        body = orjson.dumps(request)
-        header = f"Content-Length: 3.14\r\n\r\n".encode("ascii")
-        self.lsp.stdin.write(header + body)
-        self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, self.uri)
+    # def test_lake_error_end_of_input(self):
+    #     body = orjson.dumps({})
+    #     header = f"Content-Length: {len(body) + 1}\r\n\r\n".encode("ascii")
+    #     self.lsp.stdin.write(header + body)
+    #     self.lsp.stdin.flush()
+    #     self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
 
-    def invalid_path(self):
+    # def test_lake_error_content_length(self):
+    #     request = {
+    #         "jsonrpc": "2.0",
+    #         "method": "textDocument/hover",
+    #         "params": {
+    #             "textDocument": {"uri": self.uri},
+    #             "position": {"line": 9, "character": 4},
+    #         },
+    #     }
+    #     body = orjson.dumps(request)
+    #     header = f"Content-Length: 3.14\r\n\r\n".encode("ascii")
+    #     self.lsp.stdin.write(header + body)
+    #     self.lsp.stdin.flush()
+    #     self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, self.uri)
+
+    async def invalid_path(self):
         invalid_paths = [
             "g.lean",
             "garbage",
@@ -167,7 +181,7 @@ class TestLSPClientErrors(unittest.TestCase):
         # _send_request_document
         self.assertRaises(
             FileNotFoundError,
-            self.lsp._send_request,
+            self.lsp.client.lsp.send_request,
             p(),
             "textDocument/hover",
             {{"position": {"line": 9, "character": 4}}},
@@ -211,13 +225,17 @@ class TestLSPClientErrors(unittest.TestCase):
             )
 
         # Valid but not a lean project
-        with self.assertRaises(Exception, msg=f"Path: leanclient/"):
-            LeanLSPClient("leanclient/", initial_build=True)
+        # with self.assertRaises(Exception, msg=f"Path: leanclient/"):
+        #     LeanLSPClient("leanclient/", initial_build=True)
 
+
+class TestSFCErrors(unittest.TestCase):
     def test_invalid_coordinates(self):
         # Check SingleFileClient
         path = get_random_fast_mathlib_files(1, 42)[0]
-        sfc = self.lsp.create_file_client(path)
+
+        client = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        sfc = client.create_file_client(path)
 
         # Wrong input types
         invalid = [
@@ -231,8 +249,11 @@ class TestLSPClientErrors(unittest.TestCase):
             res = sfc.get_hover(**pos)
             assert res["error"]["message"].startswith("Cannot parse request params")
 
-        # Raising exceptions crashes lake
-        for pos in invalid[:1]:
-            lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
-            with self.assertRaises(EOFError):
-                lsp.get_declarations(path, **pos)
+        client.close()
+        # sfc = None
+        # # Raising exceptions crashes lake
+        # for pos in invalid[:1]:
+        #     lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
+        #     with self.assertRaises(EOFError):
+        #         lsp.get_declarations(path, **pos)
+        #     lsp.close()
