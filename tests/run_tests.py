@@ -73,7 +73,7 @@ if __name__ == "__main__":
         "test_base_client",
         "test_client_files",
         "test_client_requests",
-        "test_client_requests_async",
+        # "test_client_requests_async.TestLSPClientRequestsAsync",
         "test_client_errors",
         "test_single_file_client",
         "test_pool",

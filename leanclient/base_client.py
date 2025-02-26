@@ -181,15 +181,20 @@ class BaseLeanLSPClient:
                 self.files_last_update[path] = time.time()
 
                 if proc == []:
-                    self.files_finished[path] = True
+                    self.files_finished[path] = -2
 
                 # Check for fatalError from fileProgress. See here:
                 # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
-                elif proc and proc[-1]["kind"] == 2:
+                elif proc[-1]["kind"] == 2:
                     msg = "leanclient: Received LeanFileProgressKind.fatalError from language server."
                     message["error"] = {"message": msg}
                     self.files_diagnostics[path] = [message]
-                    self.files_finished[path] = True
+                    self.files_finished[path] = -2
+
+                else:
+                    # 0 turns into -1 which conveniently means not started yet
+                    line = proc[-1]["range"]["start"]["line"] - 1
+                    self.files_finished[path] = line
 
             elif "id" in message and message["id"] in self.pending:
                 future = self.pending.pop(message["id"])
@@ -401,7 +406,8 @@ class BaseLeanLSPClient:
         new_files = [p for p in paths if p not in self.files_finished]
         if new_files:
             for path in new_files:
-                self.files_finished[path] = False
+                # File progress: -2 = finished, -1 = not started yet, 0 - n = processed lines
+                self.files_finished[path] = -1
                 self.files_last_update[path] = time.time()
                 self.files_diagnostics[path] = None
             await self._open_new_files(new_files)
@@ -482,17 +488,28 @@ class BaseLeanLSPClient:
             del self.files_content[path]
             del self.files_last_update[path]
 
-    async def get_diagnostics(self, path: str, timeout: float = 3) -> list | None:
-        """Wait until file is loaded or errors, then return diagnostics.
+    async def get_diagnostics(
+        self, path: str, line: int = -1, timeout: float = 3
+    ) -> list | None:
+        """Get diagnostic messages of a file.
+
+        If the `line` parameter is >= 0, this function will only wait until that line is processed.
 
         Args:
-            uris (list[str]): List of URIs to wait for diagnostics on.
+            path (str): Relative file path.
+            line (int): Line number to wait for. Defaults to -1, which means waiting for the full file to load.
             timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
 
         Returns:
-            list | None: List of diagnostic messages or errors. None if no diagnostics were received.
+            list | None: List of current diagnostic messages or errors. None if no diagnostics were received.
         """
-        await self.wait_for_file(path, timeout)
+        if path not in self.files_finished:
+            await self.open_file(path)
+
+        if line >= 0:
+            await self.wait_for_line(path, line, timeout)
+        else:
+            await self.wait_for_file(path, timeout)
         return self.files_diagnostics[path]
 
     async def wait_for_file(self, path: str, timeout: float = 3):
@@ -512,11 +529,11 @@ class BaseLeanLSPClient:
         timed_out = False
 
         # Wait for file to finish processing with timeout
-        if not self.files_finished[path]:
+        if self.files_finished[path] != -2:  # -2 = finished
             duration = 0
             while duration < timeout / 2:
                 await asyncio.sleep(0.001)
-                if self.files_finished[path]:
+                if self.files_finished[path] == -2:
                     break
                 duration = time.time() - self.files_last_update[path]
             else:
@@ -544,6 +561,32 @@ class BaseLeanLSPClient:
                 f"Warning: Timed out waiting for diagnostics (waitForDiagnostics) after {timeout:}s for {path}."
             )
             pass
+
+    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+        """Wait for a line to be processed.
+
+        This is useful for waiting for diagnostics on a specific line.
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number to wait for.
+            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+        """
+        await self.open_file(path)
+
+        while True:
+            cur_line = self.files_finished[path]
+            if cur_line == -2:
+                return
+            elif cur_line >= line:
+                return
+            await asyncio.sleep(0.001)
+            duration = time.time() - self.files_last_update[path]
+            if duration > timeout:
+                print(
+                    f"Warning: Timed out waiting for line {line} after {duration:.1f}s for {path}."
+                )
+                return
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.

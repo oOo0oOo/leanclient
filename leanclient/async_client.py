@@ -38,6 +38,10 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         await self.lsp.wait_for_file(path, timeout)
 
+    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+        """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
+        await self.lsp.wait_for_line(path, line, timeout)
+
     async def open_file(self, path: str):
         """See :meth:`leanclient.client.LeanLSPClient.open_file`"""
         await self.lsp.open_file(path)
@@ -54,9 +58,11 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.close_files`"""
         await self.lsp.close_files(paths)
 
-    async def get_diagnostics(self, path: str, timeout: float = 3) -> list:
+    async def get_diagnostics(
+        self, path: str, line: int = -1, timeout: float = 3
+    ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
-        return await self.lsp.get_diagnostics(path, timeout)
+        return await self.lsp.get_diagnostics(path, line, timeout)
 
     def get_file_content(self, path: str) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
@@ -258,9 +264,9 @@ class AsyncLeanLSPClient:
         retries: int = 4,
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_code_actions`"""
-        diag = await self.lsp.get_diagnostics(path)
+        diag = await self.lsp.get_diagnostics(path, end_line + 1)
         sel = get_diagnostics_in_range(diag, start_line, end_line)
-        return await self.lsp.send_request_timeout(
+        return await self.lsp.send_request_retry(
             path,
             "textDocument/codeAction",
             {
@@ -274,6 +280,7 @@ class AsyncLeanLSPClient:
                 },
             },
             timeout,
+            retries,
         )
 
     @experimental

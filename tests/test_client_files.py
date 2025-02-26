@@ -48,6 +48,7 @@ class TestLSPClientFiles(unittest.IsolatedAsyncioTestCase):
         await self.lsp.open_file(paths[0])  # One file overlap
         await self.lsp.open_files(paths[:2])  # Two files, 1 overlap
         await self.lsp.open_files(paths[:2])  # Cache
+        await self.lsp.close_files(paths[:2])
 
     async def test_file_update(self):
         path = get_random_fast_mathlib_files(1, 42)[0]
