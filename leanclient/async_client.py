@@ -38,7 +38,7 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         await self.lsp.wait_for_file(path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
         await self.lsp.wait_for_line(path, line, timeout)
 
@@ -59,7 +59,7 @@ class AsyncLeanLSPClient:
         await self.lsp.close_files(paths)
 
     async def get_diagnostics(
-        self, path: str, line: int = -1, timeout: float = 3
+        self, path: str, line: int = -1, timeout: float = 5
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return await self.lsp.get_diagnostics(path, line, timeout)
@@ -127,8 +127,8 @@ class AsyncLeanLSPClient:
         line: int,
         character: int,
         include_declaration: bool = False,
-        timeout: float = 0.01,
-        retries: int = 5,
+        timeout: float = 0.1,
+        retries: int = 4,
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_references`"""
         await self.lsp.wait_for_file(path)
@@ -142,14 +142,6 @@ class AsyncLeanLSPClient:
             timeout,
             retries,
         )
-        # return await self.lsp.send_request(
-        #     path,
-        #     "textDocument/references",
-        #     {
-        #         "position": {"line": line, "character": character},
-        #         "context": {"includeDeclaration": include_declaration},
-        #     },
-        # )
 
     async def get_type_definitions(self, path: str, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_type_definitions`"""
@@ -260,7 +252,7 @@ class AsyncLeanLSPClient:
         start_character: int,
         end_line: int,
         end_character: int,
-        timeout: float = 3,
+        timeout: float = 0.1,
         retries: int = 4,
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_code_actions`"""

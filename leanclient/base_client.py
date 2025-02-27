@@ -57,7 +57,7 @@ class BaseLeanLSPClient:
             )
             await build_proc.wait()
 
-        # Run the lean4 language server in a subprocess
+        # Run the Lean 4 language server in a subprocess
         self.process = await asyncio.create_subprocess_exec(
             "lake",
             "serve",
@@ -329,17 +329,20 @@ class BaseLeanLSPClient:
         path: str,
         method: str,
         params: dict,
-        timeout: float = 0.01,
+        timeout: float = 0.1,
         retries: int = 4,
     ) -> dict | None:
         """Send requests until the result is stable for at least `timeout` seconds.
+
+        Note:
+            This method expects the request to return. Use `send_request_timeout` if the request could timeout.
 
         Args:
             path (str): Relative file path.
             method (str): Method name.
             params (dict): Parameters for the method.
-            timeout (float): No new results in X seconds. Defaults to 0.3.
-            retries (int): Number of retries (only timeouts count). Defaults to 2.
+            timeout (float): No new results in X seconds. Defaults to 0.1.
+            retries (int): Number of retries (only timeouts count). Defaults to 4.
 
         Returns:
             dict | None: Final response or None.
@@ -368,6 +371,17 @@ class BaseLeanLSPClient:
         params: dict,
         timeout: float = 5,
     ) -> dict | None:
+        """Send a request with a timeout.
+
+        Args:
+            path (str): Relative file path.
+            method (str): Method name.
+            params (dict): Parameters for the method.
+            timeout (float): Time to wait for the response. Defaults to 5.
+
+        Returns:
+            dict | None: Response or None if timeout.
+        """
         await self.open_file(path)
         try:
             result = await asyncio.wait_for(
@@ -489,7 +503,7 @@ class BaseLeanLSPClient:
             del self.files_last_update[path]
 
     async def get_diagnostics(
-        self, path: str, line: int = -1, timeout: float = 3
+        self, path: str, line: int = -1, timeout: float = 5
     ) -> list | None:
         """Get diagnostic messages of a file.
 
@@ -498,7 +512,7 @@ class BaseLeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for. Defaults to -1, which means waiting for the full file to load.
-            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
 
         Returns:
             list | None: List of current diagnostic messages or errors. None if no diagnostics were received.
@@ -512,7 +526,7 @@ class BaseLeanLSPClient:
             await self.wait_for_file(path, timeout)
         return self.files_diagnostics[path]
 
-    async def wait_for_file(self, path: str, timeout: float = 3):
+    async def wait_for_file(self, path: str, timeout: float = 5):
         """Wait for a file to finish processing.
 
         Checks `waitForDiagnostics` and `fileProgress`.
@@ -522,13 +536,12 @@ class BaseLeanLSPClient:
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
         """
         await self.open_file(path)
 
-        timed_out = False
-
         # Wait for file to finish processing with timeout
+        timed_out = False
         if self.files_finished[path] != -2:  # -2 = finished
             duration = 0
             while duration < timeout / 2:
@@ -544,7 +557,9 @@ class BaseLeanLSPClient:
 
         # Wait for diagnostics with timeout
         if timed_out:
-            timeout = 0.5
+            timeout = timeout / 4
+        else:
+            timeout = timeout / 2
 
         uri = self._local_to_uri(path)
         try:
@@ -554,7 +569,7 @@ class BaseLeanLSPClient:
                     {"uri": uri, "version": 1},
                     is_notification=False,
                 ),
-                timeout=timeout / 2,
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             print(
@@ -562,7 +577,7 @@ class BaseLeanLSPClient:
             )
             pass
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """Wait for a line to be processed.
 
         This is useful for waiting for diagnostics on a specific line.
@@ -570,7 +585,7 @@ class BaseLeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for.
-            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
         """
         await self.open_file(path)
 

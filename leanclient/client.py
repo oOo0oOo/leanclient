@@ -61,7 +61,7 @@ class LeanLSPClient:
         """
         self._call_async(self.client.close, timeout)
 
-    def wait_for_file(self, path: str, timeout: float = 3):
+    def wait_for_file(self, path: str, timeout: float = 5):
         """Wait for a file to be fully loaded.
 
         Internally we check for fileProgress to be finished and `waitForDiagnostic` to return.
@@ -69,11 +69,11 @@ class LeanLSPClient:
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait. Defaults to 3 seconds.
+            timeout (float): Time to wait. Defaults to 5 seconds.
         """
         self._call_async(self.client.wait_for_file, path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """Wait for a line to be processed.
 
         This is useful for waiting for diagnostics on a specific line after an update.
@@ -81,7 +81,7 @@ class LeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for.
-            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
         """
         await self.client.wait_for_line(path, line, timeout)
 
@@ -131,7 +131,7 @@ class LeanLSPClient:
         """
         self._call_async(self.client.close_files, paths)
 
-    def get_diagnostics(self, path: str, line: int = -1, timeout: float = 3) -> list:
+    def get_diagnostics(self, path: str, line: int = -1, timeout: float = 5) -> list:
         """Get diagnostic messages of a file.
 
         If the `line` parameter is >= 0, this function will only wait until that line is processed.
@@ -165,7 +165,7 @@ class LeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for. Defaults to -1 --> Wait for the full file
-            timeout (float): Time to wait for diagnostics. Defaults to 3 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
 
         Returns:
             list | None: List of current diagnostic messages or errors. None if no diagnostics were received.

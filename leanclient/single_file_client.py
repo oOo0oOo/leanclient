@@ -35,11 +35,11 @@ class SingleFileClient:
         """
         return self.client.close_files([self.file_path])
 
-    def wait_for_file(self, timeout: float = 2):
+    def wait_for_file(self, timeout: float = 5):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         return self.client.wait_for_file(self.file_path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 3):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
         await self.client.wait_for_line(path, line, timeout)
 
@@ -47,7 +47,7 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
 
-    def get_diagnostics(self, line: int = -1, timeout: float = 3) -> list:
+    def get_diagnostics(self, line: int = -1, timeout: float = 5) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(self.file_path, line, timeout)
 
