@@ -529,7 +529,6 @@ class BaseLeanLSPClient:
         await self.open_file(path)
 
         # Wait for file to finish processing with timeout
-        timed_out = False
         if self.files_finished[path] != -2:  # -2 = finished
             duration = 0
             while duration < timeout / 2:
@@ -538,17 +537,11 @@ class BaseLeanLSPClient:
                     break
                 duration = time.time() - self.files_last_update[path]
             else:
-                timed_out = True
                 print(
                     f"Warning: Timed out waiting for diagnostics (finish processing) after {duration:.1f}s for {path}."
                 )
 
         # Wait for diagnostics with timeout
-        if timed_out:
-            timeout = timeout / 4
-        else:
-            timeout = timeout / 2
-
         uri = self.local_to_uri(path)
         try:
             await asyncio.wait_for(
@@ -557,11 +550,11 @@ class BaseLeanLSPClient:
                     {"uri": uri, "version": 1},
                     is_notification=False,
                 ),
-                timeout=timeout,
+                timeout=timeout / 2,
             )
         except asyncio.TimeoutError:
             print(
-                f"Warning: Timed out waiting for diagnostics (waitForDiagnostics) after {timeout:}s for {path}."
+                f"Warning: Timed out waiting for diagnostics (waitForDiagnostics) after {timeout / 2:}s for {path}."
             )
             pass
 
