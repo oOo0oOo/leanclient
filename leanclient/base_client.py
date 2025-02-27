@@ -79,7 +79,7 @@ class BaseLeanLSPClient:
             "initialize",
             {
                 "processId": os.getpid(),
-                "rootUri": self._local_to_uri(self.project_path),
+                "rootUri": self.local_to_uri(self.project_path),
                 "initializationOptions": {
                     "editDelay": 1  # It seems like this has no effect.
                 },
@@ -119,7 +119,7 @@ class BaseLeanLSPClient:
             await self.process.kill()
 
     # URI HANDLING
-    def _local_to_uri(self, local_path: str) -> str:
+    def local_to_uri(self, local_path: str) -> str:
         """Convert a local file path to a URI.
 
         User API is based on local file paths (relative to project path) but internally we use URIs.
@@ -137,12 +137,8 @@ class BaseLeanLSPClient:
         uri = pathlib.Path(self.project_path, local_path).as_uri()
         return urllib.parse.unquote(uri)
 
-    def _uri_to_abs(self, uri: str) -> str:
-        """See :meth:`_local_to_uri`"""
-        return uri[LEN_URI_PREFIX:]
-
-    def _uri_to_local(self, uri: str) -> str:
-        """See :meth:`_local_to_uri`"""
+    def uri_to_local(self, uri: str) -> str:
+        """See :meth:`local_to_uri`"""
         return uri[self.len_project_uri :]
 
     # LANGUAGE SERVER RPC INTERACTION
@@ -163,13 +159,13 @@ class BaseLeanLSPClient:
                 pass
 
             elif method == "textDocument/publishDiagnostics":
-                path = self._uri_to_local(message["params"]["uri"])
+                path = self.uri_to_local(message["params"]["uri"])
                 self.files_diagnostics[path] = message["params"]["diagnostics"]
                 self.files_last_update[path] = time.time()
 
             elif method == "$/lean/fileProgress":
                 proc = message["params"]["processing"]
-                path = self._uri_to_local(message["params"]["textDocument"]["uri"])
+                path = self.uri_to_local(message["params"]["textDocument"]["uri"])
                 self.files_last_update[path] = time.time()
 
                 if proc == []:
@@ -282,9 +278,9 @@ class BaseLeanLSPClient:
         Args:
             paths (list[str]): List of relative file paths.
         """
-        uris = [self._local_to_uri(p) for p in paths]
+        uris = [self.local_to_uri(p) for p in paths]
         for path, uri in zip(paths, uris):
-            with open(self._uri_to_abs(uri), "r") as f:
+            with open(uri[LEN_URI_PREFIX:], "r") as f:
                 txt = f.read()
             self.files_content[path] = txt
 
@@ -312,7 +308,7 @@ class BaseLeanLSPClient:
             dict: Response or error.
         """
         await self.open_file(path)
-        params["textDocument"] = {"uri": self._local_to_uri(path)}
+        params["textDocument"] = {"uri": self.local_to_uri(path)}
         result = await self.send_request_rpc(method, params, is_notification=False)
         return result.get("result", result)
 
@@ -451,7 +447,7 @@ class BaseLeanLSPClient:
         """
         if path not in self.files_finished:
             raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
-        uri = self._local_to_uri(path)
+        uri = self.local_to_uri(path)
 
         text = self.files_content[path]
         text = apply_changes_to_text(text, changes)
@@ -483,7 +479,7 @@ class BaseLeanLSPClient:
         """
         # Only close if file is open
         paths = [p for p in paths if p in self.files_finished]
-        uris = [self._local_to_uri(p) for p in paths]
+        uris = [self.local_to_uri(p) for p in paths]
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             await self.send_notification("textDocument/didClose", params)
@@ -553,7 +549,7 @@ class BaseLeanLSPClient:
         else:
             timeout = timeout / 2
 
-        uri = self._local_to_uri(path)
+        uri = self.local_to_uri(path)
         try:
             await asyncio.wait_for(
                 self.send_request_rpc(

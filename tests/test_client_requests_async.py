@@ -143,7 +143,7 @@ class TestLSPClientRequestsAsync(unittest.IsolatedAsyncioTestCase):
 
         # Local theorem: sdiff_val
         res = await self.lsp.get_definitions(path, 52, 9)
-        assert res[0]["uri"] == self.lsp.lsp._local_to_uri(path)
+        assert res[0]["uri"] == self.lsp.lsp.local_to_uri(path)
 
         # res = await self.lsp.get_references(path, 52, 9)
         # assert len(res) == 2

@@ -40,6 +40,27 @@ class LeanLSPClient:
         """Helper: Call an async function using the event loop."""
         return self.loop.run_until_complete(func(*args, **kwargs))
 
+    def local_to_uri(self, path: str) -> str:
+        """Convert a local file path to a URI.
+
+        User API is based on local file paths (relative to project path) but internally we use URIs.
+        Example:
+
+        - local path:  MyProject/LeanFile.lean
+        - URI:         file:///abs/to/project_path/MyProject/LeanFile.lean
+
+        Args:
+            local_path (str): Relative file path.
+
+        Returns:
+            str: URI representation of the file.
+        """
+        return self.client.local_to_uri(path)
+
+    def uri_to_local(self, uri: str) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.local_to_uri`"""
+        return self.client.uri_to_local(uri)
+
     def create_file_client(self, file_path: str) -> SingleFileClient:
         """Create a SingleFileClient for a file.
 

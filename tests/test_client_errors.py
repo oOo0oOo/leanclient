@@ -82,7 +82,7 @@ class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
         self.client = AsyncLeanLSPClient(TEST_ENV_DIR, initial_build=False)
         await self.client.start()
         self.lsp = self.client.lsp
-        self.uri = self.lsp._local_to_uri(TEST_FILE_PATH)
+        self.uri = self.lsp.local_to_uri(TEST_FILE_PATH)
 
     async def asyncTearDown(self):
         await self.client.close()

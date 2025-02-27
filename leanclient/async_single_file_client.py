@@ -39,6 +39,14 @@ class AsyncSingleFileClient:
         """
         await self.client.close_files([self.file_path])
 
+    def local_to_uri(self, path: str) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.local_to_uri`"""
+        return self.client.local_to_uri(path)
+
+    def uri_to_local(self, uri: str) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.uri_to_local`"""
+        return self.client.uri_to_local(uri)
+
     async def wait_for_file(self, timeout: float = 5):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         await self.client.wait_for_file(self.file_path, timeout)

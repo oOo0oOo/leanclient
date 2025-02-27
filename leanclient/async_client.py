@@ -31,6 +31,14 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.close`"""
         await self.lsp.close(timeout)
 
+    def local_to_uri(self, path: str) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.local_to_uri`"""
+        return self.lsp.local_to_uri(path)
+
+    def uri_to_local(self, uri: str) -> str:
+        """See :meth:`leanclient.client.LeanLSPClient.uri_to_local`"""
+        return self.lsp.uri_to_local(uri)
+
     async def _send_request(self, path: str, method: str, params: dict) -> dict:
         """See :meth:`leanclient.client.LeanLSPClient.send_request`"""
         return await self.lsp.send_request(path, method, params)
@@ -93,7 +101,7 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion_item_resolve`"""
         uri = item["data"]["params"]["textDocument"]["uri"]
         res = await self._send_request(
-            self.lsp._uri_to_local(uri), "completionItem/resolve", item
+            self.lsp.uri_to_local(uri), "completionItem/resolve", item
         )
         return res["detail"]
 
@@ -215,7 +223,7 @@ class AsyncLeanLSPClient:
     async def get_call_hierarchy_incoming(self, item: dict) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_incoming`"""
         return await self._send_request(
-            self.lsp._uri_to_local(item["uri"]),
+            self.lsp.uri_to_local(item["uri"]),
             "callHierarchy/incomingCalls",
             {"item": item},
         )
@@ -224,7 +232,7 @@ class AsyncLeanLSPClient:
     async def get_call_hierarchy_outgoing(self, item: dict) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_outgoing`"""
         return await self._send_request(
-            self.lsp._uri_to_local(item["uri"]),
+            self.lsp.uri_to_local(item["uri"]),
             "callHierarchy/outgoingCalls",
             {"item": item},
         )

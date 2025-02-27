@@ -168,7 +168,7 @@ class TestLSPClientRequests(unittest.TestCase):
 
         # Local theorem: sdiff_val
         res = self.lsp.get_definitions(path, 52, 9)
-        assert res[0]["uri"] == self.lsp.client.lsp._local_to_uri(path)
+        assert res[0]["uri"] == self.lsp.client.lsp.local_to_uri(path)
 
         # res = self.lsp.get_references(path, 52, 9)
         # assert len(res) == 2

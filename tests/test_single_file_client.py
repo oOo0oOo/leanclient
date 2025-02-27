@@ -70,6 +70,8 @@ class TestSingleFileClient(unittest.TestCase):
         res.append(sfc.get_file_content())
         assert all(res)
 
+        assert TEST_FILE_PATH == sfc.uri_to_local(sfc.local_to_uri(TEST_FILE_PATH))
+
         # item = sfc.get_call_hierarchy_items(1, 15)[0]
         # assert item["data"]["name"] == "add_zero_custom"
         # inc = sfc.get_call_hierarchy_incoming(item)
@@ -144,6 +146,8 @@ class TestSingleFileClient(unittest.IsolatedAsyncioTestCase):
         res.append(await sfc.get_diagnostics())
         res.append(sfc.get_file_content())
         assert all(res)
+
+        assert TEST_FILE_PATH == sfc.uri_to_local(sfc.local_to_uri(TEST_FILE_PATH))
 
         # item = await sfc.get_call_hierarchy_items(1, 15)[0]
         # assert item["data"]["name"] == "add_zero_custom"
