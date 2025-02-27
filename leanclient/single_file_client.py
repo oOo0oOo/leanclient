@@ -17,14 +17,13 @@ class SingleFileClient:
         self.client = client
         self.file_path = file_path
 
-    def open_file(self) -> list:
+    def open_file(self):
         """Open the file.
 
         This is usually called automatically when a method is called that requires an open file.
         Use this to open the file manually and recieve its diagnostics.
 
-        Returns:
-            list: The diagnostic messages of the file.
+        See :meth:`leanclient.client.LeanLSPClient.open_file` for more information.
         """
         return self.client.open_file(self.file_path)
 
@@ -32,6 +31,8 @@ class SingleFileClient:
         """Close the file.
 
         Calling this manually is optional, files are automatically closed when max_opened_files is reached.
+
+        See :meth:`leanclient.client.LeanLSPClient.close_files` for more information.
         """
         return self.client.close_files([self.file_path])
 
@@ -39,11 +40,11 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         return self.client.wait_for_file(self.file_path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
-        await self.client.wait_for_line(path, line, timeout)
+        return self.client.wait_for_line(path, line, timeout)
 
-    def update_file(self, changes: list[DocumentContentChange]) -> list:
+    def update_file(self, changes: list[DocumentContentChange]):
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
 

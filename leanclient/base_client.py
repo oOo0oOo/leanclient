@@ -137,14 +137,6 @@ class BaseLeanLSPClient:
         uri = pathlib.Path(self.project_path, local_path).as_uri()
         return urllib.parse.unquote(uri)
 
-    def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
-        """See :meth:`_local_to_uri`"""
-        paths = [
-            pathlib.Path(self.project_path, local_path).as_uri()
-            for local_path in local_paths
-        ]
-        return [urllib.parse.unquote(path) for path in paths]
-
     def _uri_to_abs(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
         return uri[LEN_URI_PREFIX:]
@@ -290,7 +282,7 @@ class BaseLeanLSPClient:
         Args:
             paths (list[str]): List of relative file paths.
         """
-        uris = self._locals_to_uris(paths)
+        uris = [self._local_to_uri(p) for p in paths]
         for path, uri in zip(paths, uris):
             with open(self._uri_to_abs(uri), "r") as f:
                 txt = f.read()
@@ -491,7 +483,7 @@ class BaseLeanLSPClient:
         """
         # Only close if file is open
         paths = [p for p in paths if p in self.files_finished]
-        uris = self._locals_to_uris(paths)
+        uris = [self._local_to_uri(p) for p in paths]
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             await self.send_notification("textDocument/didClose", params)

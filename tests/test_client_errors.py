@@ -90,18 +90,18 @@ class TestLSPClientErrors(unittest.IsolatedAsyncioTestCase):
     async def test_rpc_errors(self):
         # Invalid method
         p = TEST_FILE_PATH
-        resp = await self.client.send_request(p, "garbageMethod", {})
+        resp = await self.client._send_request(p, "garbageMethod", {})
         exp = "No request handler found for 'garbageMethod'"
         self.assertEqual(resp["error"]["message"], exp)
 
         # Invalid params
-        resp = await self.client.send_request(p, "textDocument/hover", {})
+        resp = await self.client._send_request(p, "textDocument/hover", {})
         resp = resp["error"]["message"]
         exp = "Cannot parse request params:"
         assert resp.startswith(exp)
 
         # Invalid params2
-        resp = await self.client.send_request(
+        resp = await self.client._send_request(
             p, "textDocument/hover", {"textDocument": {}}
         )
         resp = resp["error"]["message"]

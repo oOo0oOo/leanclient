@@ -73,7 +73,7 @@ class LeanLSPClient:
         """
         self._call_async(self.client.wait_for_file, path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    def wait_for_line(self, path: str, line: int, timeout: float = 5):
         """Wait for a line to be processed.
 
         This is useful for waiting for diagnostics on a specific line after an update.
@@ -83,7 +83,7 @@ class LeanLSPClient:
             line (int): Line number to wait for.
             timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
         """
-        await self.client.wait_for_line(path, line, timeout)
+        return self.client.wait_for_line(path, line, timeout)
 
     def open_file(self, path: str):
         """Open a file in the language server.
