@@ -47,11 +47,11 @@ class AsyncSingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.uri_to_local`"""
         return self.client.uri_to_local(uri)
 
-    async def wait_for_file(self, timeout: float = 5):
+    async def wait_for_file(self, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         await self.client.wait_for_file(self.file_path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
         await self.client.wait_for_line(path, line, timeout)
 
@@ -59,7 +59,7 @@ class AsyncSingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         await self.client.update_file(self.file_path, changes)
 
-    async def get_diagnostics(self, line: int = -1, timeout: float = 5) -> list:
+    async def get_diagnostics(self, line: int = -1, timeout: float = 10) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return await self.client.get_diagnostics(self.file_path, line, timeout)
 

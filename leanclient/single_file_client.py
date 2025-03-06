@@ -44,11 +44,11 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.uri_to_local`"""
         return self.client.uri_to_local(uri)
 
-    def wait_for_file(self, timeout: float = 5):
+    def wait_for_file(self, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         return self.client.wait_for_file(self.file_path, timeout)
 
-    def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    def wait_for_line(self, path: str, line: int, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
         return self.client.wait_for_line(path, line, timeout)
 
@@ -56,7 +56,7 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
 
-    def get_diagnostics(self, line: int = -1, timeout: float = 5) -> list:
+    def get_diagnostics(self, line: int = -1, timeout: float = 10) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(self.file_path, line, timeout)
 

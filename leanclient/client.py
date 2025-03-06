@@ -72,17 +72,17 @@ class LeanLSPClient:
         """
         return SingleFileClient(self, file_path)
 
-    def close(self, timeout: float = 2):
+    def close(self, timeout: float = 10):
         """Always close the client when done!
 
         Terminates the language server process and close all pipes.
 
         Args:
-            timeout (float): Time to wait until the process is killed. Defaults to 2 seconds.
+            timeout (float): Time to wait until the process is killed. Defaults to 10 seconds.
         """
         self._call_async(self.client.close, timeout)
 
-    def wait_for_file(self, path: str, timeout: float = 5):
+    def wait_for_file(self, path: str, timeout: float = 10):
         """Wait for a file to be fully loaded.
 
         Internally we check for fileProgress to be finished and `waitForDiagnostic` to return.
@@ -90,11 +90,11 @@ class LeanLSPClient:
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait. Defaults to 5 seconds.
+            timeout (float): Time to wait. Defaults to 10 seconds.
         """
         self._call_async(self.client.wait_for_file, path, timeout)
 
-    def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    def wait_for_line(self, path: str, line: int, timeout: float = 10):
         """Wait for a line to be processed.
 
         This is useful for waiting for diagnostics on a specific line after an update.
@@ -102,7 +102,7 @@ class LeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for.
-            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
         """
         return self.client.wait_for_line(path, line, timeout)
 
@@ -152,7 +152,7 @@ class LeanLSPClient:
         """
         self._call_async(self.client.close_files, paths)
 
-    def get_diagnostics(self, path: str, line: int = -1, timeout: float = 5) -> list:
+    def get_diagnostics(self, path: str, line: int = -1, timeout: float = 10) -> list:
         """Get diagnostic messages of a file.
 
         If the `line` parameter is >= 0, this function will only wait until that line is processed.
@@ -186,7 +186,7 @@ class LeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for. Defaults to -1 --> Wait for the full file
-            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list | None: List of current diagnostic messages or errors. None if no diagnostics were received.
@@ -283,7 +283,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Hover Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover>`_
-        - Lean Source: `RequestHandling.lean\u200B\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L77₀>`_
+        - Lean Source: `RequestHandling.lean\u200b\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L77₀>`_
 
         Example response:
 
@@ -407,7 +407,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Find References Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references>`_
-        - Lean Source: `Watchdog.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L528>`_
+        - Lean Source: `Watchdog.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L528>`_
 
         Example response:
 
@@ -492,7 +492,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Document Highlight Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight>`_
-        - Lean Source: `RequestHandling.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L324>`_
+        - Lean Source: `RequestHandling.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L324>`_
 
         Example response:
 
@@ -526,7 +526,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Document Symbol Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol>`_
-        - Lean Source: `RequestHandling.lean\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
+        - Lean Source: `RequestHandling.lean\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
 
         Example response:
 
@@ -567,7 +567,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Semantic Tokens Full Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest>`_
-        - Lean Source: `RequestHandling.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L573>`_
+        - Lean Source: `RequestHandling.lean\u200d <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L573>`_
 
         Example response:
 
@@ -627,7 +627,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Folding Range Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange>`_
-        - Lean Source: `RequestHandling.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L615>`_
+        - Lean Source: `RequestHandling.lean\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L615>`_
 
         Example response:
 
@@ -661,7 +661,7 @@ class LeanLSPClient:
         More Information:
 
         - LSP Docs: `Prepare Call Hierarchy Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy>`_
-        - Lean Source: `Watchdog.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
+        - Lean Source: `Watchdog.lean\u200d <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
 
         Example response:
 
@@ -702,7 +702,7 @@ class LeanLSPClient:
         More Information:
 
         - LSP Docs: `Incoming Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls>`_
-        - Lean Source: `Watchdog.lean\u200E <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
+        - Lean Source: `Watchdog.lean\u200e <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
 
         Example response:
 
@@ -744,7 +744,7 @@ class LeanLSPClient:
         More Information:
 
         - LSP Docs: `Outgoing Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls>`_
-        - Lean Source: `Watchdog.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
+        - Lean Source: `Watchdog.lean\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
 
         Example response:
 
@@ -786,7 +786,7 @@ class LeanLSPClient:
 
         More information:
 
-        - Lean Source: `RequestHandling.lean\u200A\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L285>`_
+        - Lean Source: `RequestHandling.lean\u200a\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L285>`_
 
         Note:
 
@@ -825,7 +825,7 @@ class LeanLSPClient:
 
         More information:
 
-        - Lean Source: `RequestHandling.lean\u200A\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L316>`_
+        - Lean Source: `RequestHandling.lean\u200a\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L316>`_
 
         Note:
 
@@ -905,7 +905,7 @@ class LeanLSPClient:
         More information:
 
         - LSP Docs: `Code Action Resolve Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeAction_resolve>`_
-        - Lean Source: `Basic.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
+        - Lean Source: `Basic.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
 
         Args:
             code_action (dict): Code action.

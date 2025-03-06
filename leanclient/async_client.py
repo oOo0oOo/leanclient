@@ -27,7 +27,7 @@ class AsyncLeanLSPClient:
         """
         await self.lsp.start()
 
-    async def close(self, timeout: float = 2):
+    async def close(self, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.close`"""
         await self.lsp.close(timeout)
 
@@ -43,11 +43,11 @@ class AsyncLeanLSPClient:
         """See :meth:`leanclient.client.LeanLSPClient.send_request`"""
         return await self.lsp.send_request(path, method, params)
 
-    async def wait_for_file(self, path: str, timeout: float = 5):
+    async def wait_for_file(self, path: str, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_file`"""
         await self.lsp.wait_for_file(path, timeout)
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 10):
         """See :meth:`leanclient.client.LeanLSPClient.wait_for_line`"""
         await self.lsp.wait_for_line(path, line, timeout)
 
@@ -68,7 +68,7 @@ class AsyncLeanLSPClient:
         await self.lsp.close_files(paths)
 
     async def get_diagnostics(
-        self, path: str, line: int = -1, timeout: float = 5
+        self, path: str, line: int = -1, timeout: float = 10
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return await self.lsp.get_diagnostics(path, line, timeout)
@@ -90,6 +90,7 @@ class AsyncLeanLSPClient:
 
     async def get_completions(self, path: str, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_completions`"""
+        await self.lsp.wait_for_file(path)
         resp = await self._send_request(
             path,
             "textDocument/completion",
@@ -115,6 +116,7 @@ class AsyncLeanLSPClient:
 
     async def get_declarations(self, path: str, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_declarations`"""
+        await self.lsp.wait_for_line(path, line)
         return await self._send_request(
             path,
             "textDocument/declaration",
@@ -123,6 +125,7 @@ class AsyncLeanLSPClient:
 
     async def get_definitions(self, path: str, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_definitions`"""
+        await self.lsp.wait_for_file(path)
         return await self._send_request(
             path,
             "textDocument/definition",
@@ -173,6 +176,7 @@ class AsyncLeanLSPClient:
 
     async def get_document_symbols(self, path: str) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_symbols`"""
+        await self.lsp.wait_for_file(path)
         return await self._send_request(path, "textDocument/documentSymbol", {})
 
     async def get_semantic_tokens(self, path: str) -> list:

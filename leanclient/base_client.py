@@ -3,6 +3,7 @@ import os
 import pathlib
 import asyncio
 from pprint import pprint
+import secrets
 import time
 import urllib.parse
 
@@ -92,13 +93,13 @@ class BaseLeanLSPClient:
 
         await self.send_notification("initialized", {})
 
-    async def close(self, timeout: float = 2):
+    async def close(self, timeout: float = 10):
         """Always close the client when done!
 
         Terminates the language server process and close all pipes.
 
         Args:
-            timeout (float): Time to wait until the process is killed. Defaults to 2 seconds.
+            timeout (float): Time to wait until the process is killed. Defaults to 10 seconds.
         """
         # await self._send_request_rpc("shutdown", {}, is_notification=False)
 
@@ -116,6 +117,7 @@ class BaseLeanLSPClient:
         try:
             await asyncio.wait_for(wait, timeout=timeout)
         except asyncio.TimeoutError:
+            print("Warning: Language server did not close in time. Killing process.")
             await self.process.kill()
 
     # URI HANDLING
@@ -246,9 +248,17 @@ class BaseLeanLSPClient:
         request = {"jsonrpc": "2.0", "method": method, "params": params}
 
         if not is_notification:
-            request_id = self.request_id
-            self.request_id += 1
+            #     request_id = self.request_id
+            #     self.request_id += 1
+            #     request["id"] = request_id
+
+            request_id = secrets.randbits(64)
+            while request_id in self.pending:
+                request_id = secrets.randbits(64)
             request["id"] = request_id
+
+            future = self.loop.create_future()
+            self.pending[request_id] = future
 
         body = orjson.dumps(request)
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
@@ -256,8 +266,6 @@ class BaseLeanLSPClient:
         await self.stdin.drain()
 
         if not is_notification:
-            future = self.loop.create_future()
-            self.pending[request_id] = future
             return await future
 
     async def send_notification(self, method: str, params: dict):
@@ -357,7 +365,7 @@ class BaseLeanLSPClient:
         path: str,
         method: str,
         params: dict,
-        timeout: float = 5,
+        timeout: float = 10,
     ) -> dict | None:
         """Send a request with a timeout.
 
@@ -491,7 +499,7 @@ class BaseLeanLSPClient:
             del self.files_last_update[path]
 
     async def get_diagnostics(
-        self, path: str, line: int = -1, timeout: float = 5
+        self, path: str, line: int = -1, timeout: float = 10
     ) -> list | None:
         """Get diagnostic messages of a file.
 
@@ -514,7 +522,7 @@ class BaseLeanLSPClient:
             await self.wait_for_file(path, timeout)
         return self.files_diagnostics[path]
 
-    async def wait_for_file(self, path: str, timeout: float = 5):
+    async def wait_for_file(self, path: str, timeout: float = 10) -> bool:
         """Wait for a file to finish processing.
 
         Checks `waitForDiagnostics` and `fileProgress`.
@@ -524,7 +532,10 @@ class BaseLeanLSPClient:
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
+
+        Returns:
+            bool: True if the file was processed, False if timed out.
         """
         await self.open_file(path)
 
@@ -556,9 +567,10 @@ class BaseLeanLSPClient:
             print(
                 f"Warning: Timed out waiting for diagnostics (waitForDiagnostics) after {timeout / 2:}s for {path}."
             )
-            pass
+            return False
+        return True
 
-    async def wait_for_line(self, path: str, line: int, timeout: float = 5):
+    async def wait_for_line(self, path: str, line: int, timeout: float = 10) -> bool:
         """Wait for a line to be processed.
 
         This is useful for waiting for diagnostics on a specific line.
@@ -566,23 +578,26 @@ class BaseLeanLSPClient:
         Args:
             path (str): Relative file path.
             line (int): Line number to wait for.
-            timeout (float): Time to wait for diagnostics. Defaults to 5 seconds.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
+
+        Returns:
+            bool: True if the line was processed, False if timed out.
         """
         await self.open_file(path)
 
         while True:
             cur_line = self.files_finished[path]
             if cur_line == -2:
-                return
+                return True
             elif cur_line >= line:
-                return
+                return True
             await asyncio.sleep(0.001)
             duration = time.time() - self.files_last_update[path]
             if duration > timeout:
                 print(
                     f"Warning: Timed out waiting for line {line} after {duration:.1f}s for {path}."
                 )
-                return
+                return False
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
