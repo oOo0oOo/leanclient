@@ -35,13 +35,14 @@ class LSPFileManager(BaseLeanLSPClient):
         self.opened_files_content = {}
         self.opened_files_versions = {}
 
-    def _open_new_files(self, paths: list[str]) -> list:
+    def _open_new_files(self, paths: list[str], timeout: float = 10) -> list:
         """Open new files in the language server.
 
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
 
         Args:
             paths (list[str]): List of relative file paths.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list: List of diagnostics for each file.
@@ -65,7 +66,7 @@ class LSPFileManager(BaseLeanLSPClient):
             }
             self._send_notification("textDocument/didOpen", params)
 
-        return self._wait_for_diagnostics(uris)
+        return self._wait_for_diagnostics(uris, timeout)
 
     def _send_request(self, path: str, method: str, params: dict) -> dict:
         """Send request about a document and return a response or and error.
@@ -132,7 +133,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         return results
 
-    def open_files(self, paths: list[str]) -> list:
+    def open_files(self, paths: list[str], timeout: float = 10) -> list:
         """Open files in the language server and return diagnostics.
 
         This function maintains a cache of opened files and their diagnostics.
@@ -143,6 +144,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             paths (list[str]): List of relative file paths to open.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list: List of diagnostics for each file.
@@ -157,7 +159,7 @@ class LSPFileManager(BaseLeanLSPClient):
         # Open new files
         new_files = [p for p in paths if p not in self.opened_files_diagnostics]
         if new_files:
-            diagnostics = self._open_new_files(new_files)
+            diagnostics = self._open_new_files(new_files, timeout)
             self.opened_files_diagnostics.update(zip(new_files, diagnostics))
 
         # Remove files if over limit
@@ -186,7 +188,9 @@ class LSPFileManager(BaseLeanLSPClient):
         """
         return self.open_files([path])[0]
 
-    def update_file(self, path: str, changes: list[DocumentContentChange]) -> list:
+    def update_file(
+        self, path: str, changes: list[DocumentContentChange], timeout: float = 10
+    ) -> list:
         """Update a file in the language server.
 
         Note:
@@ -199,6 +203,7 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             path (str): Relative file path to update.
             changes (list[DocumentContentChange]): List of changes to apply.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list: Diagnostics of file
@@ -230,7 +235,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         self._send_notification(*params)
 
-        diagnostics = self._wait_for_diagnostics([uri])[0]
+        diagnostics = self._wait_for_diagnostics([uri], timeout)[0]
         self.opened_files_diagnostics[path] = diagnostics
         return diagnostics
 
@@ -318,7 +323,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         return [diagnostics[path] for path in paths]
 
-    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list:
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 10) -> list:
         """Wait until file is loaded or an rpc error occurs.
 
         This should only be used right after opening or updating files not to miss any responses.
@@ -360,7 +365,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for diagnostics. Rarely exceeded.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list: List of diagnostic messages or errors.
@@ -401,6 +406,9 @@ class LSPFileManager(BaseLeanLSPClient):
             if select.select([self.stdout], [], [], tmt)[0]:
                 res = self._read_stdout()
             else:
+                print(
+                    f"WARNING: `_wait_for_diagnostics` timed out after {tmt} seconds."
+                )
                 break
 
             method = res.get("method")
