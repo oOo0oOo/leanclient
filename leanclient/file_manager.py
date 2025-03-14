@@ -35,7 +35,12 @@ class LSPFileManager(BaseLeanLSPClient):
         self.opened_files_content = {}
         self.opened_files_versions = {}
 
-    def _open_new_files(self, paths: list[str], timeout: float = 10) -> list:
+    def _open_new_files(
+        self,
+        paths: list[str],
+        timeout: float = 10,
+        dependency_build_mode: str = "never",
+    ) -> list:
         """Open new files in the language server.
 
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
@@ -43,6 +48,7 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             paths (list[str]): List of relative file paths.
             timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
+            dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never".
 
         Returns:
             list: List of diagnostics for each file.
@@ -62,7 +68,7 @@ class LSPFileManager(BaseLeanLSPClient):
                     "languageId": "lean",
                     "version": 0,
                 },
-                "dependencyBuildMode": "always",
+                "dependencyBuildMode": dependency_build_mode,
             }
             self._send_notification("textDocument/didOpen", params)
 
