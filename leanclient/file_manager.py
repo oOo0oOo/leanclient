@@ -175,18 +175,19 @@ class LSPFileManager(BaseLeanLSPClient):
 
         return [self.opened_files_diagnostics[path] for path in paths]
 
-    def open_file(self, path: str) -> list:
+    def open_file(self, path: str, timeout: float = 10) -> list:
         """Open a file in the language server and return diagnostics.
 
         See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
 
         Args:
             path (str): Relative file path to open.
+            timeout (float): Time to wait for diagnostics. Defaults to 10 seconds.
 
         Returns:
             list: Diagnostics of file
         """
-        return self.open_files([path])[0]
+        return self.open_files([path], timeout)[0]
 
     def update_file(
         self, path: str, changes: list[DocumentContentChange], timeout: float = 10
