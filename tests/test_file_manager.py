@@ -214,3 +214,11 @@ class TestLSPFileManager(unittest.TestCase):
 
         for tactic in tactics:
             assert len(messages[tactic]) == exp_len[tactic], f"{messages}"
+
+    def test_close(self):
+        # Open large file, then close: Expecting process kill
+        fpath = ".lake/packages/mathlib/Mathlib/MeasureTheory/Covering/OneDim.lean"
+        self.lsp.open_file(fpath)
+        self.lsp.close_files([fpath], blocking=False)
+        self.lsp.close(timeout=0.01)
+        self.assertEqual(self.lsp.process.poll(), -15)  # SIGTERM despite kill?

@@ -66,16 +66,28 @@ class BaseLeanLSPClient:
 
         self._send_notification("initialized", {})
 
-    def close(self):
+    def close(self, timeout: float | None = 2):
         """Always close the client when done!
 
         Terminates the language server process and close all pipes.
+
+        Args:
+            timeout (float | None): Time to wait for the process to terminate. Defaults to 2 seconds.
         """
         self.process.terminate()
-        self.process.stderr.close()
-        self.stdout.close()
-        self.stdin.close()
-        self.process.wait()
+        try:
+            if timeout is not None:
+                self.process.wait(timeout=timeout)
+            else:
+                self.process.wait()
+        except subprocess.TimeoutExpired:
+            print("Warning: Language server did not close in time. Killing process.")
+            self.process.kill()
+            self.process.wait()
+        finally:
+            self.process.stderr.close()
+            self.stdout.close()
+            self.stdin.close()
 
     # URI HANDLING
     def _local_to_uri(self, local_path: str) -> str:
