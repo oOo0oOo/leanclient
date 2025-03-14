@@ -91,7 +91,10 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         resp = self._send_request(
             path,
             "textDocument/completion",
-            {"position": {"line": line, "character": character}},
+            {
+                "position": {"line": line, "character": character},
+                "context": {"triggerKind": 1},
+            },
         )
         return resp["items"]  # NOTE: We discard `isIncomplete` for now
 
