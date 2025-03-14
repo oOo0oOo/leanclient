@@ -2,9 +2,17 @@ import collections
 from pprint import pprint
 import time
 import urllib.parse
+import select
 
 from .utils import DocumentContentChange, apply_changes_to_text
 from .base_client import BaseLeanLSPClient
+
+
+IGNORED_METHODS = {
+    "workspace/didChangeWatchedFiles",
+    "workspace/semanticTokens/refresh",
+    "client/registerCapability",
+}
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -15,7 +23,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
     def __init__(
         self,
-        max_opened_files: int = 8,
+        max_opened_files: int = 16,
     ):
         # Only allow initialization after BaseLeanLSPClient
         if not hasattr(self, "project_path"):
@@ -25,6 +33,7 @@ class LSPFileManager(BaseLeanLSPClient):
         self.max_opened_files = max_opened_files
         self.opened_files_diagnostics = collections.OrderedDict()
         self.opened_files_content = {}
+        self.opened_files_versions = {}
 
     def _open_new_files(self, paths: list[str]) -> list:
         """Open new files in the language server.
@@ -42,13 +51,15 @@ class LSPFileManager(BaseLeanLSPClient):
             with open(self._uri_to_abs(uri), "r") as f:
                 txt = f.read()
             self.opened_files_content[path] = txt
+            self.opened_files_versions[path] = 0
+            self.opened_files_diagnostics[path] = None
 
             params = {
                 "textDocument": {
                     "uri": uri,
                     "text": txt,
                     "languageId": "lean",
-                    "version": 1,
+                    "version": 0,
                 },
                 "dependencyBuildMode": "always",
             }
@@ -68,7 +79,10 @@ class LSPFileManager(BaseLeanLSPClient):
             dict: Response or error.
         """
         self.open_file(path)
-        params["textDocument"] = {"uri": self._local_to_uri(path)}
+        params["textDocument"] = {
+            "uri": self._local_to_uri(path),
+            "version": self.opened_files_versions[path],
+        }
         rid = self._send_request_rpc(method, params, is_notification=False)
 
         result = self._read_stdout()
@@ -197,6 +211,9 @@ class LSPFileManager(BaseLeanLSPClient):
         text = apply_changes_to_text(text, changes)
         self.opened_files_content[path] = text
 
+        self.opened_files_versions[path] += 1
+        version = self.opened_files_versions[path]
+
         # TODO: Any of these useful?
         # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [{"text": text}]})
         # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
@@ -206,7 +223,7 @@ class LSPFileManager(BaseLeanLSPClient):
         params = (
             "textDocument/didChange",
             {
-                "textDocument": {"uri": uri, "version": 1, "languageId": "lean"},
+                "textDocument": {"uri": uri, "version": version, "languageId": "lean"},
                 "contentChanges": [c.get_dict() for c in changes],
             },
         )
@@ -236,6 +253,7 @@ class LSPFileManager(BaseLeanLSPClient):
         for path in paths:
             del self.opened_files_diagnostics[path]
             del self.opened_files_content[path]
+            del self.opened_files_versions[path]
 
         # Wait for published diagnostics
         if blocking:
@@ -299,3 +317,128 @@ class LSPFileManager(BaseLeanLSPClient):
             diagnostics.update(zip(missing, self.open_files(missing)))
 
         return [diagnostics[path] for path in paths]
+
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 1) -> list:
+        """Wait until file is loaded or an rpc error occurs.
+
+        This should only be used right after opening or updating files not to miss any responses.
+        Returns either diagnostics or an [{error dict}] for each file.
+
+        Checks `waitForDiagnostics` and `fileProgress` for each file.
+
+        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
+        See source for more details.
+
+        **Example diagnostics**:
+
+        .. code-block:: python
+
+            [
+            # For each file:
+            [
+                {
+                    'message': "declaration uses 'sorry'",
+                    'severity': 2,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}},
+                    'fullRange': {'end': {'character': 19, 'line': 13},
+                                'start': {'character': 8, 'line': 13}}
+                },
+                {
+                    'message': "unexpected end of input; expected ':'",
+                    'severity': 1,
+                    'source': 'Lean 4',
+                    'range': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}},
+                    'fullRange': {'end': {'character': 0, 'line': 17},
+                                'start': {'character': 0, 'line': 17}}
+                },
+                # ...
+            ], #...
+            ]
+
+        Args:
+            uris (list[str]): List of URIs to wait for diagnostics on.
+            timeout (float): Time to wait for diagnostics. Rarely exceeded.
+
+        Returns:
+            list: List of diagnostic messages or errors.
+        """
+        TIMEOUT_SHORT = 0.01
+
+        # Check if all files are opened
+        paths = [self._uri_to_local(uri) for uri in uris]
+        missing = [p for p in paths if p not in self.opened_files_diagnostics]
+        if missing:
+            raise FileNotFoundError(
+                f"Files {missing} are not open. Call open_files first."
+            )
+
+        # Request waitForDiagnostics for each file
+        rid_to_uri = {}
+        for uri, path in zip(uris, paths):
+            version = self.opened_files_versions[path]
+            rid = self._send_request_rpc(
+                "textDocument/waitForDiagnostics",
+                {"uri": uri, "version": version},
+                is_notification=False,
+            )
+            rid_to_uri[rid] = uri
+
+        num_missing_processing = len(uris)
+        num_missing_wait = len(uris)
+        errored = set()
+        diagnostics = {}
+        while num_missing_processing > 0 or num_missing_wait > 0:
+            # Non-blocking read, `waitForDiagnostics` or `processing == []` doesn't always return e.g. "unfinished comment"
+            # Timeout is shortened if all remaining files have errored
+            num_errors = len(errored)
+            short = (
+                num_errors >= num_missing_processing and num_errors >= num_missing_wait
+            )
+            tmt = TIMEOUT_SHORT if short else timeout
+            if select.select([self.stdout], [], [], tmt)[0]:
+                res = self._read_stdout()
+            else:
+                break
+
+            method = res.get("method")
+
+            # Capture diagnostics
+            if method == "textDocument/publishDiagnostics":
+                uri = res["params"]["uri"]
+                diagnostics[uri] = res["params"]["diagnostics"]
+                continue
+
+            # `waitForDiagnostics` has returned
+            elif res.get("result", True) == {}:
+                num_missing_wait -= 1
+                continue
+
+            # RPC error (only from `waitForDiagnostics`)
+            # These can lead to confusing BUGS, remove?
+            elif "error" in res:
+                uri = rid_to_uri.get(res.get("id"))
+                if uri:
+                    diagnostics[uri] = [res]
+                errored.add(uri)
+                continue
+
+            elif method in IGNORED_METHODS:
+                continue
+
+            # Check for fatalError from fileProgress. See here:
+            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+            proc = res["params"]["processing"]
+            if proc == []:
+                num_missing_processing -= 1
+            elif proc and proc[-1]["kind"] == 2:
+                uri = res["params"]["textDocument"]["uri"]
+                errored.add(uri)
+                if not diagnostics.get(uri):
+                    msg = f"leanclient: Received LeanFileProgressKind.fatalError from language server."
+                    res["error"] = {"message": msg}
+                    diagnostics[uri] = [res]
+
+        return [diagnostics.get(uri, []) for uri in uris]

@@ -125,14 +125,14 @@ class TestLSPClientErrors(unittest.TestCase):
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
+        self.assertRaises(FileNotFoundError, self.lsp._wait_for_diagnostics, [self.uri])
 
     def test_lake_error_end_of_input(self):
         body = orjson.dumps({})
         header = f"Content-Length: {len(body) + 1}\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, [self.uri])
+        self.assertRaises(FileNotFoundError, self.lsp._wait_for_diagnostics, [self.uri])
 
     def test_lake_error_content_length(self):
         request = {
@@ -147,7 +147,7 @@ class TestLSPClientErrors(unittest.TestCase):
         header = f"Content-Length: 3.14\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
-        self.assertRaises(EOFError, self.lsp._wait_for_diagnostics, self.uri)
+        self.assertRaises(FileNotFoundError, self.lsp._wait_for_diagnostics, self.uri)
 
     def invalid_path(self):
         invalid_paths = [

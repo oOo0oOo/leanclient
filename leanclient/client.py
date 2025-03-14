@@ -23,7 +23,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
     Args:
         project_path (str): Path to the root folder of a Lean project.
-        max_opened_files (int): Maximum number of files to keep open at once.
+        max_opened_files (int): Maximum number of files to keep open at once. Defaults to 16.
         initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
         print_warnings (bool): Whether to print warnings about experimental features.
     """
@@ -31,7 +31,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     def __init__(
         self,
         project_path: str,
-        max_opened_files: int = 8,
+        max_opened_files: int = 16,
         initial_build: bool = True,
         print_warnings: bool = True,
     ):
@@ -136,7 +136,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Hover Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_hover>`_
-        - Lean Source: `RequestHandling.lean\u200B\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L77₀>`_
+        - Lean Source: `RequestHandling.lean\u200b\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L77₀>`_
 
         Example response:
 
@@ -272,7 +272,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Find References Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_references>`_
-        - Lean Source: `Watchdog.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L528>`_
+        - Lean Source: `Watchdog.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L528>`_
 
         Example response:
 
@@ -363,7 +363,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Document Highlight Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentHighlight>`_
-        - Lean Source: `RequestHandling.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L324>`_
+        - Lean Source: `RequestHandling.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L324>`_
 
         Example response:
 
@@ -400,7 +400,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Document Symbol Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol>`_
-        - Lean Source: `RequestHandling.lean\u200C <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
+        - Lean Source: `RequestHandling.lean\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
 
         Example response:
 
@@ -441,7 +441,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Semantic Tokens Full Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#semanticTokens_fullRequest>`_
-        - Lean Source: `RequestHandling.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L573>`_
+        - Lean Source: `RequestHandling.lean\u200d <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L573>`_
 
         Example response:
 
@@ -505,7 +505,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Folding Range Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_foldingRange>`_
-        - Lean Source: `RequestHandling.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L615>`_
+        - Lean Source: `RequestHandling.lean\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L615>`_
 
         Example response:
 
@@ -539,7 +539,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More Information:
 
         - LSP Docs: `Prepare Call Hierarchy Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_prepareCallHierarchy>`_
-        - Lean Source: `Watchdog.lean\u200D <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
+        - Lean Source: `Watchdog.lean\u200d <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L611>`_
 
         Example response:
 
@@ -582,7 +582,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More Information:
 
         - LSP Docs: `Incoming Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_incomingCalls>`_
-        - Lean Source: `Watchdog.lean\u200E <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
+        - Lean Source: `Watchdog.lean\u200e <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L624>`_
 
         Example response:
 
@@ -628,7 +628,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More Information:
 
         - LSP Docs: `Outgoing Calls Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#callHierarchy_outgoingCalls>`_
-        - Lean Source: `Watchdog.lean\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
+        - Lean Source: `Watchdog.lean\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L676>`_
 
         Example response:
 
@@ -674,7 +674,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
 
-        - Lean Source: `RequestHandling.lean\u200A\u200F <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L285>`_
+        - Lean Source: `RequestHandling.lean\u200a\u200f <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L285>`_
 
         Note:
 
@@ -717,7 +717,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
 
-        - Lean Source: `RequestHandling.lean\u200A\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L316>`_
+        - Lean Source: `RequestHandling.lean\u200a\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L316>`_
 
         Note:
 
@@ -811,7 +811,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Code Action Resolve Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeAction_resolve>`_
-        - Lean Source: `Basic.lean\u200B <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
+        - Lean Source: `Basic.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
 
         Args:
             code_action (dict): Code action.
