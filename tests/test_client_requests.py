@@ -22,9 +22,7 @@ class TestLSPClientRequests(unittest.TestCase):
 
     # Takes long but might be worth it
     # def setUp(self):
-    #     self.lsp = LeanLSPClient(
-    #         TEST_ENV_DIR, initial_build=False
-    #     )
+    #     self.lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False)
 
     # def tearDown(self):
     #     self.lsp.close()
@@ -43,6 +41,7 @@ class TestLSPClientRequests(unittest.TestCase):
 
     def test_hover(self):
         res = self.lsp.get_hover(TEST_FILE_PATH, 4, 4)
+        print(res)
         assert type(res) == dict
         assert "The left hand" in res["contents"]["value"]
 
@@ -139,6 +138,7 @@ class TestLSPClientRequests(unittest.TestCase):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
 
         # self.lsp.open_file(path)
+        # self.lsp.wait_for_file(path)
 
         # Finset
         res = self.lsp.get_definitions(path, 52, 27)

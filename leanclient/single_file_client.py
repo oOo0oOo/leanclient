@@ -64,9 +64,11 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
         return self.client.get_file_content(self.file_path)
 
-    def get_completions(self, line: int, character: int) -> list:
+    def get_completions(
+        self, line: int, character: int, timeout: float = 5
+    ) -> list | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_completions`"""
-        return self.client.get_completions(self.file_path, line, character)
+        return self.client.get_completions(self.file_path, line, character, timeout)
 
     def get_completion_item_resolve(self, item: dict) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion_item_resolve`"""
@@ -105,9 +107,9 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_type_definitions`"""
         return self.client.get_type_definitions(self.file_path, line, character)
 
-    def get_document_symbols(self) -> list:
+    def get_document_symbols(self, timeout: float = 5) -> list | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_symbols`"""
-        return self.client.get_document_symbols(self.file_path)
+        return self.client.get_document_symbols(self.file_path, timeout)
 
     def get_document_highlights(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_highlights`"""

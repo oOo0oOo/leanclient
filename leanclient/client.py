@@ -1,4 +1,6 @@
+import asyncio
 from pprint import pprint
+import threading
 
 from leanclient.async_client import AsyncLeanLSPClient
 from leanclient.single_file_client import SingleFileClient
@@ -32,13 +34,18 @@ class LeanLSPClient:
         initial_build: bool = True,
         max_opened_files: int = 8,
     ):
+        self.loop = asyncio.new_event_loop()
+        self.loop_thread = threading.Thread(target=self.loop.run_forever, daemon=True)
+        self.loop_thread.start()
+
         self.client = AsyncLeanLSPClient(project_path, initial_build, max_opened_files)
-        self.loop = self.client.loop
         self._call_async(self.client.start)
 
     def _call_async(self, func, *args, **kwargs):
         """Helper: Call an async function using the event loop."""
-        return self.loop.run_until_complete(func(*args, **kwargs))
+        return asyncio.run_coroutine_threadsafe(
+            func(*args, **kwargs), self.loop
+        ).result()
 
     def local_to_uri(self, path: str) -> str:
         """Convert a local file path to a URI.
@@ -81,6 +88,9 @@ class LeanLSPClient:
             timeout (float): Time to wait until the process is killed. Defaults to 10 seconds.
         """
         self._call_async(self.client.close, timeout)
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.loop_thread.join()
+        self.loop.close()
 
     def wait_for_file(self, path: str, timeout: float = 10):
         """Wait for a file to be fully loaded.
@@ -204,7 +214,9 @@ class LeanLSPClient:
         """
         return self.client.get_file_content(path)
 
-    def get_completions(self, path: str, line: int, character: int) -> list:
+    def get_completions(
+        self, path: str, line: int, character: int, timeout=5
+    ) -> list | None:
         """Get completion items at a file position.
 
         The :guilabel:`textDocument/completion` method in LSP provides context-aware code completion suggestions at a specified cursor position.
@@ -239,11 +251,14 @@ class LeanLSPClient:
             path (str): Relative file path.
             line (int): Line number.
             character (int): Character number.
+            timeout (float): Time to wait for completions. Defaults to 5 seconds.
 
         Returns:
-            list: Completion items.
+            list | None: Completion items or None if timed out.
         """
-        return self._call_async(self.client.get_completions, path, line, character)
+        return self._call_async(
+            self.client.get_completions, path, line, character, timeout
+        )
 
     def get_completion_item_resolve(self, item: dict) -> str:
         """Resolve a completion item.
@@ -518,7 +533,7 @@ class LeanLSPClient:
             self.client.get_document_highlights, path, line, character
         )
 
-    def get_document_symbols(self, path: str) -> list:
+    def get_document_symbols(self, path: str, timeout: float = 5) -> list | None:
         """Get all document symbols in a document.
 
         The :guilabel:`textDocument/documentSymbol` method in LSP retrieves all symbols within a document, providing their names, kinds, and locations.
@@ -549,11 +564,12 @@ class LeanLSPClient:
 
         Args:
             path (str): Relative file path.
+            timeout (float): Time to wait for document symbols. Defaults to 5 seconds
 
         Returns:
-            list: Document symbols.
+            list | None: Document symbols or None if timed out.
         """
-        return self._call_async(self.client.get_document_symbols, path)
+        return self._call_async(self.client.get_document_symbols, path, timeout)
 
     def get_semantic_tokens(self, path: str) -> list:
         """Get semantic tokens for the entire document.

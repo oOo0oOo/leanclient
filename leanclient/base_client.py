@@ -4,6 +4,7 @@ import pathlib
 import asyncio
 from pprint import pprint
 import secrets
+import threading
 import time
 import urllib.parse
 
@@ -45,7 +46,6 @@ class BaseLeanLSPClient:
         self.files_last_update = {}  # Time of last update to the diagnostics
         self.files_content = {}
         self.max_opened_files = max_opened_files
-        self.loop = asyncio.get_event_loop()
 
     async def start(self):
         """Start the language server process and initialize it.
@@ -71,6 +71,7 @@ class BaseLeanLSPClient:
         self.stdout = self.process.stdout
         self.stderr = self.process.stderr
 
+        self.loop = asyncio.get_event_loop()
         self.tasks.add(self.loop.create_task(self._run_stdout()))
         self.tasks.add(self.loop.create_task(self._run_stderr()))
 
@@ -101,7 +102,9 @@ class BaseLeanLSPClient:
         Args:
             timeout (float): Time to wait until the process is killed. Defaults to 10 seconds.
         """
-        # await self._send_request_rpc("shutdown", {}, is_notification=False)
+        # open_files = list(self.files_finished.keys())
+        # if open_files:
+        #     await self.close_files(open_files)
 
         for task in self.tasks:
             task.cancel()
@@ -119,6 +122,15 @@ class BaseLeanLSPClient:
         except asyncio.TimeoutError:
             print("Warning: Language server did not close in time. Killing process.")
             await self.process.kill()
+
+    async def _restart_server(self):
+        """Restarting the server, when it crashes.
+
+        Like in VSCode ("Restart Server" button), we also have to restart the server when it times out.
+        """
+        print("Warning: Restarting language server.")
+        await self.close()
+        await self.start()
 
     # URI HANDLING
     def local_to_uri(self, local_path: str) -> str:
@@ -248,14 +260,14 @@ class BaseLeanLSPClient:
         request = {"jsonrpc": "2.0", "method": method, "params": params}
 
         if not is_notification:
-            #     request_id = self.request_id
-            #     self.request_id += 1
-            #     request["id"] = request_id
-
-            request_id = secrets.randbits(64)
-            while request_id in self.pending:
-                request_id = secrets.randbits(64)
+            request_id = self.request_id
+            self.request_id += 1
             request["id"] = request_id
+
+            # request_id = secrets.randbits(64)
+            # while request_id in self.pending:
+            #     request_id = secrets.randbits(64)
+            # request["id"] = request_id
 
             future = self.loop.create_future()
             self.pending[request_id] = future
@@ -264,9 +276,18 @@ class BaseLeanLSPClient:
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.stdin.write(header + body)
         await self.stdin.drain()
+        await asyncio.sleep(0)
 
         if not is_notification:
-            return await future
+            # return await future
+            try:
+                return await asyncio.wait_for(future, timeout=5)
+            except asyncio.TimeoutError:
+                print(
+                    f"Warning: send_request_rpc for {method} timed out after 5s. Restarting server."
+                )
+                await self._restart_server()
+                return await self.send_request_rpc(method, params, is_notification)
 
     async def send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
@@ -365,7 +386,7 @@ class BaseLeanLSPClient:
         path: str,
         method: str,
         params: dict,
-        timeout: float = 10,
+        timeout: float = 5,
     ) -> dict | None:
         """Send a request with a timeout.
 
@@ -488,15 +509,16 @@ class BaseLeanLSPClient:
         # Only close if file is open
         paths = [p for p in paths if p in self.files_finished]
         uris = [self.local_to_uri(p) for p in paths]
-        for uri in uris:
-            params = {"textDocument": {"uri": uri}}
-            await self.send_notification("textDocument/didClose", params)
 
         for path in paths:
             del self.files_finished[path]
             del self.files_diagnostics[path]
             del self.files_content[path]
             del self.files_last_update[path]
+
+        for uri in uris:
+            params = {"textDocument": {"uri": uri}}
+            await self.send_notification("textDocument/didClose", params)
 
     async def get_diagnostics(
         self, path: str, line: int = -1, timeout: float = 10

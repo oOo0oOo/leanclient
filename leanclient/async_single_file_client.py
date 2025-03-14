@@ -67,9 +67,13 @@ class AsyncSingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
         return self.client.get_file_content(self.file_path)
 
-    async def get_completions(self, line: int, character: int) -> list:
+    async def get_completions(
+        self, line: int, character: int, timeout: float = 5
+    ) -> list | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_completions`"""
-        return await self.client.get_completions(self.file_path, line, character)
+        return await self.client.get_completions(
+            self.file_path, line, character, timeout
+        )
 
     async def get_completion_item_resolve(self, item: dict) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion_item_resolve`"""
@@ -108,9 +112,9 @@ class AsyncSingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_type_definitions`"""
         return await self.client.get_type_definitions(self.file_path, line, character)
 
-    async def get_document_symbols(self) -> list:
+    async def get_document_symbols(self, timeout: float = 5) -> list | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_symbols`"""
-        return await self.client.get_document_symbols(self.file_path)
+        return await self.client.get_document_symbols(self.file_path, timeout)
 
     async def get_document_highlights(self, line: int, character: int) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_document_highlights`"""

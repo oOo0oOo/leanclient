@@ -23,6 +23,7 @@ class TestLSPClientRequestsAsync(unittest.IsolatedAsyncioTestCase):
         assert len(result) > 100
 
         result = await self.lsp.get_completions(TEST_FILE_PATH, 9, 15)
+        print(result)
         assert type(result) == list
         item = random.choice(result)
         # resolve_res = await self.lsp.get_completion_item_resolve(item)
