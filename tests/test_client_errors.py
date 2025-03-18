@@ -114,7 +114,7 @@ class TestLSPClientErrors(unittest.TestCase):
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
-        resp = self.lsp._wait_for_diagnostics([self.uri])[0]
+        resp = self.lsp._wait_for_diagnostics([self.uri], timeout=0.1)[0]
         exp = "Cannot process request to closed file"
         assert resp == [], f"Why is this working again?, got {resp}"
         # resp = resp["error"]["message"]

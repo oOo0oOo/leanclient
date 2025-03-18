@@ -18,14 +18,14 @@ class SingleFileClient:
         self.file_path = file_path
         self.print_warnings = client.print_warnings
 
-    def open_file(self, timeout: float = 10) -> list:
+    def open_file(self, timeout: float = 30) -> list:
         """Open the file.
 
         This is usually called automatically when a method is called that requires an open file.
         Use this to open the file manually and recieve its diagnostics.
 
         Args:
-            timeout(float): Time to wait for diagnostics. Defaults to 10 seconds.
+            timeout(float): Time to wait for diagnostics. Defaults to 30 seconds.
 
         Returns:
             list: The diagnostic messages of the file.
@@ -43,7 +43,7 @@ class SingleFileClient:
         return self.client.close_files([self.file_path], blocking)
 
     def update_file(
-        self, changes: list[DocumentContentChange], timeout: float = 10
+        self, changes: list[DocumentContentChange], timeout: float = 30
     ) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes, timeout)
