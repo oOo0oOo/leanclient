@@ -256,7 +256,12 @@ class LSPFileManager(BaseLeanLSPClient):
             blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
         """
         # Only close if file is open
-        paths = [p for p in paths if p in self.opened_files_diagnostics]
+        missing = [p for p in paths if p not in self.opened_files_diagnostics]
+        if any(missing):
+            raise FileNotFoundError(
+                f"Files {missing} are not open. Call open_files first."
+            )
+
         uris = self._locals_to_uris(paths)
         for uri in uris:
             params = {"textDocument": {"uri": uri}}

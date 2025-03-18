@@ -63,7 +63,7 @@ class TestLSPClientBenchmark(unittest.TestCase):
         msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"
         print(msg)
 
-        self.lsp.close_files(files)
+        self.lsp.close_files(new_files)
 
         # Layout profile using dot and gprof2dot
         if LOCAL_PROFILE:

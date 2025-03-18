@@ -142,7 +142,7 @@ class TestLSPFileManager(unittest.TestCase):
         os.remove(fantasy_path)
         print(f"Updated {len(lines)} lines one by one: {speed:.2f} lines/s")
 
-        self.lsp.close_files([fantasy, path])
+        self.lsp.close_files([fantasy])
 
     def test_update_file_mathlib(self):
         files = [

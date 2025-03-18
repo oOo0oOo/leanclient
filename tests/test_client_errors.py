@@ -149,7 +149,7 @@ class TestLSPClientErrors(unittest.TestCase):
         self.lsp.stdin.flush()
         self.assertRaises(FileNotFoundError, self.lsp._wait_for_diagnostics, self.uri)
 
-    def invalid_path(self):
+    def test_invalid_path(self):
         invalid_paths = [
             "g.lean",
             "garbage",
@@ -164,17 +164,16 @@ class TestLSPClientErrors(unittest.TestCase):
         p = lambda: random.choice(invalid_paths)
 
         # Check all methods
-        # _send_request_document
         self.assertRaises(
             FileNotFoundError,
             self.lsp._send_request,
             p(),
             "textDocument/hover",
-            {{"position": {"line": 9, "character": 4}}},
+            {"position": {"line": 9, "character": 4}},
         )
-        self.assertRaises(FileNotFoundError, self.lsp._open_new_files[p()])
-        self.assertRaises(FileNotFoundError, self.lsp._open_new_files[p(), p()])
-        self.assertRaises(FileNotFoundError, self.lsp.open_files([p()]))
+        self.assertRaises(FileNotFoundError, self.lsp._open_new_files, [p()])
+        self.assertRaises(FileNotFoundError, self.lsp._open_new_files, [p(), p()])
+        self.assertRaises(FileNotFoundError, self.lsp.open_files, [p()])
         self.assertRaises(FileNotFoundError, self.lsp.open_file, p())
         self.assertRaises(FileNotFoundError, self.lsp.update_file, p(), [])
         self.assertRaises(FileNotFoundError, self.lsp.close_files, [p()])
@@ -183,7 +182,7 @@ class TestLSPClientErrors(unittest.TestCase):
         self.assertRaises(FileNotFoundError, self.lsp.create_file_client, p())
 
         self.assertRaises(FileNotFoundError, self.lsp.get_completions, p(), 9, 4)
-        self.assertRaises(FileNotFoundError, self.lsp.get_completion_item_resolve, {})
+        # self.assertRaises(FileNotFoundError, self.lsp.get_completion_item_resolve, {})
         self.assertRaises(FileNotFoundError, self.lsp.get_hover, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_declarations, p(), 9, 4)
         self.assertRaises(FileNotFoundError, self.lsp.get_definitions, p(), 9, 4)
