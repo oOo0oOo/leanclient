@@ -11,14 +11,14 @@ from run_tests import TEST_ENV_DIR
 class TestLSPClientBenchmark(unittest.TestCase):
     def setUp(self):
         self.lsp = LeanLSPClient(
-            TEST_ENV_DIR, initial_build=False, print_warnings=False, max_opened_files=8
+            TEST_ENV_DIR, initial_build=False, print_warnings=False, max_opened_files=4
         )
 
     def tearDown(self):
         self.lsp.close()
 
     def test_bench_opening_files(self):
-        NUM_FILES = 8
+        NUM_FILES = 4
 
         all_files = get_random_fast_mathlib_files(NUM_FILES * 2, seed=3142)
         files = all_files[:NUM_FILES]

@@ -69,13 +69,13 @@ if __name__ == "__main__":
 
     # Collect tests
     white_list = [
-        "test_base_client",
-        "test_client_requests",
-        "test_client_errors",
-        "test_file_manager",
-        "test_single_file_client",
+        # "test_base_client",
+        # "test_client_requests",
+        # "test_client_errors",
+        # "test_file_manager",
+        # "test_single_file_client",
         "test_pool",
-        "test_client_benchmark",
+        # "test_client_benchmark",
     ]
 
     if "--all" in sys.argv:

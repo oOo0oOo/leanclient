@@ -21,7 +21,7 @@ class TestLeanClientPool(unittest.TestCase):
         NUM_FILES = 10
         BATCH_SIZE = 3
         files = FAST_MATHLIB_FILES[:NUM_FILES]
-        with LeanClientPool(TEST_ENV_DIR) as pool:
+        with LeanClientPool(TEST_ENV_DIR, max_opened_files=BATCH_SIZE) as pool:
             t0 = time.time()
             results = pool.map(get_num_folding_ranges, files, batch_size=1)
             t1 = time.time()

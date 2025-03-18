@@ -23,7 +23,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
     def __init__(
         self,
-        max_opened_files: int = 16,
+        max_opened_files: int = 4,
     ):
         # Only allow initialization after BaseLeanLSPClient
         if not hasattr(self, "project_path"):

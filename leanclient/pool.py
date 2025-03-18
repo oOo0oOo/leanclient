@@ -11,7 +11,7 @@ from leanclient import LeanLSPClient
 from leanclient import SingleFileClient
 
 
-def _init_worker(project_path, kwargs):
+def _init_worker(project_path: str, kwargs: dict):
     global client
     if "initial_build" not in kwargs:
         kwargs["initial_build"] = False
@@ -74,11 +74,11 @@ class LeanClientPool:
 
     Args:
         project_path(str): The path to the Lean project.
-        num_workers(int, optional): The number of workers to use. Defaults to 70% of CPU cores.
+        num_workers(int | None): The number of workers to use. Defaults to 70% of CPU cores.
         **kwargs: Additional arguments to pass to :class:`leanclient.client.LeanLSPClient`.
     """
 
-    def __init__(self, project_path, num_workers=None, **kwargs):
+    def __init__(self, project_path: str, num_workers: int | None = None, **kwargs):
         self.project_path = project_path
 
         if "max_opened_files" not in kwargs:
@@ -103,7 +103,7 @@ class LeanClientPool:
         self.pool.close()
         self.pool.join()
 
-    def submit(self, task, file_path) -> Any:
+    def submit(self, task: Callable[[SingleFileClient], None], file_path: str) -> Any:
         """Submit an asynchronous task to the pool.
 
         **Example use:**
@@ -136,11 +136,14 @@ class LeanClientPool:
 
         See :class:`LeanClientPool` for example use.
 
+        Note:
+            `batch_size` > 1 requires initializing the pool with `max_opened_files` > 1.
+
         Args:
             task(callable): The task to execute. Must take a `SingleFileClient` as its only argument.
             file_paths(list): A list of file paths to process.
-            batch_size(int, optional): Batching allows the language server to open multiple files in parallel. Typically faster but requires more resources (mainly memory). Beware of large batch_sizes. Defaults to 1.
-            verbose(bool, optional): Show a progress bar. Defaults to False.
+            batch_size(int): Batching allows the language server to open multiple files in parallel. Typically faster but requires more resources (mainly memory). Beware of large batch_sizes. Defaults to 1.
+            verbose(bool): Show a progress bar. Defaults to False.
 
         Returns:
             list: The result of the task for each file.
