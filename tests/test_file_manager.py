@@ -147,7 +147,7 @@ class TestLSPFileManager(unittest.TestCase):
     def test_update_file_mathlib(self):
         files = [
             ".lake/packages/mathlib/Mathlib/Data/Num/Prime.lean",
-            ".lake/packages/mathlib/Mathlib/AlgebraicTopology/DoldKan/Degeneracies.lean",
+            ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean",
         ]
         diag = self.lsp.open_files(files)
         assert diag == [[], []], f"Expected no diagnostics, got {diag}"
@@ -173,7 +173,6 @@ class TestLSPFileManager(unittest.TestCase):
                 f.write(exp_text)
             diag3 = self.lsp.open_file(fpath)
             diag4 = self.lsp.get_diagnostics(fpath)
-
             assert diag2 == diag3 == diag4
 
             os.remove(TEST_ENV_DIR + fpath)

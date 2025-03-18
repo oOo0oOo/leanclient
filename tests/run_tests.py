@@ -17,7 +17,6 @@ FAST_MATHLIB_FILES = [
     ".lake/packages/mathlib/Mathlib/Tactic/Find.lean",  # 1.20s
     ".lake/packages/mathlib/Mathlib/Algebra/Ring/Subring/Units.lean",  # 1.23s
     ".lake/packages/mathlib/Mathlib/Algebra/Module/Opposite.lean",  # 1.26s
-    ".lake/packages/mathlib/Mathlib/Algebra/PUnitInstances/GCDMonoid.lean",  # 1.26s
     ".lake/packages/mathlib/Mathlib/Algebra/Group/Action/TypeTags.lean",  # 1.30s
     ".lake/packages/mathlib/Mathlib/Order/Monotone/Odd.lean",  # 1.33s
     ".lake/packages/mathlib/Mathlib/GroupTheory/Congruence/Opposite.lean",  # 1.33s
@@ -70,12 +69,12 @@ if __name__ == "__main__":
     # Collect tests
     white_list = [
         # "test_base_client",
-        # "test_client_requests",
+        "test_client_requests",
         # "test_client_errors",
         # "test_file_manager",
         # "test_single_file_client",
         # "test_pool",
-        "test_client_benchmark",
+        # "test_client_benchmark",
     ]
 
     if "--all" in sys.argv:

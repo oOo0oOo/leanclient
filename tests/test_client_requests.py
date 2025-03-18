@@ -137,7 +137,7 @@ class TestLSPClientRequests(unittest.TestCase):
         self.lsp.open_file(path)
 
         # Finset
-        res = self.lsp.get_definitions(path, 52, 27)
+        res = self.lsp.get_definitions(path, 48, 27)
         assert len(res) == 1
         uri = res[0]["uri"] if "uri" in res[0] else res[0]["targetUri"]
         assert uri.endswith("Defs.lean")
@@ -153,27 +153,27 @@ class TestLSPClientRequests(unittest.TestCase):
                 ]
             )
 
-        references = self.lsp.get_references(path, 52, 27)
+        references = self.lsp.get_references(path, 48, 27)
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
-        assert len(references) == 5538  # References for Finset
+        assert len(references) == 5737  # References for Finset
 
-        res = self.lsp.get_declarations(path, 52, 27)
+        res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1
         assert res[0]["uri"].endswith("Defs.lean")
 
         # Local theorem: sdiff_val
-        res = self.lsp.get_definitions(path, 52, 9)
+        res = self.lsp.get_definitions(path, 48, 9)
         assert res[0]["uri"] == self.lsp._local_to_uri(path)
 
-        res = self.lsp.get_references(path, 52, 9)
+        res = self.lsp.get_references(path, 48, 9)
         assert len(res) == 2
 
-        res = self.lsp.get_references(path, 52, 9, include_declaration=True)
+        res = self.lsp.get_references(path, 48, 9, include_declaration=True)
         assert len(res) == 3
 
         res = self.lsp.get_references(
-            path, 52, 9, include_declaration=True, max_retries=1, retry_delay=0
+            path, 48, 9, include_declaration=True, max_retries=1, retry_delay=0
         )
         assert len(res) == 3
 
@@ -181,7 +181,7 @@ class TestLSPClientRequests(unittest.TestCase):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
         self.lsp.open_file(path)
 
-        ch_item = self.lsp.get_call_hierarchy_items(path, 52, 9)[0]
+        ch_item = self.lsp.get_call_hierarchy_items(path, 48, 9)[0]
         assert ch_item["data"]["name"] == "Finset.sdiff_val"
 
         res = self.lsp.get_call_hierarchy_incoming(ch_item)

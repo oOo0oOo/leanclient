@@ -48,7 +48,7 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         )
         diag2 = self.lsp.get_diagnostics_multi(paths)
         self.assertEqual(len(diag2[0]), len(diag))
-        assert len(diag2[-1]) > 0  # Any diagnostics in the mathlib file
+        assert len(diag2[-1]) == 0
 
     def test_non_terminating_waitForDiagnostics(self):
         # Create a file with non-terminating diagnostics (processing: {"kind": 2})

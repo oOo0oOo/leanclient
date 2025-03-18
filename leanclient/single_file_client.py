@@ -17,7 +17,7 @@ class SingleFileClient:
 
     def __init__(self, client, file_path: str):
         # Check if file exists
-        path = client.project_path + "/" + file_path
+        path = os.path.join(client.project_path, file_path)
         if not os.path.exists(path):
             raise FileNotFoundError(f"File not found: {path}")
 
