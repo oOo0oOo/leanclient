@@ -448,6 +448,12 @@ class LSPFileManager(BaseLeanLSPClient):
             elif method in IGNORED_METHODS:
                 continue
 
+            if method != "$/lean/fileProgress":
+                print(
+                    f"WARNING: Unhandled method: {method}. Consider opening an issue on leanclient github."
+                )
+                continue
+
             # Check for fatalError from fileProgress. See here:
             # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
             proc = res["params"]["processing"]

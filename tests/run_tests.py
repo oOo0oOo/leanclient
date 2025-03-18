@@ -69,9 +69,9 @@ if __name__ == "__main__":
     # Collect tests
     white_list = [
         # "test_base_client",
-        "test_client_requests",
+        # "test_client_requests",
         # "test_client_errors",
-        # "test_file_manager",
+        "test_file_manager.TestLSPFileManager.test_odd_wait_for_diagnostics",
         # "test_single_file_client",
         # "test_pool",
         # "test_client_benchmark",
