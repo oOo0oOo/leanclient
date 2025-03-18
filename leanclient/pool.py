@@ -80,7 +80,11 @@ class LeanClientPool:
 
     def __init__(self, project_path, num_workers=None, **kwargs):
         self.project_path = project_path
+
+        if "max_opened_files" not in kwargs:
+            kwargs["max_opened_files"] = 1
         self._init_args = kwargs
+
         self.num_workers = (
             int(os.cpu_count() * 0.7) if num_workers is None else num_workers
         )
