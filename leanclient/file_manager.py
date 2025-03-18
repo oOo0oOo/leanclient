@@ -12,6 +12,7 @@ IGNORED_METHODS = {
     "workspace/didChangeWatchedFiles",
     "workspace/semanticTokens/refresh",
     "client/registerCapability",
+    "workspace/inlayHint/refresh"
 }
 
 
