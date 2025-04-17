@@ -12,7 +12,7 @@ IGNORED_METHODS = {
     "workspace/didChangeWatchedFiles",
     "workspace/semanticTokens/refresh",
     "client/registerCapability",
-    "workspace/inlayHint/refresh"
+    "workspace/inlayHint/refresh",
 }
 
 
@@ -94,11 +94,16 @@ class LSPFileManager(BaseLeanLSPClient):
         rid = self._send_request_rpc(method, params, is_notification=False)
 
         result = self._read_stdout()
+        if result is None:
+            raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
+
         while result.get("method") == "workspace/semanticTokens/refresh" or (
             result.get("id") != rid and "error" not in result
         ):
             # Ignore some messages from `workspace/semanticTokens/refresh` and the like
             result = self._read_stdout()
+            if result is None:
+                raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
         return result.get("result", result)
 
     def _send_request_retry(
@@ -416,12 +421,12 @@ class LSPFileManager(BaseLeanLSPClient):
                 num_errors >= num_missing_processing and num_errors >= num_missing_wait
             )
             tmt = TIMEOUT_SHORT if short else timeout
-            if select.select([self.stdout], [], [], tmt)[0]:
-                res = self._read_stdout()
-            else:
-                print(
-                    f"WARNING: `_wait_for_diagnostics` timed out after {tmt} seconds."
-                )
+            res = self._read_stdout(timeout=tmt)
+            if not res:
+                if self.print_warnings:
+                    print(
+                        f"WARNING: `_wait_for_diagnostics` timed out after {tmt} seconds."
+                    )
                 break
 
             method = res.get("method")
@@ -450,9 +455,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 continue
 
             if method != "$/lean/fileProgress":
-                print(
-                    f"WARNING: Unhandled method: {method}. Consider opening an issue on leanclient github."
-                )
+                if self.print_warnings:
+                    print(
+                        f"WARNING: Unhandled method: {method}. Consider opening an issue on leanclient github."
+                    )
                 continue
 
             # Check for fatalError from fileProgress. See here:

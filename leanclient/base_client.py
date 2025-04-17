@@ -3,6 +3,8 @@ import pathlib
 from pprint import pprint
 import subprocess
 import urllib.parse
+import queue
+import threading
 
 import orjson
 
@@ -31,10 +33,20 @@ class BaseLeanLSPClient:
             cwd=self.project_path,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
+
+        # Thread to read stdout
+        self._stdout_queue = queue.Queue()
+        self._stdout_thread_stop_event = threading.Event()
+        self._stdout_thread = threading.Thread(
+            target=self._read_stdout_loop,
+            args=(self._stdout_queue, self._stdout_thread_stop_event),
+            daemon=True,
+        )
+        self._stdout_thread.start()
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
@@ -64,23 +76,28 @@ class BaseLeanLSPClient:
         Args:
             timeout (float | None): Time to wait for the process to terminate. Defaults to 2 seconds.
         """
+        self._stdout_thread_stop_event.set()
         self.process.terminate()
+
+        for pipe in (self.stdin, self.stdout):
+            if pipe:
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
+
         try:
             if timeout is not None:
                 self.process.wait(timeout=timeout)
             else:
                 self.process.wait()
         except subprocess.TimeoutExpired:
-            print("Warning: Language server did not close in time. Killing process.")
+            if self.print_warnings:
+                print(
+                    "Warning: Language server did not terminate in time. Killing process."
+                )
             self.process.kill()
             self.process.wait()
-        finally:
-            for pipe in (self.stdin, self.stdout, self.process.stderr):
-                if pipe:
-                    try:
-                        pipe.close()
-                    except OSError:
-                        pass
 
     # URI HANDLING
     def _local_to_uri(self, local_path: str) -> str:
@@ -119,31 +136,47 @@ class BaseLeanLSPClient:
         return os.path.relpath(abs_path, self.project_path)
 
     # LANGUAGE SERVER RPC INTERACTION
-    def _read_stdout(self) -> dict:
+    def _read_stdout_loop(self, queue: queue.Queue, stop_event: threading.Event):
+        """Read the stdout of the language server in a separate thread.
+
+        This is necessary to avoid blocking the main thread.
+        """
+        while not stop_event.is_set():
+            if self.stdout.closed:
+                break
+
+            try:
+                header = self.stdout.readline()
+            except (EOFError, ValueError):
+                break
+
+            if not header:
+                break
+
+            # Parse message
+            header = header.decode("utf-8")
+            content_length = int(header.split(":")[1])
+            next(self.stdout)
+            msg = orjson.loads(self.stdout.read(content_length))
+            queue.put(msg)
+
+        queue.put(None)  # This prevents blocking when the thread is stopped.
+
+    def _read_stdout(self, timeout: float | None = None) -> dict:
         """Read the next message from the language server.
 
         This is the main blocking function in this synchronous client.
 
+        Args:
+            timeout (float | None): Time to wait for a message. Defaults to None (wait indefinitely).
+
         Returns:
             dict: JSON response from the language server.
         """
-        header = self.stdout.readline().decode("utf-8")
-
-        # Handle EOF: Return contents of stderr
-        if not header:
-            line = self.process.stderr.read()
-            if line:
-                line = line.decode("utf-8", errors="ignore")
-                line = "lake stderr message:\n" + line
-            if not line:
-                line = "No lake stderr message."
-            self.close()
-            raise EOFError(f"Language server has closed. {line}")
-
-        # Parse message
-        content_length = int(header.split(":")[1])
-        next(self.stdout)
-        return orjson.loads(self.stdout.read(content_length))
+        try:
+            return self._stdout_queue.get(timeout=timeout)
+        except queue.Empty:
+            return {}
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool

@@ -7,7 +7,7 @@ Thin Wrapper
 leanclient is a thin wrapper around the native Lean language server and uses few resources.
 It is synchronous (blocking), therefore waits for a server response before returning.
 
-See this profile of a benchmark run, where 98% of the time is spent waiting for a server response (`select.select` and `_io.BufferedReader.readline`).
+See this profile of a benchmark run, where 94% of the time is spent waiting for a server response (`_io.BufferedReader.readline`).
 
 .. image:: profile_benchmark.png
    :alt: Profiling test_client_benchmark.py
