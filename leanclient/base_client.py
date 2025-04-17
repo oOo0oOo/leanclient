@@ -9,9 +9,6 @@ import orjson
 from .utils import SemanticTokenProcessor
 
 
-LEN_URI_PREFIX = 7
-
-
 class BaseLeanLSPClient:
     """BaseLeanLSPClient runs a language server in a subprocess.
 
@@ -22,8 +19,7 @@ class BaseLeanLSPClient:
         self, project_path: str, initial_build: bool = True, print_warnings: bool = True
     ):
         self.print_warnings = print_warnings
-        self.project_path = os.path.abspath(project_path) + "/"
-        self.len_project_uri = len(self.project_path) + LEN_URI_PREFIX
+        self.project_path = os.path.abspath(project_path)
         self.request_id = 0
 
         if initial_build:
@@ -107,19 +103,20 @@ class BaseLeanLSPClient:
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
         """See :meth:`_local_to_uri`"""
-        paths = [
-            pathlib.Path(self.project_path, local_path).as_uri()
-            for local_path in local_paths
-        ]
-        return [urllib.parse.unquote(path) for path in paths]
+        return [self._local_to_uri(path) for path in local_paths]
 
     def _uri_to_abs(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        return uri[LEN_URI_PREFIX:]
+        path = urllib.parse.urlparse(uri).path
+        # On windows we need to remove the leading slash
+        if os.name == "nt" and path.startswith("/"):
+            path = path[1:]
+        return path
 
     def _uri_to_local(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        return uri[self.len_project_uri :]
+        abs_path = self._uri_to_abs(uri)
+        return os.path.relpath(abs_path, self.project_path)
 
     # LANGUAGE SERVER RPC INTERACTION
     def _read_stdout(self) -> dict:
@@ -130,7 +127,7 @@ class BaseLeanLSPClient:
         Returns:
             dict: JSON response from the language server.
         """
-        header = self.stdout.readline().decode("ascii")
+        header = self.stdout.readline().decode("utf-8")
 
         # Handle EOF: Return contents of stderr
         if not header:
