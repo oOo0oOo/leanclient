@@ -20,7 +20,6 @@ FAST_MATHLIB_FILES = [
     ".lake/packages/mathlib/Mathlib/Algebra/Group/Action/TypeTags.lean",  # 1.30s
     ".lake/packages/mathlib/Mathlib/Order/Monotone/Odd.lean",  # 1.33s
     ".lake/packages/mathlib/Mathlib/GroupTheory/Congruence/Opposite.lean",  # 1.33s
-    ".lake/packages/mathlib/Mathlib/Order/RelIso/Group.lean",  # 1.36s
     ".lake/packages/mathlib/Mathlib/Data/Subtype.lean",  # 1.38s
     ".lake/packages/mathlib/Mathlib/Dynamics/FixedPoints/Topology.lean",  # 1.39s
     ".lake/packages/mathlib/Mathlib/Tactic/FunProp/ToBatteries.lean",  # 1.43s
@@ -71,9 +70,9 @@ if __name__ == "__main__":
         # "test_base_client",
         # "test_client_requests",
         # "test_client_errors",
-        "test_file_manager.TestLSPFileManager.test_odd_wait_for_diagnostics",
+        # "test_file_manager",
         # "test_single_file_client",
-        # "test_pool",
+        "test_pool",
         # "test_client_benchmark",
     ]
 

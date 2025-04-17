@@ -4,7 +4,6 @@ from pprint import pprint
 import subprocess
 import urllib.parse
 
-import select
 import orjson
 
 from .utils import SemanticTokenProcessor
@@ -40,11 +39,6 @@ class BaseLeanLSPClient:
         )
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
-
-        # Check stderr for any errors
-        error = self._read_stderr_non_blocking()
-        if error:
-            print("Process started with stderr message:\n", error)
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
@@ -85,9 +79,12 @@ class BaseLeanLSPClient:
             self.process.kill()
             self.process.wait()
         finally:
-            self.process.stderr.close()
-            self.stdout.close()
-            self.stdin.close()
+            for pipe in (self.stdin, self.stdout, self.process.stderr):
+                if pipe:
+                    try:
+                        pipe.close()
+                    except OSError:
+                        pass
 
     # URI HANDLING
     def _local_to_uri(self, local_path: str) -> str:
@@ -135,10 +132,11 @@ class BaseLeanLSPClient:
         """
         header = self.stdout.readline().decode("ascii")
 
-        # Handle EOF: Return contents of stderr (non-blocking using select)
+        # Handle EOF: Return contents of stderr
         if not header:
-            line = self._read_stderr_non_blocking()
+            line = self.process.stderr.read()
             if line:
+                line = line.decode("utf-8", errors="ignore")
                 line = "lake stderr message:\n" + line
             if not line:
                 line = "No lake stderr message."
@@ -149,20 +147,6 @@ class BaseLeanLSPClient:
         content_length = int(header.split(":")[1])
         next(self.stdout)
         return orjson.loads(self.stdout.read(content_length))
-
-    def _read_stderr_non_blocking(self, timeout: float = 0.00001) -> str:
-        """Read the next message from the language server's stderr.
-
-        Args:
-            timeout (float): Time to wait for stderr message.
-
-        Returns:
-            str: Message from the language server's stderr.
-        """
-        stderr = self.process.stderr
-        if select.select([stderr], [], [], timeout)[0]:
-            return stderr.readline().decode("utf-8")
-        return ""
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
