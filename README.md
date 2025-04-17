@@ -56,12 +56,12 @@ client = lc.LeanLSPClient(PROJECT_PATH)
 
 # Query a lean file in your project
 file_path = "MyProject/Basic.lean")
-result = client.get_goal(file_path, line=1, character=2)
+result = client.get_goal(file_path, line=0, character=2)
 print(result)
 
 # Use a SingleFileClient for simplified interaction with a single file.
 sfc = client.create_file_client(file_path)
-result = sfc.get_term_goal(line=1, character=2)
+result = sfc.get_term_goal(line=0, character=5)
 print(result)
 
 # Make a change to the document.

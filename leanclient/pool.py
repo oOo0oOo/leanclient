@@ -1,6 +1,6 @@
 from functools import partial
 from itertools import chain
-from multiprocessing import Pool
+from multiprocessing import Pool, get_context
 from typing import Callable, Any
 import os
 from pprint import pprint
@@ -89,8 +89,10 @@ class LeanClientPool:
             int(os.cpu_count() * 0.7) if num_workers is None else num_workers
         )
 
+        self.mp_context= get_context("spawn")
+
     def __enter__(self):
-        self.pool = Pool(
+        self.pool = self.mp_context.Pool(
             processes=self.num_workers,
             initializer=_init_worker,
             initargs=(self.project_path, self._init_args),
