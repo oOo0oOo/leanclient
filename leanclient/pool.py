@@ -40,6 +40,9 @@ class LeanClientPool:
     Use this context manager for parallel processing of multiple Lean files.
     It is based on Python's `multiprocessing.Pool` and uses one `LeanLSPClient` per worker.
 
+    Attention:
+        Windows is not supported for LeanClientPool, it might work but requires extra setup.
+
     Tasks are defined as functions with a single argument, a :class:`leanclient.file_client.SingleFileClient` instance.
 
     .. code-block:: python

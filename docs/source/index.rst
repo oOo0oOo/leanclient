@@ -49,12 +49,12 @@ Or try it locally:
 
    # Query a lean file in your project
    file_path = "MyProject/Basic.lean")
-   result = client.get_goal(file_path, line=1, character=2)
+   result = client.get_goal(file_path, line=0, character=2)
    print(result)
 
    # Use a SingleFileClient for simplified interaction with a single file.
    sfc = client.create_file_client(file_path)
-   result = sfc.get_term_goal(line=1, character=2)
+   result = sfc.get_term_goal(line=0, character=5)
    print(result)
 
    # Make a change to the document.
@@ -63,22 +63,6 @@ Or try it locally:
 
    # Check the document content as seen by the LSP (changes are not written to disk).
    print(sfc.get_file_content())
-
-   # Use a LeanClientPool for easy parallel processing multiple files.
-   files = ["MyProject/Basic.lean", "Main.lean"]
-
-   # Define a function that takes a SingleFileClient as its only parameter.
-   def count_tokens(client: lc.SingleFileClient):
-      return len(client.get_semantic_tokens())
-
-   with lc.LeanClientPool(PROJECT_PATH, num_workers=8) as pool:
-      results = pool.map(count_tokens, files)
-
-      # Or use pool.submit() for increased control.
-      futures = [pool.submit(count_tokens, path) for path in files]
-      res_fut = [f.get() for f in futures]
-
-   print(results)
 
 
 Currently in Beta

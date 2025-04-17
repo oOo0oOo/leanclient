@@ -55,7 +55,7 @@ PROJECT_PATH = "path/to/your/lean/project/root/"
 client = lc.LeanLSPClient(PROJECT_PATH)
 
 # Query a lean file in your project
-file_path = "MyProject/Basic.lean")
+file_path = "MyProject/Basic.lean"
 result = client.get_goal(file_path, line=0, character=2)
 print(result)
 
@@ -70,22 +70,6 @@ sfc.update_file(changes=[change])
 
 # Check the document content as seen by the LSP (changes are not written to disk).
 print(sfc.get_file_content())
-
-# Use a LeanClientPool for easy parallel processing multiple files.
-files = ["MyProject/Basic.lean", "Main.lean"]
-
-# Define a function that takes a SingleFileClient as its only parameter.
-def count_tokens(client: lc.SingleFileClient):
-    return len(client.get_semantic_tokens())
-
-with lc.LeanClientPool(PROJECT_PATH, num_workers=8) as pool:
-    results = pool.map(count_tokens, files)
-
-    # Or use pool.submit() for increased control.
-    futures = [pool.submit(count_tokens, path) for path in files]
-    res_fut = [f.get() for f in futures]
-
-print(results)
 ```
 
 ### Implemented LSP Interactions
@@ -121,6 +105,7 @@ Internal Lean methods:
 
 ### Potential Features
 
+- Better Windows support
 - Choose between `lean --server` and `lake serve`
 - Allow interaction before `waitForDiagnostics` returns.
 - Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
@@ -165,6 +150,8 @@ make test-profile       # Run all tests with cProfile
 - [LeanREPL](https://github.com/arthurpaulino/LeanREPL)
 - [LeanTool](https://github.com/GasStationManager/LeanTool)
 - [itp-interface](https://github.com/trishullab/itp-interface)
+- [LeanInteract](https://github.com/augustepoiroux/LeanInteract)
+- [LEAN SDK](https://github.com/jsimonrichard/lean-sdk/)
 
 ## License & Citation
 
