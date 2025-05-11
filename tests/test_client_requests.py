@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from pprint import pprint
 import unittest
 
@@ -115,6 +116,13 @@ class TestLSPClientRequests(unittest.TestCase):
         res = self.lsp.get_goal(TEST_FILE_PATH, 9, 25)
         assert len(res["goals"]) == 0
 
+    def test_goal_with_delay(self):
+        for _ in range(8):
+            goal = self.lsp.get_goal(TEST_FILE_PATH, 9, 12)
+            assert type(goal) == dict
+            assert "⊢" in goal["goals"][0]
+            time.sleep(random.uniform(0, 1))
+
     def test_plain_term_goal(self):
         res = self.lsp.get_term_goal(TEST_FILE_PATH, 9, 12)
         assert type(res) == dict
@@ -156,7 +164,8 @@ class TestLSPClientRequests(unittest.TestCase):
         references = self.lsp.get_references(path, 48, 27)
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
-        assert len(references) == 5846  # References for Finset
+        # print("References:", len(references))
+        assert len(references) == 5914  # References for Finset
 
         res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1

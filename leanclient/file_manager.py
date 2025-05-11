@@ -97,10 +97,9 @@ class LSPFileManager(BaseLeanLSPClient):
         if result is None:
             raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
 
-        while result.get("method") == "workspace/semanticTokens/refresh" or (
+        while result.get("method") in IGNORED_METHODS or (
             result.get("id") != rid and "error" not in result
         ):
-            # Ignore some messages from `workspace/semanticTokens/refresh` and the like
             result = self._read_stdout()
             if result is None:
                 raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
