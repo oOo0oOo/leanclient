@@ -2,7 +2,6 @@ import collections
 from pprint import pprint
 import time
 import urllib.parse
-import select
 
 from .utils import DocumentContentChange, apply_changes_to_text
 from .base_client import BaseLeanLSPClient
@@ -232,7 +231,6 @@ class LSPFileManager(BaseLeanLSPClient):
         version = self.opened_files_versions[path]
 
         # TODO: Any of these useful?
-        # params = ("textDocument/didChange", {"textDocument": {"uri": uri, "version": 1, "languageId": "lean"}, "contentChanges": [{"text": text}]})
         # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
         # params = ("workspace/applyEdit", {"changes": [{"textDocument": {"uri": uri, "version": 1}, "edits": [c.get_dict() for c in changes]}]})
         # params = ("workspace/didChangeWatchedFiles", {"changes": [{"uri": uri, "type": 2}]})
@@ -460,11 +458,12 @@ class LSPFileManager(BaseLeanLSPClient):
                     )
                 continue
 
-            # Check for fatalError from fileProgress. See here:
-            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
             proc = res["params"]["processing"]
             if proc == []:
                 num_missing_processing -= 1
+
+            # Check for fatalError from fileProgress. See here:
+            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
             elif proc and proc[-1]["kind"] == 2:
                 uri = res["params"]["textDocument"]["uri"]
                 errored.add(uri)
