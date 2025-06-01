@@ -78,7 +78,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 
 - Opening and closing files.
 - Updating (adding/removing) code from an open file.
-- Diagnostic information: Errors, warnings etc
+- Diagnostic information: Errors, warnings and information.
 - Goals and term goal.
 - Hover information.
 - Document symbols (theorems, definitions, etc).
@@ -86,14 +86,14 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Locations of definitions and type definitions.
 - Locations of declarations and references.
 - Completions, completion item resolve.
+- Getting code actions, resolving them, then applying the edits.
 
 ### Missing LSP Interactions
 
-- "Call hierarchy" and "code action" is currently not reliable.
+- "Call hierarchy" is currently not reliable.
 
 Might be implemented in the future:
 
-- `textDocument/codeAction`
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`
 

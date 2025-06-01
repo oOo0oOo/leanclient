@@ -54,7 +54,7 @@ if __name__ == "__main__":
         "scripts/create_lean_project.py",
         TEST_ENV_DIR,
         TEST_PROJECT_NAME,
-        "stable",
+        "v4.20.0-rc5",  # "stable"
         "--use-mathlib",
     ]
     subprocess.run(cmd, check=True)
@@ -67,12 +67,12 @@ if __name__ == "__main__":
 
     # Collect tests
     white_list = [
-        "test_base_client",
-        # "test_client_requests",
+        # "test_base_client",
+        "test_client_requests",
         # "test_client_errors",
         # "test_file_manager",
         # "test_single_file_client",
-        "test_pool",
+        # "test_pool",
         # "test_client_benchmark",
     ]
 

@@ -6,6 +6,7 @@ import unittest
 
 from leanclient import LeanLSPClient
 
+from leanclient.utils import DocumentContentChange
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
@@ -131,13 +132,97 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertEqual(res, res2)
 
     def test_code_actions(self):
+        # Get code actions
         res = self.lsp.get_code_actions(TEST_FILE_PATH, 12, 8, 12, 18)
         assert type(res) == list
-        assert len(res) == 0
+        EXP = [
+            {
+                "title": "Update #guard_msgs with tactic output",
+                "kind": "quickfix",
+                "isPreferred": True,
+                "data": {
+                    "providerResultIndex": 0,
+                    "providerName": "Lean.CodeAction.cmdCodeActionProvider",
+                    "params": {
+                        "textDocument": {
+                            "uri": "file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean"
+                        },
+                        "range": {
+                            "start": {"line": 12, "character": 8},
+                            "end": {"line": 12, "character": 18},
+                        },
+                        "context": {
+                            "triggerKind": 1,
+                            "diagnostics": [
+                                {
+                                    "source": "Lean 4",
+                                    "severity": 3,
+                                    "range": {
+                                        "start": {"line": 12, "character": 37},
+                                        "end": {"line": 12, "character": 42},
+                                    },
+                                    "message": "1",
+                                    "fullRange": {
+                                        "start": {"line": 12, "character": 37},
+                                        "end": {"line": 12, "character": 42},
+                                    },
+                                },
+                                {
+                                    "source": "Lean 4",
+                                    "severity": 1,
+                                    "range": {
+                                        "start": {"line": 12, "character": 15},
+                                        "end": {"line": 12, "character": 26},
+                                    },
+                                    "message": "❌️ Docstring on `#guard_msgs` does not match generated message:\n\ninfo: 1",
+                                    "fullRange": {
+                                        "start": {"line": 12, "character": 15},
+                                        "end": {"line": 12, "character": 26},
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            }
+        ]
+        self.assertEqual(res, EXP)
 
-    def test_code_action_resolve(self):
-        res = self.lsp.get_code_action_resolve({"title": "Test"})
-        assert res["error"]["message"].startswith("Cannot process request")
+        # Resolve code action
+        res2 = self.lsp.get_code_action_resolve({"title": "Test"})
+        assert res2["error"]["message"].startswith("Cannot process request")
+        res3 = self.lsp.get_code_action_resolve(res[0])
+        EXP = {
+            "title": "Update #guard_msgs with tactic output",
+            "kind": "quickfix",
+            "isPreferred": True,
+            "edit": {
+                "documentChanges": [
+                    {
+                        "textDocument": {
+                            "version": 0,
+                            "uri": "file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean",
+                        },
+                        "edits": [
+                            {
+                                "range": {
+                                    "start": {"line": 12, "character": 0},
+                                    "end": {"line": 12, "character": 15},
+                                },
+                                "newText": "/-- info: 1 -/\n",
+                            }
+                        ],
+                    }
+                ]
+            },
+        }
+        self.assertEqual(res3, EXP)
+
+        # Apply the edit
+        self.lsp.apply_code_action_resolve(res3)
+        content = self.lsp.get_file_content(TEST_FILE_PATH)
+        EXP = "-- Trigger code action\n/-- info: 1 -/\n#guard_msgs (info) in #eval 1"
+        self.assertTrue(EXP in content, f"Expected '{EXP}' in content, got:\n{content}")
 
     def test_mathlib_file(self):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"

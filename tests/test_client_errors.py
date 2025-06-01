@@ -12,10 +12,12 @@ from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 from tests.utils import get_random_fast_mathlib_files, read_stdout_timeout
 
 
-EXP_DIAGNOSTICS = [
-    ["unexpected end of input; expected ':'"],
-    ["declaration uses 'sorry'", "declaration uses 'sorry'"],
+EXP_DIAGNOSTIC_ERRORS = [
+    "❌️ Docstring on `#guard_msgs` does not match generated message:\n\ninfo: 1",
+    "unexpected end of input; expected ':'",
 ]
+
+EXP_DIAGNOSTIC_WARNINGS = ["declaration uses 'sorry'", "declaration uses 'sorry'"]
 
 
 class TestLSPClientDiagnostics(unittest.TestCase):
@@ -30,16 +32,16 @@ class TestLSPClientDiagnostics(unittest.TestCase):
     def test_open_diagnostics(self):
         diagnostics = self.lsp.open_file(TEST_FILE_PATH)
         errors = [d["message"] for d in diagnostics if d["severity"] == 1]
-        self.assertEqual(errors, EXP_DIAGNOSTICS[0])
+        self.assertEqual(errors, EXP_DIAGNOSTIC_ERRORS)
         warnings = [d["message"] for d in diagnostics if d["severity"] == 2]
-        self.assertEqual(warnings, EXP_DIAGNOSTICS[1])
+        self.assertEqual(warnings, EXP_DIAGNOSTIC_WARNINGS)
 
     def test_get_diagnostics(self):
         diag = self.lsp.get_diagnostics(TEST_FILE_PATH)
         errors = [d["message"] for d in diag if d["severity"] == 1]
-        self.assertEqual(errors, EXP_DIAGNOSTICS[0])
+        self.assertEqual(errors, EXP_DIAGNOSTIC_ERRORS)
         warnings = [d["message"] for d in diag if d["severity"] == 2]
-        self.assertEqual(warnings, EXP_DIAGNOSTICS[1])
+        self.assertEqual(warnings, EXP_DIAGNOSTIC_WARNINGS)
 
         paths = [TEST_FILE_PATH] * 2
         # paths.append("Main.lean")  # FIX: Why does this hang?

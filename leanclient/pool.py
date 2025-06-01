@@ -92,7 +92,7 @@ class LeanClientPool:
             int(os.cpu_count() * 0.7) if num_workers is None else num_workers
         )
 
-        self.mp_context= get_context("spawn")
+        self.mp_context = get_context("spawn")
 
     def __enter__(self):
         self.pool = self.mp_context.Pool(

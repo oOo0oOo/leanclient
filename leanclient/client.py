@@ -1,8 +1,9 @@
+from collections import defaultdict
 from pprint import pprint
 
 from leanclient.single_file_client import SingleFileClient
 
-from .utils import experimental, get_diagnostics_in_range
+from .utils import DocumentContentChange, experimental, get_diagnostics_in_range
 from .base_client import BaseLeanLSPClient
 from .file_manager import LSPFileManager
 
@@ -528,7 +529,6 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         Returns:
             list: Folding ranges.
-
         """
         return self._send_request(path, "textDocument/foldingRange", {})
 
@@ -745,8 +745,6 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         Returns:
             dict | None: Term goal at the position.
-
-
         """
         return self._send_request(
             path,
@@ -754,7 +752,6 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             {"position": {"line": line, "character": character}},
         )
 
-    @experimental
     def get_code_actions(
         self,
         path: str,
@@ -769,10 +766,69 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         The :guilabel:`textDocument/codeAction` method in LSP returns a list of commands that can be executed to fix or improve the code.
 
+        You can resolve the returned code actions using :meth:`get_code_action_resolve`.
+        Finally you can apply the resolved code action using :meth:`apply_code_action_resolve`.
+
         More information:
 
         - LSP Docs: `Code Action Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_codeAction>`_
         - Lean Source: `Basic.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L116>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'title': 'Update #guard_msgs with tactic output',
+                    'kind': 'quickfix',
+                    'isPreferred': True,
+                    'data': {
+                        'providerResultIndex': 0,
+                        'providerName': 'Lean.CodeAction.cmdCodeActionProvider',
+                        'params': {
+                            'textDocument': {
+                                'uri': 'file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean'
+                            },
+                            'range': {
+                                'start': {'line': 12, 'character': 8},
+                                'end': {'line': 12, 'character': 18}
+                            },
+                            'context': {
+                                'triggerKind': 1,
+                                'diagnostics': [
+                                    {
+                                        'source': 'Lean 4',
+                                        'severity': 3,
+                                        'range': {
+                                            'start': {'line': 12, 'character': 37},
+                                            'end': {'line': 12, 'character': 42}
+                                        },
+                                        'message': '1',
+                                        'fullRange': {
+                                            'start': {'line': 12, 'character': 37},
+                                            'end': {'line': 12, 'character': 42}
+                                        }
+                                    },
+                                    {
+                                        'source': 'Lean 4',
+                                        'severity': 1,
+                                        'range': {
+                                            'start': {'line': 12, 'character': 15},
+                                            'end': {'line': 12, 'character': 26}
+                                        },
+                                        'message': '❌️ Docstring on `#guard_msgs` does not match generated message:\\n\\ninfo: 1',
+                                        'fullRange': {
+                                            'start': {'line': 12, 'character': 15},
+                                            'end': {'line': 12, 'character': 26}
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
 
         Args:
             path (str): Relative file path.
@@ -805,19 +861,51 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             retry_delay,
         )
 
-    @experimental
     def get_code_action_resolve(self, code_action: dict) -> dict:
         """Resolve a code action.
 
         Calls the :guilabel:`codeAction/resolve` method.
+
+        Use :meth:`get_code_actions` to get the code actions in a file first. Select one and get the resolved code action.
+        Then apply the resolved code action using :meth:`apply_code_action_resolve`.
 
         More information:
 
         - LSP Docs: `Code Action Resolve Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#codeAction_resolve>`_
         - Lean Source: `Basic.lean\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/CodeActions/Basic.lean#L145>`_
 
+        Example response:
+
+        .. code-block:: python
+
+            {
+                'title': 'Update #guard_msgs with tactic output',
+                'kind': 'quickfix',
+                'isPreferred': True,
+                'edit': {
+                    'documentChanges': [
+                        {
+                            'textDocument': {
+                                'version': 0,
+                                'uri': 'file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean'
+                            },
+                            'edits': [
+                                {
+                                    'range': {
+                                        'start': {'line': 12, 'character': 0},
+                                        'end': {'line': 12, 'character': 15}
+                                    },
+                                    'newText': '/-- info: 1 -/\\n'
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+
+
         Args:
-            code_action (dict): Code action.
+            code_action (dict): Code action as returned by :meth:`get_code_actions` (only one).
 
         Returns:
             dict: Resolved code action.
@@ -837,3 +925,40 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             elif res.get("id") == rid:
                 return res.get("result")
         return code_action
+
+    def apply_code_action_resolve(self, code_action_resolved: dict) -> None:
+        """Apply all edits of a resolved code action.
+
+        Helper to apply the edits required to resolve a code action.
+        Converts the edits to :class:`DocumentContentChange` and calls :meth:`update_file`
+
+        First get the code action using :meth:`get_code_actions`, then resolve it using :meth:`get_code_action_resolve`.
+        Finally apply the resolved code action using this method.
+
+        Note:
+            Does not update the file system, only the in-memory representation of the file in the LSP.
+            Use :meth:`get_file_content` to get the updated file content.
+
+        Args:
+            code_action_resolved (dict): Resolved code action as returned by :meth:`get_code_action_resolve`.
+        """
+        changes_per_uri = defaultdict(list)
+        for document_change in code_action_resolved["edit"]["documentChanges"]:
+            uri = document_change["textDocument"]["uri"]
+            for edit in document_change["edits"]:
+                changes_per_uri[uri].append(
+                    DocumentContentChange(
+                        text=edit["newText"],
+                        start=[
+                            edit["range"]["start"]["line"],
+                            edit["range"]["start"]["character"],
+                        ],
+                        end=[
+                            edit["range"]["end"]["line"],
+                            edit["range"]["end"]["character"],
+                        ],
+                    )
+                )
+
+        for uri, changes in changes_per_uri.items():
+            self.update_file(self._uri_to_local(uri), changes)
