@@ -2,7 +2,7 @@
   leanclient
 </h1>
 
-<h4 align="center">Interact with the lean4 language server in Python.</h4>
+<h4 align="center">Interact with the Lean 4 language server in Python.</h4>
 
 <p align="center">
   <a href="https://pypi.org/project/leanclient/">
@@ -16,8 +16,8 @@
   </a>
 </p>
 
-leanclient is a thin Python wrapper around the native Lean language server.
-It enables interaction with a Lean language server instance running in a subprocess.
+leanclient is a thin Python wrapper around the native Lean 4 language server.
+It enables interaction with a Lean 4 language server instance running in a subprocess.
 
 Check out the [documentation](https://leanclient.readthedocs.io) for more information.
 
@@ -87,6 +87,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Locations of declarations and references.
 - Completions, completion item resolve.
 - Getting code actions, resolving them, then applying the edits.
+- Get InfoTrees of theorems.
 
 ### Missing LSP Interactions
 
