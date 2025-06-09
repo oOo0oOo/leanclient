@@ -2,6 +2,37 @@
 from functools import wraps
 from typing import NamedTuple
 
+# Mapping SymbolKinds ints to string names:
+# https://github.com/leanprover/lean4/blob/8422d936cff3b609bd2a1396e82356c82c383386/src/Lean/Data/Lsp/LanguageFeatures.lean#L202C1-L229C27
+SYMBOL_KIND_MAP = {
+    1: "file",
+    2: "module",
+    3: "namespace",
+    4: "package",
+    5: "class",
+    6: "method",
+    7: "property",
+    8: "field",
+    9: "constructor",
+    10: "enum",
+    11: "interface",
+    12: "function",
+    13: "variable",
+    14: "constant",
+    15: "string",
+    16: "number",
+    17: "boolean",
+    18: "array",
+    19: "object",
+    20: "key",
+    21: "null",
+    22: "enumMember",
+    23: "struct",
+    24: "event",
+    25: "operator",
+    26: "typeParameter",
+}
+
 
 class SemanticTokenProcessor:
     """Converts semantic token response using a token legend.

@@ -3,7 +3,12 @@ from pprint import pprint
 
 from leanclient.single_file_client import SingleFileClient
 
-from .utils import DocumentContentChange, experimental, get_diagnostics_in_range
+from .utils import (
+    SYMBOL_KIND_MAP,
+    DocumentContentChange,
+    experimental,
+    get_diagnostics_in_range,
+)
 from .base_client import BaseLeanLSPClient
 from .file_manager import LSPFileManager
 
@@ -405,6 +410,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         - LSP Docs: `Document Symbol Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_documentSymbol>`_
         - Lean Source: `RequestHandling.lean\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/FileWorker/RequestHandling.lean#L387>`_
+        - Symbol kinds are defined in `LanguageFeatures.lean\u200c <https://github.com/leanprover/lean4/blob/master/src/Lean/Data/Lsp/LanguageFeatures.lean#L143>`_
 
         Example response:
 
@@ -412,7 +418,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
             [
                 {
-                    'kind': 6,
+                    'kind': 'method',
                     'name': 'add_zero_custom',
                     'range': {
                         'end': {'character': 25, 'line': 9},
@@ -431,7 +437,11 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Document symbols.
         """
-        return self._send_request(path, "textDocument/documentSymbol", {})
+        response = self._send_request(path, "textDocument/documentSymbol", {})
+        for symbol in response:
+            if isinstance(symbol["kind"], int):
+                symbol["kind"] = SYMBOL_KIND_MAP.get(symbol["kind"], "unknown")
+        return response
 
     def get_semantic_tokens(self, path: str) -> list:
         """Get semantic tokens for the entire document.
