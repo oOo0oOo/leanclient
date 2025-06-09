@@ -173,3 +173,7 @@ class SingleFileClient:
         return self.client.apply_code_action_resolve(
             self.file_path, code_action_resolved
         )
+
+    def get_info_trees(self) -> list:
+        """See :meth:`leanclient.client.LeanLSPClient.get_info_trees`"""
+        return self.client.get_info_trees(self.file_path)

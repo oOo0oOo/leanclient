@@ -5,8 +5,6 @@ from pprint import pprint
 import unittest
 
 from leanclient import LeanLSPClient
-
-from leanclient.utils import DocumentContentChange
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 
 
@@ -321,3 +319,18 @@ class TestLSPClientRequests(unittest.TestCase):
 
         # Remove the empty file
         os.remove(TEST_ENV_DIR + path)
+
+    def test_info_trees(self):
+        # Test example
+        res = self.lsp.get_info_trees(TEST_FILE_PATH)
+        self.assertEqual(type(res), list)
+        self.assertTrue(len(res), 3)
+        for tree in res:
+            self.assertTrue(tree.startswith("• command @ "))
+
+        # Mathlib example
+        path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"
+        res = self.lsp.get_info_trees(path)
+        self.assertEqual(type(res), list)
+        self.assertTrue(len(res) == 1)
+        self.assertTrue(res[0].startswith("• command @ "))

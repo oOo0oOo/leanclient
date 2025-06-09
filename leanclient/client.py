@@ -972,3 +972,133 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         for uri, changes in changes_per_uri.items():
             self.update_file(self._uri_to_local(uri), changes)
+
+    def get_info_trees(self, path: str) -> list:
+        """Get info trees for a all "method" symbols (e.g. theorems) in a file.
+
+        Inserts ``#info_trees in`` for each method symbol and analyzes resulting diagnostic messages.
+
+        Note:
+            This method currently only returns info trees for symbols of kind "method" (e.g. "theorem").
+            Further, this method ignores invalid symbols, e.g. if a theorem contains a syntax error.
+
+        More information:
+            - `Commit <https://github.com/leanprover/lean4/commit/de99c8015a547bcd8baa91852970a2e15cda2abf>`_
+
+        Example response:
+
+        .. code-block:: python
+
+           [
+               '''• command @ ⟨18, 0⟩-⟨18, 52⟩ @ Lean.Elab.Command.elabDeclaration
+              • Nat : Type @ ⟨18, 24⟩-⟨18, 27⟩ @ Lean.Elab.Term.elabIdent
+                • [.] Nat : some Sort.{?_uniq.127} @ ⟨18, 24⟩-⟨18, 27⟩
+                • Nat : Type @ ⟨18, 24⟩-⟨18, 27⟩
+              • n (isBinder := true) : Nat @ ⟨18, 20⟩-⟨18, 21⟩
+              • n + 0 = n : Prop @ ⟨18, 31⟩-⟨18, 40⟩ @ «_aux_Init_Notation___macroRules_term_=__2»
+                • Macro expansion
+                  n + 0 = n
+                  ===>
+                  binrel% Eq✝ (n + 0) n
+                  • n + 0 = n : Prop @ ⟨18, 31⟩†-⟨18, 40⟩† @ Lean.Elab.Term.Op.elabBinRel
+                    • n + 0 = n : Prop @ ⟨18, 31⟩†-⟨18, 40⟩†
+                      • n + 0 : Nat @ ⟨18, 31⟩-⟨18, 36⟩ @ «_aux_Init_Notation___macroRules_term_+__2»
+                        • Macro expansion
+                          n + 0
+                          ===>
+                          binop% HAdd.hAdd✝ n 0
+                          • n + 0 : Nat @ ⟨18, 31⟩†-⟨18, 36⟩†
+                            • [.] Eq✝ : none @ ⟨18, 31⟩†-⟨18, 40⟩†
+                            • [.] HAdd.hAdd✝ : none @ ⟨18, 31⟩†-⟨18, 36⟩†
+                            • n : Nat @ ⟨18, 31⟩-⟨18, 32⟩ @ Lean.Elab.Term.elabIdent
+                              • [.] n : none @ ⟨18, 31⟩-⟨18, 32⟩
+                              • n : Nat @ ⟨18, 31⟩-⟨18, 32⟩
+                            • 0 : Nat @ ⟨18, 35⟩-⟨18, 36⟩ @ Lean.Elab.Term.elabNumLit
+                      • n : Nat @ ⟨18, 39⟩-⟨18, 40⟩ @ Lean.Elab.Term.elabIdent
+                        • [.] n : none @ ⟨18, 39⟩-⟨18, 40⟩
+                        • n : Nat @ ⟨18, 39⟩-⟨18, 40⟩
+              • CustomInfo(Lean.Elab.Term.AsyncBodyInfo)
+                • incomplete (isBinder := true) : ∀ (n : Nat), n + 0 = n @ ⟨18, 8⟩-⟨18, 18⟩
+                • n (isBinder := true) : Nat @ ⟨18, 20⟩-⟨18, 21⟩
+                • CustomInfo(Lean.Elab.Term.BodyInfo)
+                  • Tactic @ ⟨18, 44⟩-⟨18, 52⟩
+                    (Term.byTactic "by" (Tactic.tacticSeq (Tactic.tacticSeq1Indented [(Tactic.tacticSorry "sorry")])))
+                    before
+                    n : Nat
+                    ⊢ n + 0 = n
+                    after no goals
+                    • Tactic @ ⟨18, 44⟩-⟨18, 46⟩
+                      "by"
+                      before
+                      n : Nat
+                      ⊢ n + 0 = n
+                      after no goals
+                      • Tactic @ ⟨18, 47⟩-⟨18, 52⟩ @ Lean.Elab.Tactic.evalTacticSeq
+                        (Tactic.tacticSeq (Tactic.tacticSeq1Indented [(Tactic.tacticSorry "sorry")]))
+                        before
+                        n : Nat
+                        ⊢ n + 0 = n
+                        after no goals
+                        • Tactic @ ⟨18, 47⟩-⟨18, 52⟩ @ Lean.Elab.Tactic.evalTacticSeq1Indented
+                          (Tactic.tacticSeq1Indented [(Tactic.tacticSorry "sorry")])
+                          before
+                          n : Nat
+                          ⊢ n + 0 = n
+                          after no goals
+                          • Tactic @ ⟨18, 47⟩-⟨18, 52⟩ @ Lean.Parser.Tactic._aux_Init_Tactics___macroRules_Lean_Parser_Tactic_tacticSorry_1
+                            (Tactic.tacticSorry "sorry")
+                            before
+                            n : Nat
+                            ⊢ n + 0 = n
+                            after no goals
+                            • Tactic @ ⟨18, 47⟩†-⟨18, 52⟩† @ Lean.Elab.Tactic.evalExact
+                              (Tactic.exact "exact" (Term.sorry "sorry"))
+                              before
+                              n : Nat
+                              ⊢ n + 0 = n
+                              after no goals
+                              • sorry : n + 0 = n @ ⟨18, 47⟩†-⟨18, 52⟩† @ Lean.Elab.Term.elabSorry
+                • incomplete (isBinder := true) : ∀ (n : Nat), n + 0 = n @ ⟨18, 8⟩-⟨18, 18⟩'''
+
+                ...
+           ]
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            list: List of info trees as raw strings.
+        """
+        # Find the lines of all "method" symbols in the document (e.g. "theorem")
+        symbols = self.get_document_symbols(path)
+        lines = [s["range"]["start"]["line"] for s in symbols if s["kind"] == "method"]
+
+        if not lines:
+            return []
+
+        # Add new line before each symbol line `#info_trees in`
+        changes = []
+        info_trees_lines = []
+        for i, line in enumerate(sorted(lines)):
+            info_trees_lines.append(line + i)
+            pos = [line + i, 0]
+            changes.append(
+                DocumentContentChange(text="#info_trees in\n", start=pos, end=pos)
+            )
+        diagnostics = self.update_file(path, changes)
+
+        # Revert the changes to remove the added lines
+        revert_changes = [
+            DocumentContentChange(text="", start=[line, 0], end=[line + 1, 0])
+            for line in lines
+        ]
+        self.update_file(path, revert_changes)
+
+        # Extract info trees from diagnostic messages
+        info_trees = []
+        for message in diagnostics:
+            if message["severity"] == 3:
+                line = message["range"]["start"]["line"]
+                if line in info_trees_lines:
+                    info_trees.append(message["message"])
+        return info_trees
