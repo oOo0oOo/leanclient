@@ -334,3 +334,49 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertEqual(type(res), list)
         self.assertTrue(len(res) == 1)
         self.assertTrue(res[0].startswith("• command @ "))
+
+    def test_info_tree_parse(self):
+        res = self.lsp.get_info_trees(TEST_FILE_PATH, parse=True)
+        self.assertEqual(type(res), list)
+        self.assertTrue(len(res) == 3)
+
+        allowed_keys = {
+            "text",
+            "type",
+            "range",
+            "elaborator",
+            "goals_before",
+            "goals_after",
+            "extra",
+            "children",
+        }
+
+        def check_node(node):
+            assert isinstance(node, dict)
+            assert "children" in node
+            assert "text" in node
+            assert set(node.keys()).issubset(
+                allowed_keys
+            ), f"Unexpected keys: {set(node.keys()) - allowed_keys}"
+            for child in node["children"]:
+                check_node(child)
+
+        for tree in res:
+            check_node(tree)
+
+        # Find maximum nesting level
+        def max_nesting(node, level=0):
+            if "children" not in node or not node["children"]:
+                return level
+            return max(max_nesting(child, level + 1) for child in node["children"])
+
+        self.assertTrue(max_nesting(res[0]) == 48)
+        self.assertTrue(max_nesting(res[1]) == 14)
+        self.assertTrue(max_nesting(res[2]) == 16)
+
+        # Mathlib example
+        path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"
+        res = self.lsp.get_info_trees(path, parse=True)
+        self.assertEqual(type(res), list)
+        for tree in res:
+            check_node(tree)

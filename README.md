@@ -87,7 +87,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Locations of declarations and references.
 - Completions, completion item resolve.
 - Getting code actions, resolving them, then applying the edits.
-- Get InfoTrees of theorems.
+- Get InfoTrees of theorems (includes rudimentary parsing).
 
 ### Missing LSP Interactions
 
@@ -153,6 +153,7 @@ make test-profile       # Run all tests with cProfile
 - [itp-interface](https://github.com/trishullab/itp-interface)
 - [LeanInteract](https://github.com/augustepoiroux/LeanInteract)
 - [LEAN SDK](https://github.com/jsimonrichard/lean-sdk/)
+- [Kimina Lean Server](https://github.com/project-numina/kimina-lean-server)
 
 ## License & Citation
 

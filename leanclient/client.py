@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pprint import pprint
 
+from leanclient.info_tree import parse_info_tree
 from leanclient.single_file_client import SingleFileClient
 
 from .utils import (
@@ -973,7 +974,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         for uri, changes in changes_per_uri.items():
             self.update_file(self._uri_to_local(uri), changes)
 
-    def get_info_trees(self, path: str) -> list:
+    def get_info_trees(self, path: str, parse: bool = False) -> list:
         """Get info trees for a all "method" symbols (e.g. theorems) in a file.
 
         Inserts ``#info_trees in`` for each method symbol and analyzes resulting diagnostic messages.
@@ -984,6 +985,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
             - `Commit <https://github.com/leanprover/lean4/commit/de99c8015a547bcd8baa91852970a2e15cda2abf>`_
+
+        Check :func:`leanclient.info_tree.parse_info_tree` for more information on the parsed info tree format.
 
         Example response:
 
@@ -1065,9 +1068,10 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         Args:
             path (str): Relative file path.
+            parse (bool): Whether to parse the info trees. Parsing is experimental! Defaults to False.
 
         Returns:
-            list: List of info trees as raw strings.
+            list: List of info trees as raw strings or parsed into structured data if `parse` is True.
         """
         # Find the lines of all "method" symbols in the document (e.g. "theorem")
         symbols = self.get_document_symbols(path)
@@ -1101,4 +1105,10 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 line = message["range"]["start"]["line"]
                 if line in info_trees_lines:
                     info_trees.append(message["message"])
+
+        if parse:
+            # Parse the info trees into structured data
+            info_trees = [
+                parse_info_tree(info_tree) for info_tree in info_trees if info_tree
+            ]
         return info_trees

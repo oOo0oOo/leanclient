@@ -40,3 +40,10 @@ utils
    :members:
    :undoc-members:
    :show-inheritance:
+
+
+info_tree
+---------
+
+.. automodule:: leanclient.info_tree
+   :members:

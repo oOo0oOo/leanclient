@@ -74,6 +74,7 @@ if __name__ == "__main__":
         # "test_single_file_client",
         # "test_pool",
         # "test_client_benchmark",
+        "test_client_requests.TestLSPClientRequests.test_info_tree_parse",
     ]
 
     if "--all" in sys.argv:
