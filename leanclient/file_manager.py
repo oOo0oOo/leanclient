@@ -3,6 +3,8 @@ from pprint import pprint
 import time
 import urllib.parse
 
+import orjson
+
 from .utils import DocumentContentChange, apply_changes_to_text
 from .base_client import BaseLeanLSPClient
 
@@ -385,8 +387,6 @@ class LSPFileManager(BaseLeanLSPClient):
         Returns:
             list: List of diagnostic messages or errors.
         """
-        TIMEOUT_SHORT = 0.01
-
         # Check if all files are opened
         paths = [self._uri_to_local(uri) for uri in uris]
         missing = [p for p in paths if p not in self.opened_files_diagnostics]
@@ -406,70 +406,66 @@ class LSPFileManager(BaseLeanLSPClient):
             )
             rid_to_uri[rid] = uri
 
-        num_missing_processing = len(uris)
-        num_missing_wait = len(uris)
-        errored = set()
+        # Use sets for explicit, robust state tracking.
+        uris_to_wait_for_response = set(uris)
+        uris_to_wait_for_processing = set(uris)
         diagnostics = {}
-        while num_missing_processing > 0 or num_missing_wait > 0:
-            # Non-blocking read, `waitForDiagnostics` or `processing == []` doesn't always return e.g. "unfinished comment"
-            # Timeout is shortened if all remaining files have errored
-            num_errors = len(errored)
-            short = (
-                num_errors >= num_missing_processing and num_errors >= num_missing_wait
-            )
-            tmt = TIMEOUT_SHORT if short else timeout
-            res = self._read_stdout(timeout=tmt)
-            if not res:
+
+        last_update_time = time.time()
+        while uris_to_wait_for_response or uris_to_wait_for_processing:
+            if time.time() - last_update_time > timeout:
                 if self.print_warnings:
                     print(
-                        f"WARNING: `_wait_for_diagnostics` timed out after {tmt} seconds."
+                        f"WARNING: `_wait_for_diagnostics` timed out: No update after {timeout} seconds."
                     )
                 break
 
+            res = self._read_stdout(timeout=0.001)
+            if not res:
+                continue
+
+            res_id = res.get("id")
             method = res.get("method")
 
-            # Capture diagnostics
+            if method in IGNORED_METHODS:
+                continue
+
+            last_update_time = time.time()
+
+            # Handle a response to one of our `waitForDiagnostics` requests.
+            if res_id is not None:
+                uri = rid_to_uri.get(res_id)
+                if uri:
+                    uris_to_wait_for_response.discard(uri)
+                    if "error" in res:
+                        diagnostics.setdefault(uri, []).append(res)
+                continue
+
+            # Handle a notification from the server.
             if method == "textDocument/publishDiagnostics":
                 uri = res["params"]["uri"]
                 diagnostics[uri] = res["params"]["diagnostics"]
                 continue
 
-            # `waitForDiagnostics` has returned
-            elif res.get("result", True) == {}:
-                num_missing_wait -= 1
-                continue
-
-            # RPC error (only from `waitForDiagnostics`)
-            # These can lead to confusing BUGS, remove?
-            elif "error" in res:
-                uri = rid_to_uri.get(res.get("id"))
-                if uri:
-                    diagnostics[uri] = [res]
-                errored.add(uri)
-                continue
-
-            elif method in IGNORED_METHODS:
-                continue
-
-            if method != "$/lean/fileProgress":
-                if self.print_warnings:
-                    print(
-                        f"WARNING: Unhandled method: {method}. Consider opening an issue on leanclient github."
-                    )
-                continue
-
-            proc = res["params"]["processing"]
-            if proc == []:
-                num_missing_processing -= 1
-
-            # Check for fatalError from fileProgress. See here:
-            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
-            elif proc and proc[-1]["kind"] == 2:
+            if method == "$/lean/fileProgress":
                 uri = res["params"]["textDocument"]["uri"]
-                errored.add(uri)
-                if not diagnostics.get(uri):
-                    msg = f"leanclient: Received LeanFileProgressKind.fatalError from language server."
-                    res["error"] = {"message": msg}
-                    diagnostics[uri] = [res]
+                proc = res["params"]["processing"]
+                if not proc:
+                    uris_to_wait_for_processing.discard(uri)
+
+                # Check for fatalError from fileProgress.
+                # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+                elif proc[-1].get("kind") == 2:
+                    uris_to_wait_for_processing.discard(uri)
+                    uris_to_wait_for_response.discard(uri)
+                    if not diagnostics.get(uri):
+                        msg = "leanclient: Received LeanFileProgressKind.fatalError."
+                        diagnostics[uri] = [{"error": {"message": msg}}]
+                continue
+
+            if self.print_warnings:
+                print(
+                    f"WARNING: Unhandled method: {res.get('method')}. Consider opening an issue on leanclient github."
+                )
 
         return [diagnostics.get(uri, []) for uri in uris]
