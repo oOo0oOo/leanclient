@@ -59,7 +59,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 txt = f.read()
             self.opened_files_content[path] = txt
             self.opened_files_versions[path] = 0
-            self.opened_files_diagnostics[path] = None
+            self.opened_files_diagnostics[path] = []
 
             params = {
                 "textDocument": {

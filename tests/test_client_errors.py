@@ -65,6 +65,20 @@ class TestLSPClientDiagnostics(unittest.TestCase):
             diag[0]["error"]["message"],
             "leanclient: Received LeanFileProgressKind.fatalError.",
         )
+
+        # Check diagnostics
+        diag = self.lsp.get_diagnostics(path)
+        self.assertEqual(
+            diag,
+            [
+                {
+                    "error": {
+                        "message": "leanclient: Received LeanFileProgressKind.fatalError."
+                    }
+                }
+            ],
+        )
+
         self.lsp.close_files([path])
 
         content = "/-! Unterminated comment 2"
@@ -87,7 +101,10 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         )
         self.lsp.open_file(TEST_FILE_PATH)
         diag = self.lsp.update_file(TEST_FILE_PATH, [change])
-        pprint(diag)
+        errors = [d["message"] for d in diag if d["severity"] == 1]
+        self.assertEqual(errors, EXP_DIAGNOSTIC_ERRORS)
+        warnings = [d["message"] for d in diag if d["severity"] == 2]
+        self.assertEqual(warnings, EXP_DIAGNOSTIC_WARNINGS)
 
 
 class TestLSPClientErrors(unittest.TestCase):
@@ -151,6 +168,7 @@ class TestLSPClientErrors(unittest.TestCase):
         header = f"Content-Length: {len(body) + 1}\r\n\r\n".encode("ascii")
         self.lsp.stdin.write(header + body)
         self.lsp.stdin.flush()
+
         self.assertRaises(FileNotFoundError, self.lsp._wait_for_diagnostics, [self.uri])
 
     def test_lake_error_content_length(self):
