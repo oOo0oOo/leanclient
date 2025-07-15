@@ -10,11 +10,11 @@ from leanclient import LeanLSPClient
 
 from leanclient.utils import DocumentContentChange
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
-from tests.utils import get_random_fast_mathlib_files, read_stdout_timeout
+from tests.utils import get_random_fast_mathlib_files
 
 
 EXP_DIAGNOSTIC_ERRORS = [
-    "❌️ Docstring on `#guard_msgs` does not match generated message:\n\ninfo: 1",
+    "❌️ Docstring on `#guard_msgs` does not match generated message:\n\n- info: 2\n+ info: 1\n",
     "unexpected end of input; expected ':'",
 ]
 

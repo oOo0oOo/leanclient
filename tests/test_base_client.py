@@ -18,17 +18,20 @@ class TestBaseClient(unittest.TestCase):
             "ELAN_HOME",
             "ELAN_TOOLCHAIN",
             "LAKE",
+            "LAKE_ARTIFACT_CACHE",
+            "LAKE_CACHE_DIR",
             "LAKE_HOME",
+            "LAKE_NO_CACHE",
             "LAKE_PKG_URL_MAP",
+            "LD_LIBRARY_PATH",
             "LEAN",
-            "LEAN_GITHASH",
-            "LEAN_SYSROOT",
             "LEAN_AR",
             "LEAN_CC",
+            "LEAN_GITHASH",
             "LEAN_PATH",
             "LEAN_SRC_PATH",
+            "LEAN_SYSROOT",
             "PATH",
-            "LD_LIBRARY_PATH",
         ]
         self.assertEqual(sorted(list(env.keys())), sorted(exp))
 

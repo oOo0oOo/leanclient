@@ -172,7 +172,7 @@ class TestLSPClientRequests(unittest.TestCase):
                                         "start": {"line": 12, "character": 15},
                                         "end": {"line": 12, "character": 26},
                                     },
-                                    "message": "❌️ Docstring on `#guard_msgs` does not match generated message:\n\ninfo: 1",
+                                    "message": "❌️ Docstring on `#guard_msgs` does not match generated message:\n\n- info: 2\n+ info: 1\n",
                                     "fullRange": {
                                         "start": {"line": 12, "character": 15},
                                         "end": {"line": 12, "character": 26},
@@ -248,7 +248,7 @@ class TestLSPClientRequests(unittest.TestCase):
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
         # print("References:", len(references))
-        assert len(references) == 5914  # References for Finset
+        assert len(references) == 5998  # References for Finset
 
         res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1
@@ -326,14 +326,14 @@ class TestLSPClientRequests(unittest.TestCase):
         self.assertEqual(type(res), list)
         self.assertTrue(len(res), 3)
         for tree in res:
-            self.assertTrue(tree.startswith("• command @ "))
+            self.assertTrue(tree.startswith("• [Command] @"))
 
         # Mathlib example
         path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"
         res = self.lsp.get_info_trees(path)
         self.assertEqual(type(res), list)
         self.assertTrue(len(res) == 1)
-        self.assertTrue(res[0].startswith("• command @ "))
+        self.assertTrue(res[0].startswith("• [Command] @ "))
 
     def test_info_tree_parse(self):
         res = self.lsp.get_info_trees(TEST_FILE_PATH, parse=True)
