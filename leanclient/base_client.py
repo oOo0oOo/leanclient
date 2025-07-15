@@ -25,6 +25,9 @@ class BaseLeanLSPClient:
         self.request_id = 0
 
         if initial_build:
+            subprocess.run(
+                ["lake", "exe", "cache", "get"], cwd=self.project_path, check=False
+            )
             subprocess.run(["lake", "build"], cwd=self.project_path, check=True)
 
         # Run the lean4 language server in a subprocess
