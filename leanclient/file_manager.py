@@ -3,8 +3,6 @@ from pprint import pprint
 import time
 import urllib.parse
 
-import orjson
-
 from .utils import DocumentContentChange, apply_changes_to_text
 from .base_client import BaseLeanLSPClient
 

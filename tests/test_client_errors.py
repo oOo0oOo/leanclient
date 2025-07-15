@@ -61,7 +61,10 @@ class TestLSPClientDiagnostics(unittest.TestCase):
             f.write(content)
 
         diag = self.lsp.open_file(path)
-        self.assertEqual(diag[0]["error"]["message"], "leanclient: Received LeanFileProgressKind.fatalError.")
+        self.assertEqual(
+            diag[0]["error"]["message"],
+            "leanclient: Received LeanFileProgressKind.fatalError.",
+        )
         self.lsp.close_files([path])
 
         content = "/-! Unterminated comment 2"
@@ -80,13 +83,12 @@ class TestLSPClientDiagnostics(unittest.TestCase):
 
         end = len(content)
         change = DocumentContentChange(
-            text = "\n-- new comment at the end of the file",
-            start = [end, 0],
-            end = [end, 0]
+            text="\n-- new comment at the end of the file", start=[end, 0], end=[end, 0]
         )
         self.lsp.open_file(TEST_FILE_PATH)
         diag = self.lsp.update_file(TEST_FILE_PATH, [change])
         pprint(diag)
+
 
 class TestLSPClientErrors(unittest.TestCase):
     def setUp(self):
