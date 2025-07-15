@@ -8,6 +8,7 @@ import orjson
 
 from leanclient import LeanLSPClient
 
+from leanclient.utils import DocumentContentChange
 from run_tests import TEST_FILE_PATH, TEST_ENV_DIR
 from tests.utils import get_random_fast_mathlib_files, read_stdout_timeout
 
@@ -60,7 +61,10 @@ class TestLSPClientDiagnostics(unittest.TestCase):
             f.write(content)
 
         diag = self.lsp.open_file(path)
-        self.assertEqual(diag[0]["message"], "unterminated comment")
+        self.assertEqual(
+            diag[0]["error"]["message"],
+            "leanclient: Received LeanFileProgressKind.fatalError.",
+        )
         self.lsp.close_files([path])
 
         content = "/-! Unterminated comment 2"
@@ -71,6 +75,19 @@ class TestLSPClientDiagnostics(unittest.TestCase):
         self.assertEqual(diag[0]["message"], "unterminated comment")
 
         os.remove(TEST_ENV_DIR + path)
+
+    def test_add_comment_at_the_end(self):
+        # Add comment to end of test file
+        with open(TEST_ENV_DIR + TEST_FILE_PATH, "r") as f:
+            content = f.readlines()
+
+        end = len(content)
+        change = DocumentContentChange(
+            text="\n-- new comment at the end of the file", start=[end, 0], end=[end, 0]
+        )
+        self.lsp.open_file(TEST_FILE_PATH)
+        diag = self.lsp.update_file(TEST_FILE_PATH, [change])
+        pprint(diag)
 
 
 class TestLSPClientErrors(unittest.TestCase):
