@@ -155,7 +155,7 @@ class TestLSPFileManager(unittest.TestCase):
         changes = [
             DocumentContentChange("--", [42, 20], [42, 30]),
             DocumentContentChange("/a/b/c\\", [89, 20], [93, 20]),
-            DocumentContentChange("\n\n\n\n\n\n\n\n\n", [100, 100000], [120, 100000]),
+            DocumentContentChange("\n\n\n\n\n\n\n\n\n", [95, 100000], [105, 100000]),
         ]
 
         exp_texts = [

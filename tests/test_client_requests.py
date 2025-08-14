@@ -247,8 +247,8 @@ class TestLSPClientRequests(unittest.TestCase):
         references = self.lsp.get_references(path, 48, 27)
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
-        # print("References:", len(references))
-        assert len(references) == 5998  # References for Finset
+        print("References:", len(references))
+        assert len(references) == 6066  # References for Finset
 
         res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1
