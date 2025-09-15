@@ -40,7 +40,7 @@ class TestLSPClientRequests(unittest.TestCase):
     def test_hover(self):
         res = self.lsp.get_hover(TEST_FILE_PATH, 4, 4)
         assert type(res) == dict
-        assert "The left hand" in res["contents"]["value"]
+        assert "Zero, the smallest natural number" in res["contents"]["value"]
 
     def test_declaration(self):
         res = self.lsp.get_declarations(TEST_FILE_PATH, 6, 4)
@@ -248,11 +248,11 @@ class TestLSPClientRequests(unittest.TestCase):
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
         print("References:", len(references))
-        assert len(references) == 6066  # References for Finset
+        assert len(references) == 6144  # References for Finset
 
         res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1
-        assert res[0]["uri"].endswith("Defs.lean")
+        assert res[0]["targetUri"].endswith("Defs.lean")
 
         # Local theorem: sdiff_val
         res = self.lsp.get_definitions(path, 48, 9)

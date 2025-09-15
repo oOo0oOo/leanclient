@@ -270,5 +270,6 @@ class TestLSPClientErrors(unittest.TestCase):
         # Raising exceptions crashes lake
         for pos in invalid[:1]:
             lsp = LeanLSPClient(TEST_ENV_DIR, initial_build=False, print_warnings=False)
-            with self.assertRaises(EOFError):
-                lsp.get_declarations(path, **pos)
+            res = lsp.get_declarations(path, **pos)
+            assert "Cannot parse request params:" in res["error"]["message"]
+            lsp.close()

@@ -54,7 +54,7 @@ if __name__ == "__main__":
         "scripts/create_lean_project.py",
         TEST_ENV_DIR,
         TEST_PROJECT_NAME,
-        "v4.22.0-rc2",  # "stable"
+        "v4.23.0",  # "stable"
         "--use-mathlib",
     ]
     subprocess.run(cmd, check=True)
