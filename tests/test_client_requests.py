@@ -131,61 +131,95 @@ class TestLSPClientRequests(unittest.TestCase):
     def test_code_actions(self):
         # Get code actions
         res = self.lsp.get_code_actions(TEST_FILE_PATH, 12, 8, 12, 18)
-        assert type(res) == list        
-        EXP = [{'data': {'params': {'context': {'diagnostics': [{'fullRange': {'end': {'character': 42,
-                                                                                'line': 12},
-                                                                        'start': {'character': 37,
-                                                                                'line': 12}},
-                                                        'message': '1',
-                                                        'range': {'end': {'character': 42,
-                                                                            'line': 12},
-                                                                    'start': {'character': 37,
-                                                                            'line': 12}},
-                                                        'severity': 3,
-                                                        'source': 'Lean 4'},
-                                                        {'fullRange': {'end': {'character': 26,
-                                                                                'line': 12},
-                                                                        'start': {'character': 15,
-                                                                                'line': 12}},
-                                                        'message': '❌️ Docstring on '
-                                                                    '`#guard_msgs` '
-                                                                    'does not match '
-                                                                    'generated '
-                                                                    'message:\n'
-                                                                    '\n'
-                                                                    '- info: 2\n'
-                                                                    '+ info: 1\n',
-                                                        'range': {'end': {'character': 26,
-                                                                            'line': 12},
-                                                                    'start': {'character': 15,
-                                                                            'line': 12}},
-                                                        'severity': 1,
-                                                        'source': 'Lean 4'}],
-                                        'triggerKind': 1},
-                            'range': {'end': {'character': 18, 'line': 12},
-                                        'start': {'character': 8, 'line': 12}},
-                            'textDocument': {'uri': 'file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean'}},
-                'providerName': 'Lean.CodeAction.cmdCodeActionProvider',
-                'providerResultIndex': 0},
-        'isPreferred': True,
-        'kind': 'quickfix',
-        'title': 'Update #guard_msgs with tactic output'}]
+        assert type(res) == list
+        EXP = [
+            {
+                "data": {
+                    "params": {
+                        "context": {
+                            "diagnostics": [
+                                {
+                                    "fullRange": {
+                                        "end": {"character": 42, "line": 12},
+                                        "start": {"character": 37, "line": 12},
+                                    },
+                                    "message": "1",
+                                    "range": {
+                                        "end": {"character": 42, "line": 12},
+                                        "start": {"character": 37, "line": 12},
+                                    },
+                                    "severity": 3,
+                                    "source": "Lean 4",
+                                },
+                                {
+                                    "fullRange": {
+                                        "end": {"character": 26, "line": 12},
+                                        "start": {"character": 15, "line": 12},
+                                    },
+                                    "message": "❌️ Docstring on "
+                                    "`#guard_msgs` "
+                                    "does not match "
+                                    "generated "
+                                    "message:\n"
+                                    "\n"
+                                    "- info: 2\n"
+                                    "+ info: 1\n",
+                                    "range": {
+                                        "end": {"character": 26, "line": 12},
+                                        "start": {"character": 15, "line": 12},
+                                    },
+                                    "severity": 1,
+                                    "source": "Lean 4",
+                                },
+                            ],
+                            "triggerKind": 1,
+                        },
+                        "range": {
+                            "end": {"character": 18, "line": 12},
+                            "start": {"character": 8, "line": 12},
+                        },
+                        "textDocument": {
+                            "uri": "file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean"
+                        },
+                    },
+                    "providerName": "Lean.CodeAction.cmdCodeActionProvider",
+                    "providerResultIndex": 0,
+                },
+                "isPreferred": True,
+                "kind": "quickfix",
+                "title": "Update #guard_msgs with tactic output",
+            }
+        ]
         self.assertDictEqual(res[0], EXP[0])
 
         # Resolve code action
         res2 = self.lsp.get_code_action_resolve({"title": "Test"})
         assert res2["error"]["message"].startswith("Cannot process request")
         res3 = self.lsp.get_code_action_resolve(res[0])
-        EXP = {'edit': {'documentChanges': [{'edits': [{'newText': '/-- info: 1 -/\n',
-                                                'range': {'end': {'character': 15,
-                                                                    'line': 12},
-                                                            'start': {'character': 0,
-                                                                    'line': 12}}}],
-                                    'textDocument': {'uri': 'file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean',
-                                                        'version': 0}}]},
-        'isPreferred': True,
-        'kind': 'quickfix',
-        'title': 'Update #guard_msgs with tactic output'}
+        EXP = {
+            "edit": {
+                "documentChanges": [
+                    {
+                        "edits": [
+                            {
+                                "newText": "/-- info: 1 -/\n",
+                                "range": {
+                                    "end": {"character": 15, "line": 12},
+                                    "start": {"character": 0, "line": 12},
+                                },
+                            }
+                        ],
+                        "textDocument": {
+                            "uri": "file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean",
+                            "version": 0,
+                        },
+                    }
+                ]
+            },
+            "isPreferred": True,
+            "kind": "quickfix",
+            "title": "Update #guard_msgs with tactic output",
+        }
         self.assertEqual(res3, EXP)
 
         # Apply the edit

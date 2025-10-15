@@ -98,7 +98,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 "context": {"triggerKind": 1},
             },
         )
-        items = resp["items"] # NOTE: We discard `isIncomplete` for now
+        items = resp["items"]  # NOTE: We discard `isIncomplete` for now
         # We add the original file URI so we can resolve later
         for item in items:
             item["_uri"] = path
@@ -131,9 +131,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             str: Additional detail about the completion item.
 
         """
-        return self._send_request(
-            item["_uri"], "completionItem/resolve", item
-        )["detail"]
+        return self._send_request(item["_uri"], "completionItem/resolve", item)[
+            "detail"
+        ]
 
     def get_hover(self, path: str, line: int, character: int) -> dict | None:
         """Get hover information at a cursor position.
