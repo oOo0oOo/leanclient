@@ -62,6 +62,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         The :guilabel:`textDocument/completion` method in LSP provides context-aware code completion suggestions at a specified cursor position.
         It returns a list of possible completions for partially typed code, suggesting continuations.
 
+        Note:
+            The _uri field is added by leanclient to enable later resolution. It is not part of the LSP response.
+
         More information:
 
         - LSP Docs: `Completion Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_completion>`_
@@ -72,18 +75,10 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         .. code-block:: python
 
             [
-                {
-                    'data': {
-                        'id': {'const': {'declName': 'Nat.dvd_add'}},
-                        'params': {
-                            'position': {'character': 15, 'line': 9},
-                            'textDocument': {'uri': 'file://...'}
-                        }
-                    },
-                    'kind': 23,
-                    'label': 'dvd_add',
-                    'sortText': '001'
-                },
+                {'_uri': 'LeanTestProject/Basic.lean',
+                'data': ['LeanTestProject.Basic', 9, 15, 0, 'cNat.dvd_add_left'],
+                'kind': 23,
+                'label': 'dvd_add_left'},
                 # ...
             ]
 
@@ -103,7 +98,11 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 "context": {"triggerKind": 1},
             },
         )
-        return resp["items"]  # NOTE: We discard `isIncomplete` for now
+        items = resp["items"] # NOTE: We discard `isIncomplete` for now
+        # We add the original file URI so we can resolve later
+        for item in items:
+            item["_uri"] = path
+        return items
 
     def get_completion_item_resolve(self, item: dict) -> str:
         """Resolve a completion item.
@@ -132,9 +131,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             str: Additional detail about the completion item.
 
         """
-        uri = item["data"]["params"]["textDocument"]["uri"]
         return self._send_request(
-            self._uri_to_local(uri), "completionItem/resolve", item
+            item["_uri"], "completionItem/resolve", item
         )["detail"]
 
     def get_hover(self, path: str, line: int, character: int) -> dict | None:

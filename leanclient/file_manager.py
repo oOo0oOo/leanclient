@@ -3,7 +3,7 @@ from pprint import pprint
 import time
 import urllib.parse
 
-from .utils import DocumentContentChange, apply_changes_to_text
+from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 from .base_client import BaseLeanLSPClient
 
 
@@ -56,7 +56,7 @@ class LSPFileManager(BaseLeanLSPClient):
         uris = self._locals_to_uris(paths)
         for path, uri in zip(paths, uris):
             with open(self._uri_to_abs(uri), "r") as f:
-                txt = f.read()
+                txt = normalize_newlines(f.read())
             self.opened_files_content[path] = txt
             self.opened_files_versions[path] = 0
             self.opened_files_diagnostics[path] = []
@@ -238,7 +238,7 @@ class LSPFileManager(BaseLeanLSPClient):
         params = (
             "textDocument/didChange",
             {
-                "textDocument": {"uri": uri, "version": version, "languageId": "lean"},
+                "textDocument": {"uri": uri, "version": version},
                 "contentChanges": [c.get_dict() for c in changes],
             },
         )

@@ -86,7 +86,7 @@ class TestLSPClientBenchmark(unittest.TestCase):
         items = self.lsp.get_completions(file_path, LINE, COL + 20)
         completion_item = items[8]
 
-        items = self.lsp.get_call_hierarchy_items(file_path, LINE, COL + 20)
+        items = self.lsp.get_call_hierarchy_items(file_path, LINE-2, COL + 20)
         call_hierarchy_item = items[0]
 
         results = []

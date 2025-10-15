@@ -53,6 +53,7 @@ def create_lean_project(
         f.write(toml)
 
     subprocess.run("lake update", shell=True, cwd=project_path)
+    subprocess.run("lake exe cache get", shell=True, cwd=project_path)
     subprocess.run(f"lake build", shell=True, cwd=project_path)
 
 

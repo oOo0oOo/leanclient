@@ -33,9 +33,8 @@ class TestLSPClientRequests(unittest.TestCase):
     def test_completion_item_resolve(self):
         result = self.lsp.get_completions(TEST_FILE_PATH, 9, 15)
         assert type(result) == list
-        item = random.choice(result)
-        resolve_res = self.lsp.get_completion_item_resolve(item)
-        assert type(resolve_res) == str
+        resolve_res = self.lsp.get_completion_item_resolve(result[0])
+        assert resolve_res == "a ∣ c → (a ∣ b + c ↔ a ∣ b)"
 
     def test_hover(self):
         res = self.lsp.get_hover(TEST_FILE_PATH, 4, 4)
@@ -132,88 +131,61 @@ class TestLSPClientRequests(unittest.TestCase):
     def test_code_actions(self):
         # Get code actions
         res = self.lsp.get_code_actions(TEST_FILE_PATH, 12, 8, 12, 18)
-        assert type(res) == list
-        EXP = [
-            {
-                "title": "Update #guard_msgs with tactic output",
-                "kind": "quickfix",
-                "isPreferred": True,
-                "data": {
-                    "providerResultIndex": 0,
-                    "providerName": "Lean.CodeAction.cmdCodeActionProvider",
-                    "params": {
-                        "textDocument": {
-                            "uri": "file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean"
-                        },
-                        "range": {
-                            "start": {"line": 12, "character": 8},
-                            "end": {"line": 12, "character": 18},
-                        },
-                        "context": {
-                            "triggerKind": 1,
-                            "diagnostics": [
-                                {
-                                    "source": "Lean 4",
-                                    "severity": 3,
-                                    "range": {
-                                        "start": {"line": 12, "character": 37},
-                                        "end": {"line": 12, "character": 42},
-                                    },
-                                    "message": "1",
-                                    "fullRange": {
-                                        "start": {"line": 12, "character": 37},
-                                        "end": {"line": 12, "character": 42},
-                                    },
-                                },
-                                {
-                                    "source": "Lean 4",
-                                    "severity": 1,
-                                    "range": {
-                                        "start": {"line": 12, "character": 15},
-                                        "end": {"line": 12, "character": 26},
-                                    },
-                                    "message": "❌️ Docstring on `#guard_msgs` does not match generated message:\n\n- info: 2\n+ info: 1\n",
-                                    "fullRange": {
-                                        "start": {"line": 12, "character": 15},
-                                        "end": {"line": 12, "character": 26},
-                                    },
-                                },
-                            ],
-                        },
-                    },
-                },
-            }
-        ]
-        self.assertEqual(res, EXP)
+        assert type(res) == list        
+        EXP = [{'data': {'params': {'context': {'diagnostics': [{'fullRange': {'end': {'character': 42,
+                                                                                'line': 12},
+                                                                        'start': {'character': 37,
+                                                                                'line': 12}},
+                                                        'message': '1',
+                                                        'range': {'end': {'character': 42,
+                                                                            'line': 12},
+                                                                    'start': {'character': 37,
+                                                                            'line': 12}},
+                                                        'severity': 3,
+                                                        'source': 'Lean 4'},
+                                                        {'fullRange': {'end': {'character': 26,
+                                                                                'line': 12},
+                                                                        'start': {'character': 15,
+                                                                                'line': 12}},
+                                                        'message': '❌️ Docstring on '
+                                                                    '`#guard_msgs` '
+                                                                    'does not match '
+                                                                    'generated '
+                                                                    'message:\n'
+                                                                    '\n'
+                                                                    '- info: 2\n'
+                                                                    '+ info: 1\n',
+                                                        'range': {'end': {'character': 26,
+                                                                            'line': 12},
+                                                                    'start': {'character': 15,
+                                                                            'line': 12}},
+                                                        'severity': 1,
+                                                        'source': 'Lean 4'}],
+                                        'triggerKind': 1},
+                            'range': {'end': {'character': 18, 'line': 12},
+                                        'start': {'character': 8, 'line': 12}},
+                            'textDocument': {'uri': 'file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean'}},
+                'providerName': 'Lean.CodeAction.cmdCodeActionProvider',
+                'providerResultIndex': 0},
+        'isPreferred': True,
+        'kind': 'quickfix',
+        'title': 'Update #guard_msgs with tactic output'}]
+        self.assertDictEqual(res[0], EXP[0])
 
         # Resolve code action
         res2 = self.lsp.get_code_action_resolve({"title": "Test"})
         assert res2["error"]["message"].startswith("Cannot process request")
         res3 = self.lsp.get_code_action_resolve(res[0])
-        EXP = {
-            "title": "Update #guard_msgs with tactic output",
-            "kind": "quickfix",
-            "isPreferred": True,
-            "edit": {
-                "documentChanges": [
-                    {
-                        "textDocument": {
-                            "version": 0,
-                            "uri": "file:///home/ooo/Code/leanclient/.test_env/LeanTestProject/Basic.lean",
-                        },
-                        "edits": [
-                            {
-                                "range": {
-                                    "start": {"line": 12, "character": 0},
-                                    "end": {"line": 12, "character": 15},
-                                },
-                                "newText": "/-- info: 1 -/\n",
-                            }
-                        ],
-                    }
-                ]
-            },
-        }
+        EXP = {'edit': {'documentChanges': [{'edits': [{'newText': '/-- info: 1 -/\n',
+                                                'range': {'end': {'character': 15,
+                                                                    'line': 12},
+                                                            'start': {'character': 0,
+                                                                    'line': 12}}}],
+                                    'textDocument': {'uri': 'file:///home/oliver/Code/leanclient/.test_env/LeanTestProject/Basic.lean',
+                                                        'version': 0}}]},
+        'isPreferred': True,
+        'kind': 'quickfix',
+        'title': 'Update #guard_msgs with tactic output'}
         self.assertEqual(res3, EXP)
 
         # Apply the edit
@@ -231,7 +203,7 @@ class TestLSPClientRequests(unittest.TestCase):
         res = self.lsp.get_definitions(path, 48, 27)
         assert len(res) == 1
         uri = res[0]["uri"] if "uri" in res[0] else res[0]["targetUri"]
-        assert uri.endswith("Defs.lean")
+        assert uri.endswith("SDiff.lean")
 
         def flatten(ref):
             return tuple(
@@ -244,28 +216,28 @@ class TestLSPClientRequests(unittest.TestCase):
                 ]
             )
 
-        references = self.lsp.get_references(path, 48, 27)
+        references = self.lsp.get_references(path, 45, 32)
         flat = set([flatten(ref) for ref in references])
         assert len(flat) == len(references)
         print("References:", len(references))
-        assert len(references) == 6144  # References for Finset
+        assert len(references) == 6212  # References for Finset
 
         res = self.lsp.get_declarations(path, 48, 27)
         assert len(res) == 1
-        assert res[0]["targetUri"].endswith("Defs.lean")
+        assert res[0]["targetUri"].endswith("SDiff.lean")
 
         # Local theorem: sdiff_val
-        res = self.lsp.get_definitions(path, 48, 9)
+        res = self.lsp.get_definitions(path, 49, 9)
         assert res[0]["uri"] == self.lsp._local_to_uri(path)
 
-        res = self.lsp.get_references(path, 48, 9)
+        res = self.lsp.get_references(path, 49, 9)
         assert len(res) == 2
 
-        res = self.lsp.get_references(path, 48, 9, include_declaration=True)
+        res = self.lsp.get_references(path, 49, 9, include_declaration=True)
         assert len(res) == 3
 
         res = self.lsp.get_references(
-            path, 48, 9, include_declaration=True, max_retries=1, retry_delay=0
+            path, 49, 9, include_declaration=True, max_retries=1, retry_delay=0
         )
         assert len(res) == 3
 
@@ -273,8 +245,8 @@ class TestLSPClientRequests(unittest.TestCase):
         path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
         self.lsp.open_file(path)
 
-        ch_item = self.lsp.get_call_hierarchy_items(path, 48, 9)[0]
-        assert ch_item["data"]["name"] == "Finset.sdiff_val"
+        ch_item = self.lsp.get_call_hierarchy_items(path, 46, 30)[0]
+        assert ch_item["data"]["name"] == "Multiset.nodup_of_le"
 
         res = self.lsp.get_call_hierarchy_incoming(ch_item)
         # assert len(res) == 2, len(res)

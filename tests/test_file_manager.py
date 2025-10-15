@@ -67,8 +67,6 @@ class TestLSPFileManager(unittest.TestCase):
         diags = self.lsp.open_file(path)
         assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
-        # Make some random changes
-        # random.seed(6.28)
         NUM_CHANGES = 16
         changes = []
         t0 = time.time()
@@ -94,7 +92,6 @@ class TestLSPFileManager(unittest.TestCase):
         new_text = self.lsp.get_file_content(path)
         self.assertEqual(text, new_text)
 
-        # Rerun with the altered text and compare diagnostics
         fpath = path.replace(".lean", "_test.lean")
         with open(TEST_ENV_DIR + fpath, "w") as f:
             f.write(text)
@@ -173,7 +170,8 @@ class TestLSPFileManager(unittest.TestCase):
                 f.write(exp_text)
             diag3 = self.lsp.open_file(fpath)
             diag4 = self.lsp.get_diagnostics(fpath)
-            assert diag2 == diag3 == diag4
+            assert diag2 == diag3
+            assert diag3 == diag4
 
             os.remove(TEST_ENV_DIR + fpath)
 

@@ -1,6 +1,7 @@
 # Varia to be sorted later...
+from dataclasses import dataclass
 from functools import wraps
-from typing import NamedTuple
+from typing import Tuple
 
 # Mapping SymbolKinds ints to string names:
 # https://github.com/leanprover/lean4/blob/8422d936cff3b609bd2a1396e82356c82c383386/src/Lean/Data/Lsp/LanguageFeatures.lean#L202C1-L229C27
@@ -61,26 +62,59 @@ class SemanticTokenProcessor:
         return tokens
 
 
-class DocumentContentChange(NamedTuple):
-    """Represents a change in a document.
+def normalize_newlines(text: str) -> str:
+    """Convert CRLF sequences to LF for stable indexing."""
+    return text.replace("\r\n", "\n")
 
-    Class attributes:
 
-    - text (str): The new text to insert.
-    - start (list[int]): The start position of the change: [line, character]
-    - end (list[int]): The end position of the change: [line, character]
-    """
+def _index_from_line_character(text: str, line: int, character: int) -> int:
+    if line < 0:
+        return 0
+
+    lines = text.split("\n")
+    if line >= len(lines):
+        return len(text)
+
+    prefix = sum(len(lines[i]) + 1 for i in range(line))
+    return prefix + max(character, 0)
+
+
+@dataclass(frozen=True)
+class DocumentContentChange:
+    """Represents a change in a document."""
 
     text: str
-    start: list[int]
-    end: list[int]
+    start: Tuple[int, int] | None = None
+    end: Tuple[int, int] | None = None
+
+    def __post_init__(self) -> None:
+        normalized_text = normalize_newlines(self.text)
+        object.__setattr__(self, "text", normalized_text)
+
+        if (self.start is None) != (self.end is None):
+            raise ValueError(
+                "DocumentContentChange requires both start and end for ranged edits."
+            )
+
+        if self.start is not None:
+            start = tuple(int(v) for v in self.start)
+            if len(start) != 2:
+                raise ValueError("start must be a (line, character) pair")
+            object.__setattr__(self, "start", start)
+        if self.end is not None:
+            end = tuple(int(v) for v in self.end)
+            if len(end) != 2:
+                raise ValueError("end must be a (line, character) pair")
+            object.__setattr__(self, "end", end)
+
+    def is_full_change(self) -> bool:
+        return self.start is None
 
     def get_dict(self) -> dict:
-        """Get dictionary representation of the change.
+        if self.is_full_change():
+            return {"text": self.text}
 
-        Returns:
-            dict: The change as an lsp dict.
-        """
+        assert self.start is not None and self.end is not None
         return {
             "text": self.text,
             "range": {
@@ -91,18 +125,23 @@ class DocumentContentChange(NamedTuple):
 
 
 def apply_changes_to_text(text: str, changes: list[DocumentContentChange]) -> str:
-    """Apply changes to a text."""
+    """Apply LSP-style incremental changes to ``text``."""
+
+    text = normalize_newlines(text)
+    if not changes:
+        return text
+
     for change in changes:
-        start = get_index_from_line_character(text, *change.start)
-        end = get_index_from_line_character(text, *change.end)
-        text = text[:start] + change.text + text[end:]
+        if change.is_full_change():
+            text = change.text
+            continue
+
+        assert change.start is not None and change.end is not None
+        start_idx = _index_from_line_character(text, change.start[0], change.start[1])
+        end_idx = _index_from_line_character(text, change.end[0], change.end[1])
+        text = text[:start_idx] + change.text + text[end_idx:]
+
     return text
-
-
-def get_index_from_line_character(text: str, line: int, char: int) -> int:
-    """Convert line and character to flat index."""
-    lines = text.split("\n")
-    return sum(len(lines[i]) + 1 for i in range(line)) + char
 
 
 def get_diagnostics_in_range(
