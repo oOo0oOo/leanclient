@@ -25,10 +25,7 @@ class BaseLeanLSPClient:
         self.request_id = 0
 
         if initial_build:
-            subprocess.run(
-                ["lake", "exe", "cache", "get"], cwd=self.project_path, check=False
-            )
-            subprocess.run(["lake", "build"], cwd=self.project_path, check=True)
+            self.build_project()
 
         # Run the lean4 language server in a subprocess
         self.process = subprocess.Popen(
@@ -70,6 +67,17 @@ class BaseLeanLSPClient:
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
         self._send_notification("initialized", {})
+
+    def build_project(self, get_cache: bool = True):
+        """Build the Lean project.
+
+        This optionally runs `lake exe cache get`, then `lake build`
+        """
+        if get_cache:
+            subprocess.run(
+                ["lake", "exe", "cache", "get"], cwd=self.project_path, check=False
+            )
+        subprocess.run(["lake", "build"], cwd=self.project_path, check=True)
 
     def close(self, timeout: float | None = 2):
         """Always close the client when done!
