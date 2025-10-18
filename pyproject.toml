@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "leanclient"
-version = "0.2.0"
+version = "0.2.1"
 description = "Interact with the Lean theorem prover language server"
 authors = ["Oliver Dressler <hey@oli.show>"]
 homepage = "https://github.com/oOo0oOo/leanclient"
