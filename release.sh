@@ -29,5 +29,6 @@ git tag -a v$new_version -m "leanclient $new_version"
 git push
 git push --tags
 
-# Publish the extension using vsce
-poetry publish --build
+# Build and publish using uv
+uv build
+uv publish

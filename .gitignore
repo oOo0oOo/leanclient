@@ -1,6 +1,7 @@
 __pycache__/
 
 dist/
+.venv/
 
 .test_env/
 tests/profile*.png

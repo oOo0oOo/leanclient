@@ -1,30 +1,32 @@
 .PHONY: build install test test-profile docs
 
 build:
-	poetry build
+	uv build
 
 install:
-	poetry install
+	uv sync --all-extras
 
 test:
-	poetry run python tests/run_tests.py
+	uv run python tests/run_tests.py
 
 test-profile:
-	poetry run python tests/run_tests.py --profile
+	uv run python tests/run_tests.py --profile
 
 test-all:
-	poetry run python tests/run_tests.py --all
+	uv run python tests/run_tests.py --all
 
 update-benchmark:
-	poetry run python tests/run_tests.py --profile --benchmark
+	uv run python tests/run_tests.py --profile --benchmark
 	cp tests/profile.png docs/source/profile_benchmark.png
 
 docs:
 	rm -rf docs/build/
-	poetry run sphinx-build -b html docs/source/ docs/build/
+	uv run sphinx-build -b html docs/source/ docs/build/
 
 publish:
-	poetry publish --build
+	uv build
+	uv publish
 
 publish-test:
-	poetry publish --build --repository testpypi
+	uv build
+	uv publish --publish-url https://test.pypi.org/legacy/
