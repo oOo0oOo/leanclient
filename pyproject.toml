@@ -33,6 +33,7 @@ test = [
     "pytest-benchmark>=4.0",
     "pytest-timeout>=2.2",
     "pytest-sugar>=1.0",
+    "psutil>=5.9",
 ]
 
 [build-system]

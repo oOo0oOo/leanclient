@@ -670,6 +670,7 @@ dev = [
     { name = "sphinx-rtd-theme" },
 ]
 test = [
+    { name = "psutil" },
     { name = "pytest" },
     { name = "pytest-benchmark" },
     { name = "pytest-cov" },
@@ -684,6 +685,7 @@ requires-dist = [
     { name = "gprof2dot", marker = "extra == 'dev'", specifier = ">=2024.6.6" },
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.29.5" },
     { name = "orjson", specifier = ">=3.11.1" },
+    { name = "psutil", marker = "extra == 'test'", specifier = ">=5.9" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0" },
     { name = "pytest-benchmark", marker = "extra == 'test'", specifier = ">=4.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.1" },
