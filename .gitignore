@@ -15,4 +15,6 @@ examples/LeanProject/
 examples/AnalyseMathlib/
 examples/experiments/
 
+.coverage
+
 TODO.md
