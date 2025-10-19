@@ -7,17 +7,35 @@ install:
 	uv sync --all-extras
 
 test:
-	uv run python tests/run_tests.py
-
-test-profile:
-	uv run python tests/run_tests.py --profile
+	uv run pytest -m "not slow and not benchmark"
 
 test-all:
-	uv run python tests/run_tests.py --all
+	uv run pytest
+
+test-unit:
+	uv run pytest tests/unit -v
+
+test-integration:
+	uv run pytest tests/integration
+
+test-parallel:
+	uv run pytest -n auto
+
+test-benchmark:
+	uv run pytest tests/benchmark -v
+
+test-coverage:
+	uv run pytest --cov-report=html --cov-report=term
+	@echo "Coverage report: htmlcov/index.html"
+
+test-fast:
+	uv run pytest -x -v
+
+test-verbose:
+	uv run pytest -vv
 
 update-benchmark:
-	uv run python tests/run_tests.py --profile --benchmark
-	cp tests/profile.png docs/source/profile_benchmark.png
+	uv run pytest tests/benchmark -v
 
 docs:
 	rm -rf docs/build/

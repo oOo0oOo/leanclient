@@ -26,6 +26,14 @@ dev = [
     "sphinx-rtd-theme>=3.0.2",
     "ipykernel>=6.29.5",
 ]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "pytest-xdist>=3.5",
+    "pytest-benchmark>=4.0",
+    "pytest-timeout>=2.2",
+    "pytest-sugar>=1.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -33,3 +41,33 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["leanclient"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = []
+python_functions = ["test_*"]
+
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "benchmark: performance tests",
+    "integration: integration tests",
+    "unit: fast unit tests",
+    "mathlib: requires mathlib files",
+]
+
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=leanclient",
+    "--cov-report=html",
+    "--cov-report=term-missing:skip-covered",
+]
+
+timeout = 300
+timeout_method = "thread"
+
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
