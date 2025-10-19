@@ -260,7 +260,7 @@ def test_code_actions(lsp_client, test_file_path, test_env_dir):
                     "start": {"character": 8, "line": 12},
                 },
                 "textDocument": {
-                    "uri": f"file://{os.path.abspath(test_env_dir)}LeanTestProject/Basic.lean"
+                    "uri": f"file://{os.path.abspath(test_env_dir)}/LeanTestProject/Basic.lean"
                 },
             },
             "providerName": "Lean.CodeAction.cmdCodeActionProvider",
@@ -291,7 +291,7 @@ def test_code_actions(lsp_client, test_file_path, test_env_dir):
                         }
                     ],
                     "textDocument": {
-                        "uri": f"file://{os.path.abspath(test_env_dir)}LeanTestProject/Basic.lean",
+                        "uri": f"file://{os.path.abspath(test_env_dir)}/LeanTestProject/Basic.lean",
                         "version": 0,
                     },
                 }

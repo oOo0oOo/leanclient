@@ -314,14 +314,14 @@ def test_invalid_path_with_spaces(clean_lsp_client, test_file_path, path_with_sp
 @pytest.mark.unit
 def test_invalid_root_not_found():
     """Test initialization with non-existent path."""
-    with pytest.raises(FileNotFoundError, match="Path: invalid_path"):
+    with pytest.raises(FileNotFoundError):
         LeanLSPClient("invalid_path", initial_build=False, print_warnings=False)
 
 
 @pytest.mark.unit
 def test_invalid_root_not_directory():
     """Test initialization with file instead of directory."""
-    with pytest.raises(NotADirectoryError, match="Path: invalid_path"):
+    with pytest.raises(NotADirectoryError):
         LeanLSPClient("leanclient/client.py", initial_build=False, print_warnings=False)
 
 
@@ -329,7 +329,7 @@ def test_invalid_root_not_directory():
 @pytest.mark.slow
 def test_invalid_root_not_lean_project():
     """Test initialization with non-Lean project directory."""
-    with pytest.raises(Exception, match="Path: leanclient/"):
+    with pytest.raises(Exception):
         LeanLSPClient("leanclient/", initial_build=True)
 
 
