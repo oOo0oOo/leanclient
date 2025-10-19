@@ -1,14 +1,13 @@
-import subprocess
-import unittest
-import sys
-import shutil
+"""Mathlib file utilities for tests."""
+
+import os
+import random
+from typing import List
+
+from .project_setup import TEST_ENV_DIR
 
 
-# TEST CONFIG. Move?
-TEST_ENV_DIR = ".test_env/"
-TEST_PROJECT_NAME = "LeanTestProject"
-TEST_FILE_PATH = f"{TEST_PROJECT_NAME}/Basic.lean"
-
+# Fast-loading mathlib files for tests
 FAST_MATHLIB_FILES = [
     ".lake/packages/mathlib/Mathlib/Combinatorics/Quiver/Subquiver.lean",  # 1.13s
     ".lake/packages/mathlib/Mathlib/Combinatorics/Quiver/Push.lean",  # 1.19s
@@ -45,58 +44,56 @@ FAST_MATHLIB_FILES = [
 ]
 
 
-if __name__ == "__main__":
-    from tests.utils import start_profiler, stop_profiler
+def get_all_mathlib_files() -> List[str]:
+    """Get all mathlib files in the test environment.
+    
+    Returns:
+        List[str]: List of relative paths to mathlib files.
+    """
+    file_paths = []
+    l = len(TEST_ENV_DIR)
+    path = TEST_ENV_DIR + ".lake/packages/mathlib/Mathlib"
+    
+    if not os.path.exists(path):
+        return []
+    
+    for root, __, files in os.walk(path):
+        file_paths += [root[l:] + "/" + f for f in files if f.endswith(".lean")]
+    return file_paths
 
-    # Setup environment
-    cmd = [
-        "python",
-        "scripts/create_lean_project.py",
-        TEST_ENV_DIR,
-        TEST_PROJECT_NAME,
-        "v4.24.0",  # "stable"
-        "--use-mathlib",
-    ]
-    subprocess.run(cmd, check=True)
 
-    # Copy the lean files required for testing
-    target_dir = f"{TEST_ENV_DIR}{TEST_FILE_PATH}"
-    shutil.copy("tests/tests.lean", target_dir)
-
-    subprocess.run(["lake", "build"], cwd=TEST_ENV_DIR, check=True)
-
-    # Collect tests
-    white_list = [
-        # "test_base_client",
-        # "test_client_requests",
-        # "test_client_errors",
-        "test_file_manager",
-        # "test_single_file_client",
-        # "test_pool",
-        # "test_client_benchmark",
-        # "test_client_requests.TestLSPClientRequests.test_info_tree_parse",
-    ]
-
-    if "--all" in sys.argv:
-        white_list = []
-    elif "--benchmark" in sys.argv:
-        white_list = ["test_client_benchmark"]
-
-    if not white_list:
-        suite = unittest.TestLoader().discover("tests")
+def get_random_mathlib_files(num: int, seed: int = None) -> List[str]:
+    """Get random mathlib files.
+    
+    Args:
+        num: Number of files to return.
+        seed: Random seed for reproducibility.
+        
+    Returns:
+        List[str]: List of random mathlib file paths.
+    """
+    all_files = get_all_mathlib_files()
+    if seed is not None:
+        all_files = sorted(all_files)
+        random.seed(seed)
     else:
-        suite = unittest.TestSuite()
-        loader = unittest.TestLoader()
-        for test in white_list:
-            suite.addTests(loader.loadTestsFromName(test))
-    runner = unittest.TextTestRunner()
+        random.seed()
+    random.shuffle(all_files)
+    return all_files[:num]
 
-    # Run tests
-    profiler = None
-    if "--profile" in sys.argv:
-        profiler = start_profiler()
 
-    runner.run(suite)
-
-    if profiler:
-        stop_profiler(profiler, "tests/profile.png")
+def get_random_fast_mathlib_files(num: int, seed: int = None) -> List[str]:
+    """Get random fast-loading mathlib files.
+    
+    Args:
+        num: Number of files to return.
+        seed: Random seed for reproducibility.
+        
+    Returns:
+        List[str]: List of random fast mathlib file paths.
+    """
+    if seed is not None:
+        random.seed(seed)
+    else:
+        random.seed()
+    return random.sample(FAST_MATHLIB_FILES, num)

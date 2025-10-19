@@ -25,6 +25,14 @@ class SingleFileClient:
         self.file_path = file_path
         self.print_warnings = client.print_warnings
 
+    def build_project(self, get_cache: bool = True):        
+        """Build the Lean project by running `lake build`.
+
+        Args:
+            get_cache (bool): Whether to run `lake exe cache get` before building.
+        """
+        return self.client.build_project(get_cache)
+
     def open_file(self, timeout: float = 30) -> list:
         """Open the file.
 

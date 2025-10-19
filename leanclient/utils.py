@@ -67,16 +67,67 @@ def normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
-def _index_from_line_character(text: str, line: int, character: int) -> int:
+def _utf16_len(char: str) -> int:
+    """Return the UTF-16 length of a single character (1 or 2 code units)."""
+    code_point = ord(char)
+    # Characters outside the BMP (Basic Multilingual Plane) need 2 UTF-16 code units (surrogate pairs)
+    return 2 if code_point > 0xFFFF else 1
+
+
+def _utf16_pos_to_utf8_pos(text: str, line: int, utf16_character: int) -> int:
+    """
+    Convert LSP position (line, UTF-16 character offset) to UTF-8 byte index.
+    
+    This matches the Lean LSP server implementation:
+    - line is 0-indexed
+    - character is a UTF-16 code unit offset
+    - character is accepted liberally: actual character := min(line length, character)
+    
+    Args:
+        text: The text content (UTF-8 encoded, with LF newlines)
+        line: 0-indexed line number
+        utf16_character: UTF-16 code unit offset within the line
+    
+    Returns:
+        UTF-8 byte offset into text
+    """
     if line < 0:
         return 0
-
+    
     lines = text.split("\n")
     if line >= len(lines):
         return len(text)
+    
+    # Get byte offset to start of line
+    line_start_byte = sum(len(lines[i]) + 1 for i in range(line))  # +1 for '\n'
+    
+    # Convert UTF-16 character offset to UTF-8 byte offset within the line
+    line_content = lines[line]
+    utf16_offset = 0
+    utf8_offset = 0
+    
+    for char in line_content:
+        if utf16_offset >= utf16_character:
+            break
+        utf16_offset += _utf16_len(char)
+        utf8_offset += len(char.encode('utf-8'))
+    
+    return line_start_byte + utf8_offset
 
-    prefix = sum(len(lines[i]) + 1 for i in range(line))
-    return prefix + max(character, 0)
+
+def _index_from_line_character(text: str, line: int, character: int) -> int:
+    """
+    Convert LSP position to UTF-8 byte index.
+    
+    Args:
+        text: The text content
+        line: 0-indexed line number
+        character: UTF-16 code unit offset
+    
+    Returns:
+        UTF-8 byte index
+    """
+    return _utf16_pos_to_utf8_pos(text, line, character)
 
 
 @dataclass(frozen=True)

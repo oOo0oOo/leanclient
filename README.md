@@ -43,6 +43,8 @@ Or try it locally:
 
 ```bash
 pip install leanclient
+# Or with uv:
+uv pip install leanclient
 ```
 
 3) In your python code:
@@ -126,8 +128,7 @@ See [documentation](https://leanclient.readthedocs.io/en/latest/benchmarks.html)
 ## Testing
 
 ```bash
-# python3 -m venv venv  # Or similar: Create environment
-make install            # Installs python package and dev dependencies
+make install            # Installs python package and dev dependencies with uv
 make test               # Run all tests, also installs fresh lean env if not found
 make test-profile       # Run all tests with cProfile
 ```

@@ -69,9 +69,10 @@ class BaseLeanLSPClient:
         self._send_notification("initialized", {})
 
     def build_project(self, get_cache: bool = True):
-        """Build the Lean project.
+        """Build the Lean project by running `lake build`.
 
-        This optionally runs `lake exe cache get`, then `lake build`
+        Args:
+            get_cache (bool): Whether to run `lake exe cache get` before building.
         """
         if get_cache:
             subprocess.run(

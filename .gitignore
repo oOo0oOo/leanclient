@@ -1,6 +1,10 @@
 __pycache__/
 
 dist/
+.venv/
+.benchmarks/
+.pytest_cache/
+htmlcov/
 
 .test_env/
 tests/profile*.png
@@ -10,5 +14,7 @@ docs/build/
 examples/LeanProject/
 examples/AnalyseMathlib/
 examples/experiments/
+
+.coverage
 
 TODO.md
