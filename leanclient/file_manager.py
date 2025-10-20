@@ -4,15 +4,7 @@ import time
 import urllib.parse
 
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
-from .base_client import BaseLeanLSPClient
-
-
-IGNORED_METHODS = {
-    "workspace/didChangeWatchedFiles",
-    "workspace/semanticTokens/refresh",
-    "client/registerCapability",
-    "workspace/inlayHint/refresh",
-}
+from .base_client import BaseLeanLSPClient, IGNORED_METHODS
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -90,19 +82,23 @@ class LSPFileManager(BaseLeanLSPClient):
             "uri": self._local_to_uri(path),
             "version": self.opened_files_versions[path],
         }
-        rid = self._send_request_rpc(method, params, is_notification=False)
-
-        result = self._read_stdout()
-        if result is None:
+        
+        try:
+            result = self._send_request_sync(method, params)
+            return result
+        except EOFError:
             raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
-
-        while result.get("method") in IGNORED_METHODS or (
-            result.get("id") != rid and "error" not in result
-        ):
-            result = self._read_stdout()
-            if result is None:
-                raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
-        return result.get("result", result)
+        except Exception as e:
+            # Return error in dict format for backward compatibility
+            if "LSP Error:" in str(e):
+                error_msg = str(e).replace("LSP Error: ", "")
+                import ast
+                try:
+                    error_dict = ast.literal_eval(error_msg)
+                    return {"error": error_dict}
+                except:
+                    return {"error": {"message": str(e)}}
+            raise
 
     def _send_request_retry(
         self,
@@ -393,16 +389,13 @@ class LSPFileManager(BaseLeanLSPClient):
                 f"Files {missing} are not open. Call open_files first."
             )
 
-        # Request waitForDiagnostics for each file
-        rid_to_uri = {}
+        # Request waitForDiagnostics for each file - now non-blocking
+        futures_by_uri = {}
         for uri, path in zip(uris, paths):
             version = self.opened_files_versions[path]
-            rid = self._send_request_rpc(
-                "textDocument/waitForDiagnostics",
-                {"uri": uri, "version": version},
-                is_notification=False,
-            )
-            rid_to_uri[rid] = uri
+            params = {"uri": uri, "version": version}
+            future = self._send_request_async("textDocument/waitForDiagnostics", params)
+            futures_by_uri[uri] = future
 
         # Use sets for explicit, robust state tracking.
         uris_to_wait_for_response = set(uris)
@@ -418,11 +411,25 @@ class LSPFileManager(BaseLeanLSPClient):
                     )
                 break
 
+            # Check for completed futures
+            for uri in list(uris_to_wait_for_response):
+                future = futures_by_uri[uri]
+                if future.done():
+                    uris_to_wait_for_response.discard(uri)
+                    last_update_time = time.time()
+                    try:
+                        # Try to get the result to check for errors
+                        future.result()
+                    except Exception as e:
+                        # On error, mark processing as done and store error
+                        uris_to_wait_for_processing.discard(uri)
+                        if not diagnostics.get(uri):
+                            diagnostics[uri] = [{"error": {"message": str(e)}}]
+
             res = self._read_stdout(timeout=0.001)
             if not res:
                 continue
 
-            res_id = res.get("id")
             method = res.get("method")
 
             if method in IGNORED_METHODS:
@@ -430,19 +437,12 @@ class LSPFileManager(BaseLeanLSPClient):
 
             last_update_time = time.time()
 
-            # Handle a response to one of our `waitForDiagnostics` requests.
-            if res_id is not None:
-                uri = rid_to_uri.get(res_id)
-                if uri:
-                    uris_to_wait_for_response.discard(uri)
-                    if "error" in res:
-                        diagnostics.setdefault(uri, []).append(res)
-                continue
-
             # Handle a notification from the server.
             if method == "textDocument/publishDiagnostics":
                 uri = res["params"]["uri"]
                 diagnostics[uri] = res["params"]["diagnostics"]
+                # Also mark as done processing when we get diagnostics
+                uris_to_wait_for_processing.discard(uri)
                 continue
 
             if method == "$/lean/fileProgress":
@@ -461,7 +461,7 @@ class LSPFileManager(BaseLeanLSPClient):
                         diagnostics[uri] = [{"error": {"message": msg}}]
                 continue
 
-            if self.print_warnings:
+            if self.print_warnings and method:
                 print(
                     f"WARNING: Unhandled method: {res.get('method')}. Consider opening an issue on leanclient github."
                 )

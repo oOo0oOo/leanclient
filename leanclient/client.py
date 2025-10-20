@@ -926,14 +926,20 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         except:
             pass
 
-        rid = self._send_request_rpc("codeAction/resolve", code_action, False)
-        for __ in range(100):  # Just in case
-            res = self._read_stdout()
-            if "error" in res:
-                return res
-            elif res.get("id") == rid:
-                return res.get("result")
-        return code_action
+        try:
+            result = self._send_request_sync("codeAction/resolve", code_action)
+            return result
+        except Exception as e:
+            # Return error in the old format for backward compatibility
+            if "LSP Error:" in str(e):
+                error_msg = str(e).replace("LSP Error: ", "")
+                import ast
+                try:
+                    error_dict = ast.literal_eval(error_msg)
+                    return {"error": error_dict}
+                except:
+                    return {"error": {"message": str(e)}}
+            raise
 
     def apply_code_action_resolve(self, code_action_resolved: dict) -> None:
         """Apply all edits of a resolved code action.
