@@ -50,6 +50,7 @@ def _send_signal_during_operation(client, test_file_path, sig, delay=0.05):
 
 
 @pytest.mark.integration
+@pytest.mark.unimportant
 def test_no_lingering_processes_after_close(test_project_dir):
     """Test that client.close() terminates the lake serve process."""
     initial_count = len(_get_lake_serve_processes())
@@ -64,6 +65,8 @@ def test_no_lingering_processes_after_close(test_project_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.unimportant
 def test_multiple_clients_cleanup(test_project_dir):
     """Test that multiple clients clean up properly."""
     initial_count = len(_get_lake_serve_processes())
@@ -80,7 +83,7 @@ def test_multiple_clients_cleanup(test_project_dir):
     for client in clients:
         client.close()
     
-    time.sleep(0.2)
+    time.sleep(0.1)
     
     for pid in pids:
         assert not psutil.pid_exists(pid), f"Process {pid} should be terminated"
@@ -90,11 +93,13 @@ def test_multiple_clients_cleanup(test_project_dir):
 
 @pytest.mark.integration
 @pytest.mark.parametrize("sig,timeout", [
-    (signal.SIGINT, 0.5),      # CTRL+C with short timeout
+    (signal.SIGINT, 0.1),      # CTRL+C with short timeout
     (signal.SIGINT, None),     # CTRL+C with immediate termination
-    (signal.SIGKILL, 1.0),     # Force kill
-    (signal.SIGTERM, 1.0),     # Graceful terminate
+    (signal.SIGKILL, 0.25),     # Force kill
+    (signal.SIGTERM, 0.25),     # Graceful terminate
 ])
+@pytest.mark.slow
+@pytest.mark.unimportant
 def test_signal_during_operation(test_project_dir, test_file_path, sig, timeout):
     """Test cleanup when process receives various signals during operation."""
     initial_count = len(_get_lake_serve_processes())
@@ -109,6 +114,7 @@ def test_signal_during_operation(test_project_dir, test_file_path, sig, timeout)
 
 
 @pytest.mark.integration
+@pytest.mark.unimportant
 def test_close_already_dead_process(test_project_dir):
     """Test cleanup when process has already died before close() is called."""
     initial_count = len(_get_lake_serve_processes())
@@ -124,13 +130,14 @@ def test_close_already_dead_process(test_project_dir):
     assert not psutil.pid_exists(client_pid), "Process should be dead"
     
     # Should handle cleanup gracefully
-    client.close(timeout=0.5)
+    client.close(timeout=0.25)
     
     time.sleep(0.05)
     assert len(_get_lake_serve_processes()) == initial_count, "No lingering processes"
 
 
 @pytest.mark.integration
+@pytest.mark.unimportant
 def test_force_kill_on_timeout(test_project_dir):
     """Test that process is force killed if it doesn't terminate gracefully."""
     initial_count = len(_get_lake_serve_processes())

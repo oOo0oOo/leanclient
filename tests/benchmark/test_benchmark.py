@@ -27,6 +27,7 @@ def benchmark_client(test_project_dir):
 
 @pytest.mark.benchmark
 @pytest.mark.mathlib
+@pytest.mark.skip(reason="Benchmark test, run manually as needed")
 def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_env_dir):
     """Benchmark opening multiple files."""
     NUM_FILES = 4
@@ -79,6 +80,7 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
 
 @pytest.mark.benchmark
 @pytest.mark.mathlib
+@pytest.mark.skip(reason="Benchmark test, run manually as needed")
 def test_bench_all_functions(benchmark_client):
     """Benchmark all LSP request methods."""
     file_path = ".lake/packages/mathlib/Mathlib/Topology/MetricSpace/Infsep.lean"

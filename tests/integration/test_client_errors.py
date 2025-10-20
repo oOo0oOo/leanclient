@@ -47,6 +47,7 @@ def test_get_diagnostics(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
     """Test handling of non-terminating diagnostic processing."""
     # Create a file with non-terminating diagnostics (processing: {"kind": 2})
@@ -315,7 +316,6 @@ def test_invalid_root_not_directory():
 
 
 @pytest.mark.unit
-@pytest.mark.slow
 def test_invalid_root_not_lean_project():
     """Test initialization with non-Lean project directory."""
     with pytest.raises(Exception):

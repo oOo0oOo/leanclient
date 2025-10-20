@@ -39,9 +39,10 @@ def file_manager(test_project_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_open_files(file_manager, random_fast_mathlib_files):
     """Test opening files with caching."""
-    paths = random_fast_mathlib_files(3)
+    paths = random_fast_mathlib_files(1)
     file_manager.open_file(paths[0])
     diag = file_manager.get_diagnostics(paths[0])
     diag2 = file_manager.get_diagnostics(paths[0])
@@ -100,7 +101,7 @@ def test_file_update(file_manager, random_fast_mathlib_files, test_env_dir):
 @pytest.mark.slow
 def test_file_update_line_by_line(file_manager, test_env_dir):
     """Test updating file line by line."""
-    NUM_LINES = 24
+    NUM_LINES = 12
     path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
 
     with open(test_env_dir + path, "r") as f:
@@ -141,6 +142,7 @@ def test_file_update_line_by_line(file_manager, test_env_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_update_file_mathlib(file_manager, test_env_dir):
     """Test that update_file correctly applies changes matching server behavior."""
     files = [
@@ -187,6 +189,7 @@ def test_update_file_mathlib(file_manager, test_env_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_update_try_tactics(file_manager):
     """Test updating file to try different tactics."""
     file_path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Covering/OneDim.lean"

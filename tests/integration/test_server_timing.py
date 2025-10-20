@@ -9,6 +9,7 @@ import os
 import subprocess
 import time
 import json
+import pytest
 
 
 def send_rpc_request(stdin, request_id, method, params):
@@ -50,6 +51,7 @@ def read_rpc_message(stdout, timeout=1.0):
     return json.loads(body)
 
 
+@pytest.mark.slow
 def test_server_queues_requests_and_handles_concurrent_calls(test_project_dir):
     """Server queues immediate+concurrent requests, responds when ready (3 hovers on mathlib file)."""
     process = subprocess.Popen(

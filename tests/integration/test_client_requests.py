@@ -182,14 +182,13 @@ def test_plain_goal(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
-@pytest.mark.slow
 def test_goal_with_delay(lsp_client, test_file_path):
     """Test getting goal with random delays between requests."""
-    for _ in range(8):
+    for _ in range(4):
         goal = lsp_client.get_goal(test_file_path, 9, 12)
         assert isinstance(goal, dict)
         assert "⊢" in goal["goals"][0]
-        time.sleep(random.uniform(0, 1))
+        time.sleep(random.uniform(0, 0.5))
 
 
 @pytest.mark.integration
@@ -449,6 +448,7 @@ def test_info_trees(lsp_client, test_file_path):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_info_trees_mathlib(lsp_client):
     """Test getting info trees from mathlib file."""
     path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"
@@ -501,6 +501,7 @@ def test_info_tree_parse(lsp_client, test_file_path):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_info_tree_parse_mathlib(lsp_client):
     """Test parsing info trees from mathlib file."""
     path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"

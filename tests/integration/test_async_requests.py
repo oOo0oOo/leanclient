@@ -1,10 +1,11 @@
 """Integration tests for async request functionality."""
 
 import time
-import asyncio
+import pytest
 from leanclient import LeanLSPClient
 
 
+@pytest.mark.unimportant
 def test_async_single_request(lsp_client: LeanLSPClient):
     """Test that a single async request works."""
     path = "LeanTestProject/Basic.lean"
@@ -81,6 +82,7 @@ def test_async_multiple_requests_concurrent(lsp_client: LeanLSPClient):
     assert elapsed < 3, "Concurrent requests should complete quickly"
 
 
+@pytest.mark.unimportant
 def test_async_request_performance(lsp_client: LeanLSPClient):
     """Test that async requests provide performance benefit for multiple operations."""
     path = "LeanTestProject/Basic.lean"
@@ -122,6 +124,7 @@ def test_async_request_performance(lsp_client: LeanLSPClient):
     assert async_time < 5, f"Async requests took too long: {async_time:.3f}s"
 
 
+@pytest.mark.unimportant
 def test_sync_api_still_works(lsp_client: LeanLSPClient):
     """Test that the synchronous API still works after async changes."""
     path = "LeanTestProject/Basic.lean"
@@ -140,6 +143,7 @@ def test_sync_api_still_works(lsp_client: LeanLSPClient):
     assert len(symbols) > 0
 
 
+@pytest.mark.unimportant
 def test_async_with_errors(lsp_client: LeanLSPClient):
     """Test that async requests handle errors properly."""
     path = "LeanTestProject/Basic.lean"
