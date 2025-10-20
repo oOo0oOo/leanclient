@@ -578,6 +578,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Call hierarchy items.
         """
+        # Ensure diagnostics are up-to-date so the server has processed the file.
+        self.get_diagnostics(path)
+
         return self._send_request(
             path,
             "textDocument/prepareCallHierarchy",

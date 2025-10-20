@@ -82,10 +82,6 @@ class LSPFileManager(BaseLeanLSPClient):
                     self.opened_files[path]["processing"] = False
                     self.opened_files[path]["complete"] = True
                 
-                # Update version and processing status if version is provided
-                if diag_version is not None and diag_version >= self.opened_files[path]["diagnostics_version"]:
-                    self.opened_files[path]["diagnostics_version"] = diag_version
-                
                 # Mark processing complete when processing array is empty
                 if not processing:
                     # Processing complete (but may still get more diagnostics)
@@ -478,6 +474,7 @@ class LSPFileManager(BaseLeanLSPClient):
             timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
+        path_by_uri = dict(zip(uris, paths))
         
         # Check if all files are opened
         with self._opened_files_lock:
@@ -489,13 +486,22 @@ class LSPFileManager(BaseLeanLSPClient):
         
         # Check current state - do we need to wait?
         uris_needing_wait = []
+        target_versions: dict[str, int] = {}
         with self._opened_files_lock:
-            for uri, path in zip(uris, paths):
+            for uri in uris:
+                path = path_by_uri[uri]
                 state = self.opened_files[path]
-                
-                # Skip if already complete
+
+                if (
+                    not state["complete"]
+                    and not state["processing"]
+                    and state["diagnostics_version"] >= state["version"]
+                ):
+                    state["complete"] = True
+
                 if not state["complete"]:
                     uris_needing_wait.append(uri)
+                    target_versions[uri] = state["version"]
         
         if not uris_needing_wait:
             # All files already have diagnostics or errors
@@ -503,77 +509,57 @@ class LSPFileManager(BaseLeanLSPClient):
         
         # Send waitForDiagnostics requests for files that need it
         futures_by_uri = {}
-        with self._opened_files_lock:
-            for uri in uris_needing_wait:
-                path = self._uri_to_local(uri)
-                version = self.opened_files[path]["version"]
-                params = {"uri": uri, "version": version}
-                future = self._send_request_async("textDocument/waitForDiagnostics", params)
-                futures_by_uri[uri] = future
+        for uri in uris_needing_wait:
+            params = {"uri": uri, "version": target_versions[uri]}
+            futures_by_uri[uri] = self._send_request_async("textDocument/waitForDiagnostics", params)
         
         # Wait for completion
-        start_time = time.time()
-        uris_to_wait_for_response = set(uris_needing_wait)
-        processing_finished_time = {}  # Track when each URI finished processing
-        
-        while uris_to_wait_for_response:
-            elapsed = time.time() - start_time
+        start_time = time.monotonic()
+        pending_uris = set(uris_needing_wait)
+
+        while pending_uris:
+            elapsed = time.monotonic() - start_time
             if elapsed > timeout:
                 if self.print_warnings:
                     print(f"WARNING: `_wait_for_diagnostics` timed out after {timeout} seconds.")
                 break
             
-            # Check for completed futures
-            for uri in list(uris_to_wait_for_response):
-                future = futures_by_uri[uri]
-                if future.done():
-                    uris_to_wait_for_response.discard(uri)
+            done_uris = [uri for uri in pending_uris if futures_by_uri[uri].done()]
+            completed_uris: set[str] = set()
+
+            with self._opened_files_lock:
+                for uri in done_uris:
+                    path = path_by_uri[uri]
+                    future = futures_by_uri[uri]
                     try:
-                        # Get result to check for errors
                         future.result()
-                        # waitForDiagnostics returned successfully - mark complete
-                        path = self._uri_to_local(uri)
-                        with self._opened_files_lock:
-                            self.opened_files[path]["complete"] = True
                     except Exception as e:
-                        # Store error in state
-                        path = self._uri_to_local(uri)
-                        with self._opened_files_lock:
-                            self.opened_files[path]["error"] = {"message": str(e)}
-                            self.opened_files[path]["processing"] = False
-                            self.opened_files[path]["complete"] = True
-            
-            # Check if state has been updated by global handlers
-            with self._opened_files_lock:
-                for uri in list(uris_to_wait_for_response):
-                    path = self._uri_to_local(uri)
+                        self.opened_files[path]["error"] = {"message": str(e)}
+                        self.opened_files[path]["processing"] = False
+                    finally:
+                        self.opened_files[path]["complete"] = True
+                        completed_uris.add(uri)
+
+                for uri in pending_uris - completed_uris:
+                    path = path_by_uri[uri]
                     state = self.opened_files[path]
-                    
-                    # Check completion signals
-                    if state["complete"]:
-                        # Already marked complete (error or waitForDiagnostics returned)
-                        uris_to_wait_for_response.discard(uri)
-                    elif not state["processing"]:
-                        # Processing finished - track time and wait a bit more for late diagnostics
-                        if uri not in processing_finished_time:
-                            processing_finished_time[uri] = time.time()
-            
-            # Handle processing-finished cases with grace period
-            current_time = time.time()
-            with self._opened_files_lock:
-                for uri in list(uris_to_wait_for_response):
-                    path = self._uri_to_local(uri)
-                    state = self.opened_files[path]
-                    if not state["processing"] and uri in processing_finished_time and not state["complete"] and not state["error"]:
-                        # Check if grace period (0.1s) has passed since processing finished
-                        time_since_finished = current_time - processing_finished_time[uri]
-                        if time_since_finished >= 0.1:
-                            # Processing done and grace period passed - mark complete
-                            self.opened_files[path]["complete"] = True
-                            uris_to_wait_for_response.discard(uri)
-            
-            # Small sleep to avoid busy waiting
-            if uris_to_wait_for_response:
-                remaining_time = timeout - elapsed
-                wait_time = min(0.025, max(0.001, remaining_time))
-                time.sleep(wait_time)
+                    target_version = target_versions[uri]
+
+                    if (
+                        not state["complete"]
+                        and not state["processing"]
+                        and state["diagnostics_version"] >= target_version
+                    ):
+                        state["complete"] = True
+                        completed_uris.add(uri)
+                    elif state["complete"]:
+                        completed_uris.add(uri)
+
+            pending_uris.difference_update(completed_uris)
+
+            if not pending_uris:
+                break
+
+            remaining_time = timeout - elapsed
+            wait_time = min(0.02, max(0.001, remaining_time))
+            time.sleep(wait_time)
