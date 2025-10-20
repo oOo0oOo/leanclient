@@ -3,10 +3,8 @@ import pathlib
 from pprint import pprint
 import subprocess
 import urllib.parse
-import queue
 import threading
 import asyncio
-import concurrent.futures
 from typing import Optional, Dict, Any
 
 import orjson
@@ -62,18 +60,17 @@ class BaseLeanLSPClient:
         self._loop_thread.start()
         
         # Thread to read stdout
-        self._stdout_queue = queue.Queue()
         self._stdout_thread_stop_event = threading.Event()
         self._stdout_thread = threading.Thread(
             target=self._read_stdout_loop,
-            args=(self._stdout_queue, self._stdout_thread_stop_event),
+            args=(self._stdout_thread_stop_event,),
             daemon=True,
         )
         self._stdout_thread.start()
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
-        self._send_request_rpc(
+        server_info = self._send_request_sync(
             "initialize",
             {
                 "processId": os.getpid(),
@@ -82,9 +79,7 @@ class BaseLeanLSPClient:
                     "editDelay": 1  # It seems like this has no effect.
                 },
             },
-            is_notification=False,
         )
-        server_info = self._read_stdout()["result"]
 
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
@@ -188,7 +183,7 @@ class BaseLeanLSPClient:
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
     
-    def _read_stdout_loop(self, queue: queue.Queue, stop_event: threading.Event):
+    def _read_stdout_loop(self, stop_event: threading.Event):
         """Read the stdout of the language server in a separate thread.
 
         This is necessary to avoid blocking the main thread.
@@ -212,9 +207,6 @@ class BaseLeanLSPClient:
             next(self.stdout)
             msg = orjson.loads(self.stdout.read(content_length))
             
-            # Put message in queue (for backward compatibility with _read_stdout)
-            queue.put(msg)
-            
             # Dispatch to futures and notification handlers
             msg_id = msg.get("id")
             method = msg.get("method")
@@ -236,24 +228,16 @@ class BaseLeanLSPClient:
                         future.set_result, 
                         msg.get("result", msg)
                     )
+                continue
             
-            # Handle notification
-            elif method is not None and method in self._notification_handlers:
+            # Handle notification with registered handler
+            if method is not None and method in self._notification_handlers:
                 handler = self._notification_handlers[method]
                 try:
                     handler(msg)
                 except Exception as e:
                     if self.print_warnings:
                         print(f"Warning: Notification handler for {method} failed: {e}")
-
-        queue.put(None)  # This prevents blocking when the thread is stopped.
-
-    def _read_stdout(self, timeout=None):
-        """Read and parse one message from the server."""
-        try:
-            return self._stdout_queue.get(timeout=timeout)
-        except queue.Empty:
-            return None
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
@@ -269,7 +253,7 @@ class BaseLeanLSPClient:
             int | None: Id of the request if it is not a notification.
         """
         if not is_notification:
-            request_id = f"client_{self.request_id}"
+            request_id = self.request_id
             self.request_id += 1
 
         request = {
@@ -324,18 +308,12 @@ class BaseLeanLSPClient:
         """
         async_future = self._send_request_async(method, params)
         
-        # Convert asyncio.Future to blocking call using concurrent.futures.Future
-        thread_future = concurrent.futures.Future()
+        # Wrap the future in an awaitable coroutine
+        async def await_future():
+            return await async_future
         
-        def callback(f):
-            try:
-                thread_future.set_result(f.result())
-            except Exception as e:
-                thread_future.set_exception(e)
-        
-        self._loop.call_soon_threadsafe(async_future.add_done_callback, callback)
-        
-        return thread_future.result(timeout=timeout)
+        # Use asyncio.run_coroutine_threadsafe to bridge async to sync
+        return asyncio.run_coroutine_threadsafe(await_future(), self._loop).result(timeout=timeout)
     
     def _register_notification_handler(self, method: str, handler):
         """Register a handler for a specific notification method.

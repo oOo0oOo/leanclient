@@ -1,6 +1,7 @@
 import collections
 from pprint import pprint
 import time
+import threading
 import urllib.parse
 
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
@@ -274,10 +275,20 @@ class LSPFileManager(BaseLeanLSPClient):
         # Wait for published diagnostics
         if blocking:
             waiting_uris = set(uris)
-            while waiting_uris:
-                resp = self._read_stdout()
-                if resp.get("method") == "textDocument/publishDiagnostics":
-                    waiting_uris.discard(resp["params"]["uri"])
+            completion_event = threading.Event()
+            
+            def handle_close_diagnostics(msg):
+                uri = msg["params"]["uri"]
+                waiting_uris.discard(uri)
+                if not waiting_uris:
+                    completion_event.set()
+            
+            self._register_notification_handler("textDocument/publishDiagnostics", handle_close_diagnostics)
+            try:
+                # Wait up to 5 seconds for all diagnostics
+                completion_event.wait(timeout=5)
+            finally:
+                self._unregister_notification_handler("textDocument/publishDiagnostics")
 
     def get_diagnostics(self, path: str) -> list:
         """Get diagnostics for a single file.
@@ -398,72 +409,89 @@ class LSPFileManager(BaseLeanLSPClient):
             futures_by_uri[uri] = future
 
         # Use sets for explicit, robust state tracking.
+        waiting_uris = set(uris)  # Original URIs we're waiting for
         uris_to_wait_for_response = set(uris)
         uris_to_wait_for_processing = set(uris)
         diagnostics = {}
+        completion_event = threading.Event()
 
-        last_update_time = time.time()
-        while uris_to_wait_for_response or uris_to_wait_for_processing:
-            if time.time() - last_update_time > timeout:
-                if self.print_warnings:
-                    print(
-                        f"WARNING: `_wait_for_diagnostics` timed out: No update after {timeout} seconds."
-                    )
-                break
-
-            # Check for completed futures
-            for uri in list(uris_to_wait_for_response):
-                future = futures_by_uri[uri]
-                if future.done():
-                    uris_to_wait_for_response.discard(uri)
-                    last_update_time = time.time()
-                    try:
-                        # Try to get the result to check for errors
-                        future.result()
-                    except Exception as e:
-                        # On error, mark processing as done and store error
-                        uris_to_wait_for_processing.discard(uri)
-                        if not diagnostics.get(uri):
-                            diagnostics[uri] = [{"error": {"message": str(e)}}]
-
-            res = self._read_stdout(timeout=0.001)
-            if not res:
-                continue
-
-            method = res.get("method")
-
-            if method in IGNORED_METHODS:
-                continue
-
-            last_update_time = time.time()
-
-            # Handle a notification from the server.
-            if method == "textDocument/publishDiagnostics":
-                uri = res["params"]["uri"]
-                diagnostics[uri] = res["params"]["diagnostics"]
-                # Also mark as done processing when we get diagnostics
+        # Register notification handlers for diagnostics and file progress
+        def handle_publish_diagnostics(msg):
+            uri = msg["params"]["uri"]
+            if uri in waiting_uris:  # Only process if we're waiting for this URI
+                new_diagnostics = msg["params"]["diagnostics"]
+                # Only store if:
+                # 1. We don't have diagnostics yet, OR
+                # 2. The new diagnostics are non-empty (server sends empty first, then real ones), AND
+                # 3. We don't already have an error diagnostic (from fatal error)
+                has_error = uri in diagnostics and diagnostics[uri] and "error" in diagnostics[uri][0]
+                if (uri not in diagnostics or new_diagnostics) and not has_error:
+                    diagnostics[uri] = new_diagnostics
+                # Getting diagnostics means processing is done
                 uris_to_wait_for_processing.discard(uri)
-                continue
+                if not uris_to_wait_for_response and not uris_to_wait_for_processing:
+                    completion_event.set()
 
-            if method == "$/lean/fileProgress":
-                uri = res["params"]["textDocument"]["uri"]
-                proc = res["params"]["processing"]
-                if not proc:
-                    uris_to_wait_for_processing.discard(uri)
+        def handle_file_progress(msg):
+            uri = msg["params"]["textDocument"]["uri"]
+            if uri not in waiting_uris:  # Only process if we're waiting for this URI
+                return
+            
+            proc = msg["params"]["processing"]
+            if not proc:
+                uris_to_wait_for_processing.discard(uri)
+                if not uris_to_wait_for_response and not uris_to_wait_for_processing:
+                    completion_event.set()
+            # Check for fatalError from fileProgress.
+            # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
+            elif proc[-1].get("kind") == 2:
+                uris_to_wait_for_processing.discard(uri)
+                uris_to_wait_for_response.discard(uri)
+                if uri not in diagnostics:
+                    msg_text = "leanclient: Received LeanFileProgressKind.fatalError."
+                    diagnostics[uri] = [{"error": {"message": msg_text}}]
+                if not uris_to_wait_for_response and not uris_to_wait_for_processing:
+                    completion_event.set()
 
-                # Check for fatalError from fileProgress.
-                # https://github.com/leanprover/lean4/blob/8791a9ce069d6dc87f7cccc4387545b1110c89bd/src/Lean/Data/Lsp/Extra.lean#L55
-                elif proc[-1].get("kind") == 2:
-                    uris_to_wait_for_processing.discard(uri)
-                    uris_to_wait_for_response.discard(uri)
-                    if not diagnostics.get(uri):
-                        msg = "leanclient: Received LeanFileProgressKind.fatalError."
-                        diagnostics[uri] = [{"error": {"message": msg}}]
-                continue
+        self._register_notification_handler("textDocument/publishDiagnostics", handle_publish_diagnostics)
+        self._register_notification_handler("$/lean/fileProgress", handle_file_progress)
 
-            if self.print_warnings and method:
-                print(
-                    f"WARNING: Unhandled method: {res.get('method')}. Consider opening an issue on leanclient github."
-                )
+        try:
+            # Wait for futures to complete and check for errors
+            start_time = time.time()
+            while uris_to_wait_for_response or uris_to_wait_for_processing:
+                # Check if we've timed out
+                elapsed = time.time() - start_time
+                if elapsed > timeout:
+                    if self.print_warnings:
+                        print(f"WARNING: `_wait_for_diagnostics` timed out after {timeout} seconds.")
+                    break
+
+                # Check for completed futures
+                for uri in list(uris_to_wait_for_response):
+                    future = futures_by_uri[uri]
+                    if future.done():
+                        uris_to_wait_for_response.discard(uri)
+                        try:
+                            # Try to get the result to check for errors
+                            future.result()
+                        except Exception as e:
+                            # On error, mark processing as done and store error
+                            uris_to_wait_for_processing.discard(uri)
+                            if uri not in diagnostics:
+                                diagnostics[uri] = [{"error": {"message": str(e)}}]
+
+                # Wait for notifications or timeout
+                if uris_to_wait_for_response or uris_to_wait_for_processing:
+                    remaining_time = timeout - elapsed
+                    wait_time = min(0.1, max(0.001, remaining_time))
+                    completion_event.wait(timeout=wait_time)
+                    if completion_event.is_set():
+                        completion_event.clear()
+
+        finally:
+            # Always unregister handlers
+            self._unregister_notification_handler("textDocument/publishDiagnostics")
+            self._unregister_notification_handler("$/lean/fileProgress")
 
         return [diagnostics.get(uri, []) for uri in uris]
