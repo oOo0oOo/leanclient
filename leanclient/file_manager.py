@@ -64,7 +64,6 @@ class LSPFileManager(BaseLeanLSPClient):
             """Handle $/lean/fileProgress notifications."""
             uri = msg["params"]["textDocument"]["uri"]
             processing = msg["params"]["processing"]
-            diag_version = msg["params"].get("version", None)
             
             path = self._uri_to_local(uri)
             

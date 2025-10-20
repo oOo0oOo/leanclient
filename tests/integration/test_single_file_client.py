@@ -53,7 +53,6 @@ def test_requests(lsp_client, test_file_path):
     """Test various request methods on SingleFileClient."""
     sfc = lsp_client.create_file_client(test_file_path)
     res = []
-    # res.append(sfc.get_diagnostics())
     res.append(sfc.get_completions(9, 15))
     res.append(sfc.get_completion_item_resolve(res[0][0]))
     res.append(sfc.get_hover(4, 4))
@@ -69,6 +68,7 @@ def test_requests(lsp_client, test_file_path):
     res.append(sfc.get_goal(9, 15))
     res.append(sfc.get_term_goal(9, 15))
     res.append(sfc.get_file_content())
+    res.append(sfc.get_diagnostics())
     assert all(res)
 
     item = sfc.get_call_hierarchy_items(1, 15)[0]

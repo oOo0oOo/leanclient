@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from leanclient.utils import DocumentContentChange, experimental
 
@@ -17,8 +17,8 @@ class SingleFileClient:
 
     def __init__(self, client, file_path: str):
         # Check if file exists
-        path = os.path.join(client.project_path, file_path)
-        if not os.path.exists(path):
+        path = (client.project_path / Path(file_path)).resolve()
+        if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
         self.client = client

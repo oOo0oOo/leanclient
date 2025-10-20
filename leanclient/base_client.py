@@ -1,11 +1,10 @@
 import os
-import pathlib
-from pprint import pprint
 import subprocess
 import urllib.parse
 import threading
 import asyncio
 from collections import defaultdict
+from pathlib import Path
 
 import orjson
 
@@ -30,7 +29,7 @@ class BaseLeanLSPClient:
         self, project_path: str, initial_build: bool = True, print_warnings: bool = True
     ):
         self.print_warnings = print_warnings
-        self.project_path = os.path.abspath(project_path)
+        self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
 
         if initial_build:
@@ -142,7 +141,7 @@ class BaseLeanLSPClient:
             pass
 
     # URI HANDLING
-    def _local_to_uri(self, local_path: str) -> str:
+    def _local_to_uri(self, local_path: str | os.PathLike[str]) -> str:
         """Convert a local file path to a URI.
 
         User API is based on local file paths (relative to project path) but internally we use URIs.
@@ -157,25 +156,33 @@ class BaseLeanLSPClient:
         Returns:
             str: URI representation of the file.
         """
-        uri = pathlib.Path(self.project_path, local_path).as_uri()
-        return urllib.parse.unquote(uri)
+        path = (self.project_path / Path(local_path)).resolve()
+        return urllib.parse.unquote(path.as_uri())
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
         """See :meth:`_local_to_uri`"""
         return [self._local_to_uri(path) for path in local_paths]
 
-    def _uri_to_abs(self, uri: str) -> str:
+    def _uri_to_abs(self, uri: str) -> Path:
         """See :meth:`_local_to_uri`"""
-        path = urllib.parse.urlparse(uri).path
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme and parsed.scheme != "file":
+            raise ValueError(f"Unsupported URI scheme: {parsed.scheme}")
+
+        path = urllib.parse.unquote(parsed.path)
         # On windows we need to remove the leading slash
         if os.name == "nt" and path.startswith("/"):
             path = path[1:]
-        return path
+        return Path(path)
 
     def _uri_to_local(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        abs_path = self._uri_to_abs(uri)
-        return os.path.relpath(abs_path, self.project_path)
+        abs_path = self._uri_to_abs(uri).resolve()
+        try:
+            rel_path = abs_path.relative_to(self.project_path)
+        except ValueError:
+            return str(abs_path)
+        return str(rel_path)
 
     # LANGUAGE SERVER RPC INTERACTION
     def _run_event_loop(self):
