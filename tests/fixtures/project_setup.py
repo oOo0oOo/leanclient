@@ -80,7 +80,6 @@ def setup_test_project():
     version = _get_lean_version()
     
     if not _needs_rebuild():
-        print(f"Test project exists with correct version ({version}), skipping rebuild")
         return TEST_ENV_DIR
     
     print(f"Setting up test project with Lean {version}...")

@@ -12,12 +12,15 @@ def test_async_single_request(lsp_client: LeanLSPClient):
     lsp_client.open_file(path)
     
     # Send async request
+    with lsp_client._opened_files_lock:
+        version = lsp_client.opened_files.get(path, {}).get("version", 0)
+    
     future = lsp_client._send_request_async(
         "textDocument/hover",
         {
             "textDocument": {
                 "uri": lsp_client._local_to_uri(path),
-                "version": lsp_client.opened_files_versions.get(path, 0),
+                "version": version,
             },
             "position": {"line": 4, "character": 2},
         }
@@ -48,14 +51,17 @@ def test_async_multiple_requests_concurrent(lsp_client: LeanLSPClient):
     
     futures = []
     start_time = time.time()
+    uri = lsp_client._local_to_uri(path)
     
     for line, char in positions:
+        with lsp_client._opened_files_lock:
+            version = lsp_client.opened_files[path]["version"]
         future = lsp_client._send_request_async(
             "textDocument/hover",
             {
                 "textDocument": {
-                    "uri": lsp_client._local_to_uri(path),
-                    "version": lsp_client.opened_files_versions[path],
+                    "uri": uri,
+                    "version": version,
                 },
                 "position": {"line": line, "character": char},
             }
@@ -94,13 +100,16 @@ def test_async_request_performance(lsp_client: LeanLSPClient):
     # Time async approach
     async_start = time.time()
     futures = []
+    uri = lsp_client._local_to_uri(path)
     for line, char in positions:
+        with lsp_client._opened_files_lock:
+            version = lsp_client.opened_files[path]["version"]
         future = lsp_client._send_request_async(
             "textDocument/hover",
             {
                 "textDocument": {
-                    "uri": lsp_client._local_to_uri(path),
-                    "version": lsp_client.opened_files_versions[path],
+                    "uri": uri,
+                    "version": version,
                 },
                 "position": {"line": line, "character": char},
             }
@@ -150,12 +159,14 @@ def test_async_with_errors(lsp_client: LeanLSPClient):
     lsp_client.open_file(path)
     
     # Send request with invalid parameters (very large position)
+    with lsp_client._opened_files_lock:
+        version = lsp_client.opened_files[path]["version"]
     future = lsp_client._send_request_async(
         "textDocument/hover",
         {
             "textDocument": {
                 "uri": lsp_client._local_to_uri(path),
-                "version": lsp_client.opened_files_versions[path],
+                "version": version,
             },
             "position": {"line": 99999, "character": 99999},
         }
@@ -185,12 +196,14 @@ def test_multiple_files_async(lsp_client: LeanLSPClient):
     # Send requests to different files concurrently
     futures = []
     for path in paths:
+        with lsp_client._opened_files_lock:
+            version = lsp_client.opened_files[path]["version"]
         future = lsp_client._send_request_async(
             "textDocument/documentSymbol",
             {
                 "textDocument": {
                     "uri": lsp_client._local_to_uri(path),
-                    "version": lsp_client.opened_files_versions[path],
+                    "version": version,
                 },
             }
         )

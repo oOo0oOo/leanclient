@@ -2,6 +2,7 @@
 
 import os
 import random
+import time
 
 import pytest
 import orjson
@@ -49,8 +50,8 @@ def test_get_diagnostics(lsp_client, test_file_path):
 @pytest.mark.integration
 @pytest.mark.slow
 def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
-    """Test handling of non-terminating diagnostic processing."""
-    # Create a file with non-terminating diagnostics (processing: {"kind": 2})
+    """Test handling of files with unterminated comments."""
+    # Create a file with an unterminated block comment
     content = "/- Unclosed comment"
     path = "BadFile.lean"
     with open(test_env_dir + path, "w") as f:
@@ -60,25 +61,18 @@ def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
         clean_lsp_client.open_file(path)
         diag = clean_lsp_client.get_diagnostics(path)
         # Should get diagnostics for the unterminated comment
-        # (may be error or real diagnostic depending on timing)
         assert len(diag) > 0
-        if "error" in diag[0]:
-            # Fatal error case
-            assert diag[0]["error"]["message"] == \
-                "leanclient: Received LeanFileProgressKind.fatalError."
-        else:
-            # Normal diagnostic case
-            assert diag[0]["message"] == "unterminated comment"
+        assert diag[0]["message"] == "unterminated comment"
 
         clean_lsp_client.close_files([path])
 
+        # Doc comments (/-!) with no closing
         content = "/-! Unterminated comment 2"
         with open(test_env_dir + path, "w") as f:
             f.write(content)
 
         clean_lsp_client.open_file(path)
         diag = clean_lsp_client.get_diagnostics(path)
-        # This one should always get proper diagnostics
         assert diag[0]["message"] == "unterminated comment"
     finally:
         if os.path.exists(test_env_dir + path):
@@ -134,6 +128,7 @@ def test_rpc_errors(clean_lsp_client, test_file_path):
     assert resp.startswith(exp)
 
     # Unopened file
+    clean_lsp_client.close_files([test_file_path])
     uri = clean_lsp_client._local_to_uri(test_file_path)
     body = orjson.dumps({
         "jsonrpc": "2.0",
@@ -146,7 +141,6 @@ def test_rpc_errors(clean_lsp_client, test_file_path):
     header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
     clean_lsp_client.stdin.write(header + body)
     clean_lsp_client.stdin.flush()
-    clean_lsp_client._wait_for_diagnostics([uri], timeout=0.1)
     resp = clean_lsp_client.get_diagnostics(test_file_path)
     assert resp == []
 

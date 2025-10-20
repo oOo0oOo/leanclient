@@ -5,6 +5,7 @@ import subprocess
 import urllib.parse
 import threading
 import asyncio
+from collections import defaultdict
 
 import orjson
 
@@ -49,7 +50,7 @@ class BaseLeanLSPClient:
         # Asyncio infrastructure for non-blocking requests
         self._loop = asyncio.new_event_loop()
         self._futures = {}  # {request_id: asyncio.Future}
-        self._notification_handlers = {}  # {method: callback}
+        self._notification_handlers = defaultdict(list)  # {method: [callback, ...]}
         
         # Start event loop in a separate thread
         self._loop_thread = threading.Thread(
@@ -231,12 +232,14 @@ class BaseLeanLSPClient:
             
             # Handle notification with registered handler
             if method is not None and method in self._notification_handlers:
-                handler = self._notification_handlers[method]
-                try:
-                    handler(msg)
-                except Exception as e:
-                    if self.print_warnings:
-                        print(f"Warning: Notification handler for {method} failed: {e}")
+                # Copy to avoid modification during iteration
+                handlers = list(self._notification_handlers[method])
+                for handler in handlers:
+                    try:
+                        handler(msg)
+                    except Exception as e:
+                        if self.print_warnings:
+                            print(f"Warning: Notification handler for {method} failed: {e}")
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
@@ -321,15 +324,29 @@ class BaseLeanLSPClient:
             method (str): Notification method name (e.g., "textDocument/publishDiagnostics").
             handler: Callable that takes the notification message as argument.
         """
-        self._notification_handlers[method] = handler
+        self._notification_handlers[method].append(handler)
     
-    def _unregister_notification_handler(self, method: str):
+    def _unregister_notification_handler(self, method: str, handler=None):
         """Unregister a notification handler.
         
         Args:
             method (str): Notification method name.
         """
-        self._notification_handlers.pop(method, None)
+        handlers = self._notification_handlers.get(method)
+        if not handlers:
+            return
+
+        if handler is None:
+            # Remove the most recently registered handler
+            handlers.pop()
+        else:
+            try:
+                handlers.remove(handler)
+            except ValueError:
+                return
+
+        if not handlers:
+            self._notification_handlers.pop(method, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:

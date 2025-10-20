@@ -207,14 +207,12 @@ def test_plain_term_goal(lsp_client, test_file_path):
 # ============================================================================
 
 @pytest.mark.integration
-def test_code_actions(lsp_client, test_file_path, test_env_dir):
+def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
     """Test getting, resolving, and applying code actions."""
-    if test_file_path in lsp_client.opened_files_diagnostics:
-        lsp_client.close_files([test_file_path])
-    lsp_client.open_file(test_file_path)
-    
+    clean_lsp_client.open_file(test_file_path)
+
     # Get code actions
-    res = lsp_client.get_code_actions(test_file_path, 12, 8, 12, 18)
+    res = clean_lsp_client.get_code_actions(test_file_path, 12, 8, 12, 18)
     assert isinstance(res, list)
     
     EXP = {
@@ -276,10 +274,10 @@ def test_code_actions(lsp_client, test_file_path, test_env_dir):
     assert res[0] == EXP
 
     # Resolve code action
-    res2 = lsp_client.get_code_action_resolve({"title": "Test"})
+    res2 = clean_lsp_client.get_code_action_resolve({"title": "Test"})
     assert res2["error"]["message"].startswith("Cannot process request")
-    
-    res3 = lsp_client.get_code_action_resolve(res[0])
+
+    res3 = clean_lsp_client.get_code_action_resolve(res[0])
     EXP = {
         "edit": {
             "documentChanges": [
@@ -307,8 +305,8 @@ def test_code_actions(lsp_client, test_file_path, test_env_dir):
     assert res3 == EXP
 
     # Apply the edit
-    lsp_client.apply_code_action_resolve(res3)
-    content = lsp_client.get_file_content(test_file_path)
+    clean_lsp_client.apply_code_action_resolve(res3)
+    content = clean_lsp_client.get_file_content(test_file_path)
     EXP = "-- Trigger code action\n/-- info: 1 -/\n#guard_msgs (info) in #eval 1"
     assert EXP in content, f"Expected '{EXP}' in content, got:\n{content}"
 
