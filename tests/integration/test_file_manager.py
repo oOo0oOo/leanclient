@@ -49,6 +49,35 @@ def test_open_files(file_manager, random_fast_mathlib_files):
     assert diag == diag2
 
 
+@pytest.mark.integration
+@pytest.mark.mathlib
+def test_open_file_receives_diagnostics_without_wait(file_manager, test_file_path):
+    """Ensure diagnostics arrive without explicitly waiting."""
+    file_manager.open_file(test_file_path)
+
+    deadline = time.time() + 10.0
+    diagnostics = []
+    error = None
+    fatal_error = False
+
+    while time.time() < deadline:
+        with file_manager._opened_files_lock:
+            state = file_manager.opened_files[test_file_path]
+            diagnostics = list(state["diagnostics"])
+            error = state["error"]
+            fatal_error = state["fatal_error"]
+        if diagnostics or error or fatal_error:
+            break
+        time.sleep(0.1)
+
+    try:
+        assert fatal_error is False, "Unexpected fatal error while waiting for diagnostics"
+        assert error is None, f"Unexpected error while waiting for diagnostics: {error}"
+        assert diagnostics, "Expected diagnostics to arrive without waitForDiagnostics"
+    finally:
+        file_manager.close_files([test_file_path])
+
+
 # ============================================================================
 # File update tests
 # ============================================================================
