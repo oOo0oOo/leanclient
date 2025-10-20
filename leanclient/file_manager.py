@@ -1,11 +1,40 @@
 import collections
-from pprint import pprint
+from dataclasses import dataclass, field
 import time
 import threading
 import urllib.parse
+from typing import Any
 
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 from .base_client import BaseLeanLSPClient
+
+
+@dataclass(slots=True)
+class FileState:
+    """Represents the mutable state of an open Lean file."""
+
+    uri: str
+    content: str
+    version: int = 0
+    diagnostics: list[Any] = field(default_factory=list)
+    diagnostics_version: int = -1
+    processing: bool = True
+    error: dict | None = None
+    fatal_error: bool = False
+    complete: bool = False
+    close_pending: bool = False
+    close_ready: bool = False
+
+    def reset_after_change(self):
+        """Reset diagnostics-related state after a content change."""
+        self.diagnostics = []
+        self.diagnostics_version = self.version - 1
+        self.processing = True
+        self.error = None
+        self.fatal_error = False
+        self.complete = False
+        self.close_pending = False
+        self.close_ready = False
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -25,7 +54,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         self.max_opened_files = max_opened_files
         # Unified state tracking for opened files
-        self.opened_files = collections.OrderedDict()  # path -> state dict
+        self.opened_files: collections.OrderedDict[str, FileState] = collections.OrderedDict()
         self._opened_files_lock = threading.Lock()
         self._recently_closed: set[str] = set()
         
@@ -45,20 +74,21 @@ class LSPFileManager(BaseLeanLSPClient):
             
             with self._opened_files_lock:
                 # Only update if file is still open
-                if path not in self.opened_files:
+                state = self.opened_files.get(path)
+                if state is None:
                     return
                 
                 # Only update if diagnostics version is current or newer
-                if diag_version >= self.opened_files[path]["diagnostics_version"]:
-                    has_error = self.opened_files[path]["error"] is not None
+                if diag_version >= state.diagnostics_version:
+                    has_error = state.error is not None
                     
                     # Always update diagnostics unless we have an error
                     # (Server sends empty [] first, then progressively more diagnostics)
                     if not has_error:
-                        self.opened_files[path]["diagnostics"] = diagnostics
-                        self.opened_files[path]["diagnostics_version"] = diag_version
-                        if self.opened_files[path]["close_pending"] and not diagnostics:
-                            self.opened_files[path]["close_ready"] = True
+                        state.diagnostics = diagnostics
+                        state.diagnostics_version = diag_version
+                        if state.close_pending and not diagnostics:
+                            state.close_ready = True
         
         def handle_file_progress(msg):
             """Handle $/lean/fileProgress notifications."""
@@ -69,7 +99,8 @@ class LSPFileManager(BaseLeanLSPClient):
             
             with self._opened_files_lock:
                 # Only update if file is still open
-                if path not in self.opened_files:
+                state = self.opened_files.get(path)
+                if state is None:
                     return
 
                 # Always check for fatal errors regardless of version
@@ -77,14 +108,14 @@ class LSPFileManager(BaseLeanLSPClient):
                 if processing and processing[-1].get("kind") == 2:
                     # Mark that we saw a fatal error, but don't set error message yet
                     # We'll set it later if no diagnostics arrive
-                    self.opened_files[path]["fatal_error"] = True
-                    self.opened_files[path]["processing"] = False
-                    self.opened_files[path]["complete"] = True
+                    state.fatal_error = True
+                    state.processing = False
+                    state.complete = True
                 
                 # Mark processing complete when processing array is empty
                 if not processing:
                     # Processing complete (but may still get more diagnostics)
-                    self.opened_files[path]["processing"] = False        
+                    state.processing = False        
         
         # Register permanent handlers
         self._register_notification_handler("textDocument/publishDiagnostics", handle_publish_diagnostics)
@@ -109,19 +140,7 @@ class LSPFileManager(BaseLeanLSPClient):
             # Initialize file state
             with self._opened_files_lock:
                 self._recently_closed.discard(path)
-                self.opened_files[path] = {
-                    "content": txt,
-                    "version": 0,
-                    "uri": uri,
-                    "diagnostics": [],
-                    "diagnostics_version": -1,
-                    "processing": True,
-                    "error": None,
-                    "fatal_error": False,  # Track if we saw a fatal error
-                    "complete": False,  # True either when error or (waitForDiagnostics returns and processing done)
-                    "close_pending": False,
-                    "close_ready": False,
-                }
+                self.opened_files[path] = FileState(uri=uri, content=txt)
 
             params = {
                 "textDocument": {
@@ -147,8 +166,9 @@ class LSPFileManager(BaseLeanLSPClient):
         """
         self.open_file(path)
         with self._opened_files_lock:
-            uri = self.opened_files[path]["uri"]
-            version = self.opened_files[path]["version"]
+            state = self.opened_files[path]
+            uri = state.uri
+            version = state.version
         
         params["textDocument"] = {
             "uri": uri,
@@ -279,23 +299,17 @@ class LSPFileManager(BaseLeanLSPClient):
             if path not in self.opened_files:
                 raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
             
-            text = self.opened_files[path]["content"]
+            state = self.opened_files[path]
+            text = state.content
             text = apply_changes_to_text(text, changes)
             
             # Update state - reset for new version
-            self.opened_files[path]["content"] = text
-            self.opened_files[path]["version"] += 1
-            self.opened_files[path]["diagnostics"] = []
-            self.opened_files[path]["diagnostics_version"] = self.opened_files[path]["version"] - 1
-            self.opened_files[path]["processing"] = True
-            self.opened_files[path]["error"] = None
-            self.opened_files[path]["fatal_error"] = False
-            self.opened_files[path]["complete"] = False
-            self.opened_files[path]["close_pending"] = False
-            self.opened_files[path]["close_ready"] = False
-            
-            uri = self.opened_files[path]["uri"]
-            version = self.opened_files[path]["version"]
+            state.content = text
+            state.version += 1
+            state.reset_after_change()
+
+            uri = state.uri
+            version = state.version
 
         # TODO: Any of these useful?
         # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
@@ -328,11 +342,12 @@ class LSPFileManager(BaseLeanLSPClient):
                 raise FileNotFoundError(
                     f"Files {missing} are not open. Call open_files first."
                 )
-            uris = [self.opened_files[p]["uri"] for p in paths]
+            uris = [self.opened_files[p].uri for p in paths]
             if blocking:
                 for path in paths:
-                    self.opened_files[path]["close_pending"] = True
-                    self.opened_files[path]["close_ready"] = False
+                    state = self.opened_files[path]
+                    state.close_pending = True
+                    state.close_ready = False
             for path in paths:
                 self._recently_closed.add(path)
 
@@ -345,7 +360,7 @@ class LSPFileManager(BaseLeanLSPClient):
             deadline = time.monotonic() + 5
             while True:
                 with self._opened_files_lock:
-                    ready = [self.opened_files[p]["close_ready"] for p in paths]
+                    ready = [self.opened_files[p].close_ready for p in paths]
                 if all(ready):
                     break
                 if time.monotonic() >= deadline:
@@ -357,8 +372,9 @@ class LSPFileManager(BaseLeanLSPClient):
                 for path in paths:
                     # Reset flags; file about to be removed
                     if path in self.opened_files:
-                        self.opened_files[path]["close_pending"] = False
-                        self.opened_files[path]["close_ready"] = False
+                        state = self.opened_files[path]
+                        state.close_pending = False
+                        state.close_ready = False
         
         # Remove from state
         with self._opened_files_lock:
@@ -424,8 +440,9 @@ class LSPFileManager(BaseLeanLSPClient):
         
         # Check if we need to wait
         with self._opened_files_lock:
-            is_complete = self.opened_files[path]["complete"]
-            uri = self.opened_files[path]["uri"]
+            state = self.opened_files[path]
+            is_complete = state.complete
+            uri = state.uri
         
         need_to_wait = not is_complete
         
@@ -437,15 +454,26 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             state = self.opened_files[path]
             if self.print_warnings:
-                print(f"DEBUG get_diagnostics: path={path}, diag={state['diagnostics']}, error={state['error']}, processing={state['processing']}, version={state['version']}, diag_version={state['diagnostics_version']}")
-            if state["error"]:
-                return [state["error"]]
+                print(
+                    "DEBUG get_diagnostics: path=%s, diag=%s, error=%s, processing=%s, "
+                    "version=%s, diag_version=%s"
+                    % (
+                        path,
+                        state.diagnostics,
+                        state.error,
+                        state.processing,
+                        state.version,
+                        state.diagnostics_version,
+                    )
+                )
+            if state.error:
+                return [state.error]
             # If we saw a fatal error but have no diagnostics, return generic error message
-            if state["fatal_error"] and not state["diagnostics"]:
+            if state.fatal_error and not state.diagnostics:
                 return [{
                     "message": "leanclient: Received LeanFileProgressKind.fatalError."
                 }]
-            return state["diagnostics"]
+            return state.diagnostics
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
@@ -457,8 +485,9 @@ class LSPFileManager(BaseLeanLSPClient):
             str: Content of the file.
         """
         with self._opened_files_lock:
-            if path in self.opened_files:
-                return self.opened_files[path]["content"]
+            state = self.opened_files.get(path)
+            if state is not None:
+                return state.content
 
         raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
 
@@ -492,15 +521,15 @@ class LSPFileManager(BaseLeanLSPClient):
                 state = self.opened_files[path]
 
                 if (
-                    not state["complete"]
-                    and not state["processing"]
-                    and state["diagnostics_version"] >= state["version"]
+                    not state.complete
+                    and not state.processing
+                    and state.diagnostics_version >= state.version
                 ):
-                    state["complete"] = True
+                    state.complete = True
 
-                if not state["complete"]:
+                if not state.complete:
                     uris_needing_wait.append(uri)
-                    target_versions[uri] = state["version"]
+                    target_versions[uri] = state.version
         
         if not uris_needing_wait:
             # All files already have diagnostics or errors
@@ -533,10 +562,12 @@ class LSPFileManager(BaseLeanLSPClient):
                     try:
                         future.result()
                     except Exception as e:
-                        self.opened_files[path]["error"] = {"message": str(e)}
-                        self.opened_files[path]["processing"] = False
+                        state = self.opened_files[path]
+                        state.error = {"message": str(e)}
+                        state.processing = False
                     finally:
-                        self.opened_files[path]["complete"] = True
+                        state = self.opened_files[path]
+                        state.complete = True
                         completed_uris.add(uri)
 
                 for uri in pending_uris - completed_uris:
@@ -545,13 +576,13 @@ class LSPFileManager(BaseLeanLSPClient):
                     target_version = target_versions[uri]
 
                     if (
-                        not state["complete"]
-                        and not state["processing"]
-                        and state["diagnostics_version"] >= target_version
+                        not state.complete
+                        and not state.processing
+                        and state.diagnostics_version >= target_version
                     ):
-                        state["complete"] = True
+                        state.complete = True
                         completed_uris.add(uri)
-                    elif state["complete"]:
+                    elif state.complete:
                         completed_uris.add(uri)
 
             pending_uris.difference_update(completed_uris)

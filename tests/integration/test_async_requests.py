@@ -13,7 +13,8 @@ def test_async_single_request(lsp_client: LeanLSPClient):
     
     # Send async request
     with lsp_client._opened_files_lock:
-        version = lsp_client.opened_files.get(path, {}).get("version", 0)
+        state = lsp_client.opened_files.get(path)
+        version = state.version if state else 0
     
     future = lsp_client._send_request_async(
         "textDocument/hover",
@@ -55,7 +56,7 @@ def test_async_multiple_requests_concurrent(lsp_client: LeanLSPClient):
     
     for line, char in positions:
         with lsp_client._opened_files_lock:
-            version = lsp_client.opened_files[path]["version"]
+            version = lsp_client.opened_files[path].version
         future = lsp_client._send_request_async(
             "textDocument/hover",
             {
@@ -103,7 +104,7 @@ def test_async_request_performance(lsp_client: LeanLSPClient):
     uri = lsp_client._local_to_uri(path)
     for line, char in positions:
         with lsp_client._opened_files_lock:
-            version = lsp_client.opened_files[path]["version"]
+            version = lsp_client.opened_files[path].version
         future = lsp_client._send_request_async(
             "textDocument/hover",
             {
@@ -160,7 +161,7 @@ def test_async_with_errors(lsp_client: LeanLSPClient):
     
     # Send request with invalid parameters (very large position)
     with lsp_client._opened_files_lock:
-        version = lsp_client.opened_files[path]["version"]
+        version = lsp_client.opened_files[path].version
     future = lsp_client._send_request_async(
         "textDocument/hover",
         {
@@ -197,7 +198,7 @@ def test_multiple_files_async(lsp_client: LeanLSPClient):
     futures = []
     for path in paths:
         with lsp_client._opened_files_lock:
-            version = lsp_client.opened_files[path]["version"]
+            version = lsp_client.opened_files[path].version
         future = lsp_client._send_request_async(
             "textDocument/documentSymbol",
             {

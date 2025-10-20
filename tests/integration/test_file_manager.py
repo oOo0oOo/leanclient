@@ -63,9 +63,9 @@ def test_open_file_receives_diagnostics_without_wait(file_manager, test_file_pat
     while time.time() < deadline:
         with file_manager._opened_files_lock:
             state = file_manager.opened_files[test_file_path]
-            diagnostics = list(state["diagnostics"])
-            error = state["error"]
-            fatal_error = state["fatal_error"]
+            diagnostics = list(state.diagnostics)
+            error = state.error
+            fatal_error = state.fatal_error
         if diagnostics or error or fatal_error:
             break
         time.sleep(0.1)
