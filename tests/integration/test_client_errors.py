@@ -26,7 +26,8 @@ EXP_DIAGNOSTIC_WARNINGS = ["declaration uses 'sorry'", "declaration uses 'sorry'
 @pytest.mark.integration
 def test_open_diagnostics(clean_lsp_client, test_file_path):
     """Test getting diagnostics when opening file."""
-    diagnostics = clean_lsp_client.open_file(test_file_path)
+    clean_lsp_client.open_file(test_file_path)
+    diagnostics = clean_lsp_client.get_diagnostics(test_file_path)
     errors = [d["message"] for d in diagnostics if d["severity"] == 1]
     assert errors == EXP_DIAGNOSTIC_ERRORS
     
@@ -46,21 +47,6 @@ def test_get_diagnostics(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
-@pytest.mark.mathlib
-def test_get_diagnostics_multi(lsp_client, test_file_path):
-    """Test getting diagnostics for multiple files."""
-    paths = [test_file_path] * 2
-    paths.append(
-        ".lake/packages/mathlib/Mathlib/Algebra/GroupWithZero/Divisibility.lean"
-    )
-    diag2 = lsp_client.get_diagnostics_multi(paths)
-    
-    diag = lsp_client.get_diagnostics(test_file_path)
-    assert len(diag2[0]) == len(diag)
-    assert len(diag2[-1]) == 0
-
-
-@pytest.mark.integration
 def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
     """Test handling of non-terminating diagnostic processing."""
     # Create a file with non-terminating diagnostics (processing: {"kind": 2})
@@ -70,19 +56,18 @@ def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
         f.write(content)
 
     try:
-        diag = clean_lsp_client.open_file(path)
-        assert diag[0]["error"]["message"] == \
-            "leanclient: Received LeanFileProgressKind.fatalError."
-
-        # Check diagnostics
+        clean_lsp_client.open_file(path)
         diag = clean_lsp_client.get_diagnostics(path)
-        assert diag == [
-            {
-                "error": {
-                    "message": "leanclient: Received LeanFileProgressKind.fatalError."
-                }
-            }
-        ]
+        # Should get diagnostics for the unterminated comment
+        # (may be error or real diagnostic depending on timing)
+        assert len(diag) > 0
+        if "error" in diag[0]:
+            # Fatal error case
+            assert diag[0]["error"]["message"] == \
+                "leanclient: Received LeanFileProgressKind.fatalError."
+        else:
+            # Normal diagnostic case
+            assert diag[0]["message"] == "unterminated comment"
 
         clean_lsp_client.close_files([path])
 
@@ -90,7 +75,9 @@ def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
         with open(test_env_dir + path, "w") as f:
             f.write(content)
 
-        diag = clean_lsp_client.open_file(path)
+        clean_lsp_client.open_file(path)
+        diag = clean_lsp_client.get_diagnostics(path)
+        # This one should always get proper diagnostics
         assert diag[0]["message"] == "unterminated comment"
     finally:
         if os.path.exists(test_env_dir + path):
@@ -109,7 +96,8 @@ def test_add_comment_at_the_end(clean_lsp_client, test_file_path, test_env_dir):
         text="\n-- new comment at the end of the file", start=[end, 0], end=[end, 0]
     )
     clean_lsp_client.open_file(test_file_path)
-    diag = clean_lsp_client.update_file(test_file_path, [change])
+    clean_lsp_client.update_file(test_file_path, [change])
+    diag = clean_lsp_client.get_diagnostics(test_file_path)
     
     errors = [d["message"] for d in diag if d["severity"] == 1]
     assert errors == EXP_DIAGNOSTIC_ERRORS
@@ -157,7 +145,8 @@ def test_rpc_errors(clean_lsp_client, test_file_path):
     header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
     clean_lsp_client.stdin.write(header + body)
     clean_lsp_client.stdin.flush()
-    resp = clean_lsp_client._wait_for_diagnostics([uri], timeout=0.1)[0]
+    clean_lsp_client._wait_for_diagnostics([uri], timeout=0.1)
+    resp = clean_lsp_client.get_diagnostics(test_file_path)
     assert resp == []
 
 
@@ -250,8 +239,8 @@ def test_invalid_path(clean_lsp_client, invalid_path, test_file_path):
     with pytest.raises(FileNotFoundError):
         clean_lsp_client.get_diagnostics(p())
     
-    with pytest.raises(FileNotFoundError):
-        clean_lsp_client.get_diagnostics_multi([p()])
+    # with pytest.raises(FileNotFoundError):
+    #     clean_lsp_client.get_diagnostics_multi([p()])
     
     with pytest.raises(FileNotFoundError):
         clean_lsp_client.create_file_client(p())

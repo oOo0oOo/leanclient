@@ -210,6 +210,10 @@ def test_plain_term_goal(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_code_actions(lsp_client, test_file_path, test_env_dir):
     """Test getting, resolving, and applying code actions."""
+    if test_file_path in lsp_client.opened_files_diagnostics:
+        lsp_client.close_files([test_file_path])
+    lsp_client.open_file(test_file_path)
+    
     # Get code actions
     res = lsp_client.get_code_actions(test_file_path, 12, 8, 12, 18)
     assert isinstance(res, list)

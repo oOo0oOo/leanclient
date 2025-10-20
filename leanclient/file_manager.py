@@ -5,7 +5,7 @@ import threading
 import urllib.parse
 
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
-from .base_client import BaseLeanLSPClient, IGNORED_METHODS
+from .base_client import BaseLeanLSPClient
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -31,20 +31,13 @@ class LSPFileManager(BaseLeanLSPClient):
     def _open_new_files(
         self,
         paths: list[str],
-        timeout: float = 30,
         dependency_build_mode: str = "never",
-    ) -> list:
+    ) -> None:
         """Open new files in the language server.
-
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
 
         Args:
             paths (list[str]): List of relative file paths.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
             dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never".
-
-        Returns:
-            list: List of diagnostics for each file.
         """
         uris = self._locals_to_uris(paths)
         for path, uri in zip(paths, uris):
@@ -52,7 +45,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 txt = normalize_newlines(f.read())
             self.opened_files_content[path] = txt
             self.opened_files_versions[path] = 0
-            self.opened_files_diagnostics[path] = []
+            self.opened_files_diagnostics[path] = None
 
             params = {
                 "textDocument": {
@@ -64,8 +57,6 @@ class LSPFileManager(BaseLeanLSPClient):
                 "dependencyBuildMode": dependency_build_mode,
             }
             self._send_notification("textDocument/didOpen", params)
-
-        return self._wait_for_diagnostics(uris, timeout)
 
     def _send_request(self, path: str, method: str, params: dict) -> dict:
         """Send request about a document and return a response or and error.
@@ -140,21 +131,16 @@ class LSPFileManager(BaseLeanLSPClient):
 
         return results
 
-    def open_files(self, paths: list[str], timeout: float = 30) -> list:
-        """Open files in the language server and return diagnostics.
+    def open_files(self, paths: list[str]) -> None:
+        """Open files in the language server.
 
-        This function maintains a cache of opened files and their diagnostics.
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+        Use :meth:`get_diagnostics` to get diagnostics.
 
         Note:
             Opening multiple files is typically faster than opening them sequentially.
 
         Args:
             paths (list[str]): List of relative file paths to open.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
-
-        Returns:
-            list: List of diagnostics for each file.
         """
         if len(paths) > self.max_opened_files:
             raise RuntimeError(
@@ -166,8 +152,7 @@ class LSPFileManager(BaseLeanLSPClient):
         # Open new files
         new_files = [p for p in paths if p not in self.opened_files_diagnostics]
         if new_files:
-            diagnostics = self._open_new_files(new_files, timeout)
-            self.opened_files_diagnostics.update(zip(new_files, diagnostics))
+            self._open_new_files(new_files)
 
         # Remove files if over limit
         remove_count = max(
@@ -180,41 +165,31 @@ class LSPFileManager(BaseLeanLSPClient):
             removable_paths = removable_paths[:remove_count]
             self.close_files(removable_paths)
 
-        return [self.opened_files_diagnostics[path] for path in paths]
+    def open_file(self, path: str) -> None:
+        """Open a file in the language server.
 
-    def open_file(self, path: str, timeout: float = 30) -> list:
-        """Open a file in the language server and return diagnostics.
-
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+        Use :meth:`get_diagnostics` to get diagnostics for the file.
 
         Args:
             path (str): Relative file path to open.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
-
-        Returns:
-            list: Diagnostics of file
         """
-        return self.open_files([path], timeout)[0]
+        self.open_files([path])
 
     def update_file(
-        self, path: str, changes: list[DocumentContentChange], timeout: float = 30
-    ) -> list:
+        self, path: str, changes: list[DocumentContentChange]
+    ) -> None:
         """Update a file in the language server.
 
         Note:
 
             Changes are not written to disk! Use :meth:`get_file_content` to get the current content of a file, as seen by the language server.
 
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
+        Use :meth:`get_diagnostics` to get diagnostics after the update.
         Raises a FileNotFoundError if the file is not open.
 
         Args:
             path (str): Relative file path to update.
             changes (list[DocumentContentChange]): List of changes to apply.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
-
-        Returns:
-            list: Diagnostics of file
         """
         if path not in self.opened_files_diagnostics:
             raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
@@ -240,12 +215,11 @@ class LSPFileManager(BaseLeanLSPClient):
             },
         )
 
+        # Clear diagnostics cache so next get_diagnostics() waits for fresh diagnostics
+        self.opened_files_diagnostics[path] = None
+
         self._send_notification(*params)
-
-        diagnostics = self._wait_for_diagnostics([uri], timeout)[0]
-        self.opened_files_diagnostics[path] = diagnostics
-        return diagnostics
-
+        
     def close_files(self, paths: list[str], blocking: bool = True):
         """Close files in the language server.
 
@@ -290,71 +264,12 @@ class LSPFileManager(BaseLeanLSPClient):
             finally:
                 self._unregister_notification_handler("textDocument/publishDiagnostics")
 
-    def get_diagnostics(self, path: str) -> list:
+    def get_diagnostics(self, path: str, timeout: float = 30) -> list | None:
         """Get diagnostics for a single file.
 
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
-
-        Args:
-            path (str): Relative file path.
-
-        Returns:
-            list: Diagnostics of file
-        """
-        if path in self.opened_files_diagnostics:
-            return self.opened_files_diagnostics[path]
-        return self.open_file(path)
-
-    def get_file_content(self, path: str) -> str:
-        """Get the content of a file as seen by the language server.
-
-        Args:
-            path (str): Relative file path.
-
-        Returns:
-            str: Content of the file.
-        """
-        if path in self.opened_files_content:
-            return self.opened_files_content[path]
-
-        raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
-
-    def get_diagnostics_multi(self, paths: list[str]) -> list:
-        """Get diagnostics for a list of files.
-
-        See :meth:`_wait_for_diagnostics` for information on the diagnostic response.
-
-        Args:
-            paths (list[str]): List of relative file paths.
-
-        Returns:
-            list: List of diagnostics for each file.
-        """
-        diagnostics = {}
-        missing = []
-        for path in paths:
-            if path in self.opened_files_diagnostics:
-                # Store these now, because they might be closed soon?
-                diagnostics[path] = self.opened_files_diagnostics[path]
-            else:
-                missing.append(path)
-
-        if missing:
-            missing = list(set(missing))
-            diagnostics.update(zip(missing, self.open_files(missing)))
-
-        return [diagnostics[path] for path in paths]
-
-    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 30) -> list:
-        """Wait until file is loaded or an rpc error occurs.
-
-        This should only be used right after opening or updating files not to miss any responses.
-        Returns either diagnostics or an [{error dict}] for each file.
-
-        Checks `waitForDiagnostics` and `fileProgress` for each file.
-
-        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
-        See source for more details.
+        If the file is not open, it will be opened first and wait for diagnostics.
+        If the file is already open but diagnostics not yet loaded, waits for them.
+        If diagnostics are already loaded, returns cached value.
 
         **Example diagnostics**:
 
@@ -386,11 +301,57 @@ class LSPFileManager(BaseLeanLSPClient):
             ]
 
         Args:
-            uris (list[str]): List of URIs to wait for diagnostics on.
+            path (str): Relative file path.
             timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
 
         Returns:
-            list: List of diagnostic messages or errors.
+            list | None: Diagnostics of file or None if timed out
+        """
+        need_to_wait = False
+        
+        if path not in self.opened_files_diagnostics:
+            # File not open yet, open it and wait
+            self.open_files([path])
+            need_to_wait = True
+        elif self.opened_files_diagnostics[path] is None:
+            # File is open but diagnostics not yet received (None)
+            need_to_wait = True
+        
+        if need_to_wait:
+            # Wait for diagnostics to be ready
+            self._wait_for_diagnostics([self._local_to_uri(path)], timeout)
+        
+        # Return cached diagnostics
+        return self.opened_files_diagnostics[path]
+
+    def get_file_content(self, path: str) -> str:
+        """Get the content of a file as seen by the language server.
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            str: Content of the file.
+        """
+        if path in self.opened_files_content:
+            return self.opened_files_content[path]
+
+        raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
+
+    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 30) -> None:
+        """Wait until file is loaded or an rpc error occurs.
+
+        This should only be used right after opening or updating files not to miss any responses.
+        Returns either diagnostics or an [{error dict}] for each file.
+
+        Checks `waitForDiagnostics` and `fileProgress` for each file.
+
+        Sometimes either of these can fail, so we need to check for "rpc errors", "fatal errors" and use a timeout..
+        See source for more details.
+
+        Args:
+            uris (list[str]): List of URIs to wait for diagnostics on.
+            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
         """
         # Check if all files are opened
         paths = [self._uri_to_local(uri) for uri in uris]
@@ -493,5 +454,12 @@ class LSPFileManager(BaseLeanLSPClient):
             # Always unregister handlers
             self._unregister_notification_handler("textDocument/publishDiagnostics")
             self._unregister_notification_handler("$/lean/fileProgress")
-
-        return [diagnostics.get(uri, []) for uri in uris]
+        
+        # Update diagnostics cache
+        for uri in waiting_uris:
+            path = self._uri_to_local(uri)
+            if uri in diagnostics:
+                self.opened_files_diagnostics[path] = diagnostics[uri]
+            else:
+                # No diagnostics received, set to empty list
+                self.opened_files_diagnostics[path] = []

@@ -35,7 +35,8 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
     files = all_files[:NUM_FILES]
 
     t0 = time.time()
-    diagnostics = benchmark_client.open_files(files)
+    benchmark_client.open_files(files)
+    diagnostics = [benchmark_client.get_diagnostics(f) for f in files]
     duration = time.time() - t0
 
     assert len(diagnostics) == NUM_FILES
@@ -62,7 +63,8 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
         print(msg)
     new_files = all_files[NUM_FILES - EXTRA_FILES : NUM_FILES + EXTRA_FILES]
     t0 = time.time()
-    diagnostics2 = benchmark_client.open_files(new_files)
+    benchmark_client.open_files(new_files)
+    diagnostics2 = [benchmark_client.get_diagnostics(f) for f in new_files]
     extra_duration = time.time() - t0
     assert diagnostics[-EXTRA_FILES:] == diagnostics2[:EXTRA_FILES]
     msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"

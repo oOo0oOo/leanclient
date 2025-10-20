@@ -1093,7 +1093,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             changes.append(
                 DocumentContentChange(text="#info_trees in\n", start=pos, end=pos)
             )
-        diagnostics = self.update_file(path, changes)
+        self.update_file(path, changes)
+        diagnostics = self.get_diagnostics(path)
 
         # Revert the changes to remove the added lines
         revert_changes = [
