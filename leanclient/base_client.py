@@ -5,6 +5,7 @@ import threading
 import asyncio
 from collections import defaultdict
 from pathlib import Path
+from typing import Any, Callable, DefaultDict
 
 import orjson
 
@@ -49,7 +50,7 @@ class BaseLeanLSPClient:
         # Asyncio infrastructure for non-blocking requests
         self._loop = asyncio.new_event_loop()
         self._futures = {}  # {request_id: asyncio.Future}
-        self._notification_handlers = defaultdict(list)  # {method: [callback, ...]}
+        self._notification_handlers: DefaultDict[str, set[Callable[[dict], Any]]] = defaultdict(set)
         
         # Start event loop in a separate thread
         self._loop_thread = threading.Thread(
@@ -239,9 +240,8 @@ class BaseLeanLSPClient:
             
             # Handle notification with registered handler
             if method is not None and method in self._notification_handlers:
-                # Copy to avoid modification during iteration
-                handlers = list(self._notification_handlers[method])
-                for handler in handlers:
+                handlers_snapshot = tuple(self._notification_handlers[method])
+                for handler in handlers_snapshot:
                     try:
                         handler(msg)
                     except Exception as e:
@@ -331,7 +331,7 @@ class BaseLeanLSPClient:
             method (str): Notification method name (e.g., "textDocument/publishDiagnostics").
             handler: Callable that takes the notification message as argument.
         """
-        self._notification_handlers[method].append(handler)
+        self._notification_handlers[method].add(handler)
     
     def _unregister_notification_handler(self, method: str, handler=None):
         """Unregister a notification handler.
@@ -344,13 +344,9 @@ class BaseLeanLSPClient:
             return
 
         if handler is None:
-            # Remove the most recently registered handler
-            handlers.pop()
+            handlers.clear()
         else:
-            try:
-                handlers.remove(handler)
-            except ValueError:
-                return
+            handlers.discard(handler)
 
         if not handlers:
             self._notification_handlers.pop(method, None)
