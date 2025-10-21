@@ -25,7 +25,6 @@ Check out the [documentation](https://leanclient.readthedocs.io) for more inform
 
 - **Interact**: Query and change lean files via the [LSP](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/).
 - **Thin wrapper**: Directly expose the [Lean Language Server](https://github.com/leanprover/lean4/tree/master/src/Lean/Server).
-- **Synchronous**: Requests block until a response is received.
 - **Fast**: Typically more than 95% of time is spent waiting.
 - **Parallel**: Easy batch processing of files using all your cores.
 
@@ -110,10 +109,7 @@ Internal Lean methods:
 
 - Better Windows support
 - Choose between `lean --server` and `lake serve`
-- Allow interaction before `waitForDiagnostics` returns.
-- Parallel implementation (multiple requests in-flight) like [multilspy](https://github.com/microsoft/multilspy/)
 - Automatic testing (lean env setup) for non Debian-based systems
-- Use document versions to handle evolving file states
 
 ## Documentation
 
