@@ -1,14 +1,12 @@
+import os
 from functools import partial
 from itertools import chain
-from multiprocessing import Pool, get_context
-from typing import Callable, Any
-import os
-from pprint import pprint
+from multiprocessing import get_context
+from typing import Any, Callable
 
 import tqdm
 
-from leanclient import LeanLSPClient
-from leanclient import SingleFileClient
+from leanclient import LeanLSPClient, SingleFileClient
 
 
 def _init_worker(project_path: str, kwargs: dict):

@@ -4,6 +4,7 @@ import urllib.parse
 import threading
 import asyncio
 import logging
+import atexit
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, DefaultDict
@@ -87,6 +88,9 @@ class BaseLeanLSPClient:
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
         self._send_notification("initialized", {})
+        
+        # Register cleanup at exit in case user forgets to call close()
+        atexit.register(self.close)
 
     def build_project(self, get_cache: bool = True):
         """Build the Lean project by running `lake build`.
@@ -108,6 +112,12 @@ class BaseLeanLSPClient:
         Args:
             timeout (float | None): Time to wait for the process to terminate. Defaults to 2 seconds.
         """
+        # Unregister atexit handler since we're closing properly
+        try:
+            atexit.unregister(self.close)
+        except Exception:
+            pass
+        
         # Terminate the language server process
         self.process.terminate()
         

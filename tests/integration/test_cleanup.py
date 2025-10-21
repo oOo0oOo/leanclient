@@ -4,6 +4,9 @@ Tests to verify that LeanLSPClient properly terminates the 'lake serve'
 subprocess and doesn't leave lingering processes after close().
 """
 
+import subprocess
+import sys
+
 import psutil
 import pytest
 
@@ -60,3 +63,38 @@ def test_close_already_dead_process(test_project_dir):
     
     # close() should handle this gracefully without errors
     client.close(timeout=0.25)
+
+
+@pytest.mark.integration
+def test_automatic_cleanup_at_exit(test_project_dir):
+    """Test that atexit handler cleans up if close() is not called."""
+    # Run a subprocess that creates a client without closing
+    test_code = f"""
+import sys
+sys.path.insert(0, '{sys.path[0]}')
+
+from leanclient import LeanLSPClient
+
+# Create client without closing
+client = LeanLSPClient('{test_project_dir}')
+print(f"PID={{client.process.pid}}")
+# Exit without calling close() - atexit should clean up
+"""
+    
+    result = subprocess.run(
+        [sys.executable, "-c", test_code],
+        capture_output=True,
+        text=True,
+        timeout=10
+    )
+    
+    # Extract PID from output
+    pid = None
+    for line in result.stdout.split('\n'):
+        if line.startswith('PID='):
+            pid = int(line.split('=')[1])
+            break
+    
+    assert pid is not None, "Should have captured process PID"
+    assert result.returncode == 0, "Program should exit cleanly"
+    assert not psutil.pid_exists(pid), "Process should be cleaned up at exit"
