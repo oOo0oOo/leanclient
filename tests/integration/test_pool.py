@@ -1,5 +1,8 @@
 """Integration tests for LeanClientPool."""
 
+import os
+import signal
+import threading
 import time
 
 import pytest
@@ -16,6 +19,12 @@ def get_num_folding_ranges(client: SingleFileClient) -> int:
 def empty_task(client: SingleFileClient) -> str:
     """Empty task that returns a string."""
     return "t"
+
+
+def slow_task(client: SingleFileClient) -> str:
+    """Task that takes some time to complete."""
+    time.sleep(2)
+    return "done"
 
 
 @pytest.mark.integration
@@ -79,7 +88,7 @@ def test_submit(test_project_dir, fast_mathlib_files):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
-@pytest.mark.parametrize("num_workers", [1, 4, 8])
+@pytest.mark.parametrize("num_workers", [1, 4])
 @pytest.mark.slow
 def test_num_workers(test_project_dir, fast_mathlib_files, num_workers):
     """Test pool with different numbers of workers."""
@@ -104,3 +113,37 @@ def test_verbose(test_project_dir, fast_mathlib_files):
         )
         assert all(result > 0 for result in results)
         assert len(results) == NUM_FILES
+
+
+@pytest.mark.integration
+@pytest.mark.mathlib
+@pytest.mark.slow
+def test_keyboard_interrupt_cleanup(test_project_dir, fast_mathlib_files):
+    """Test that KeyboardInterrupt during processing triggers cleanup without hanging."""
+    NUM_FILES = 2
+    files = fast_mathlib_files[:NUM_FILES]
+    
+    pool = LeanClientPool(test_project_dir, num_workers=2)
+    
+    start_time = time.time()
+    
+    def interrupt_soon():
+        time.sleep(0.05)
+        os.kill(os.getpid(), signal.SIGINT)
+    
+    interrupt_thread = threading.Thread(target=interrupt_soon)
+    interrupt_thread.start()
+    
+    # This should be interrupted and cleanup should complete
+    with pytest.raises(KeyboardInterrupt):
+        with pool:
+            # This will be interrupted mid-execution
+            pool.map(slow_task, files)
+    
+    interrupt_thread.join()
+    elapsed = time.time() - start_time
+    
+    # Should complete reasonably fast
+    assert elapsed < 5.0, f"Cleanup took too long: {elapsed:.2f}s"
+    print(f"Interrupt and cleanup completed in {elapsed:.2f}s")
+

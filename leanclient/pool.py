@@ -103,10 +103,14 @@ class LeanClientPool:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        for _ in range(self.num_workers):
-            self.pool.apply(_close_worker)
-        self.pool.close()
-        self.pool.join()
+        try:
+            for _ in range(self.num_workers):
+                self.pool.apply(_close_worker)
+            self.pool.close()
+            self.pool.join()
+        except (KeyboardInterrupt, Exception):
+            self.pool.terminate()
+            self.pool.join()
 
     def submit(self, task: Callable[[SingleFileClient], None], file_path: str) -> Any:
         """Submit an asynchronous task to the pool.
