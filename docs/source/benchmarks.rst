@@ -1,6 +1,8 @@
 Benchmarks
 ==========
 
+Currently outdated.
+
 Thin Wrapper
 ------------
 
