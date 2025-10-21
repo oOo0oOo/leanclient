@@ -30,9 +30,7 @@ class BaseLeanLSPClient:
     See :meth:`leanclient.client.LeanLSPClient` for more information.
     """
 
-    def __init__(
-        self, project_path: str, initial_build: bool = False
-    ):
+    def __init__(self, project_path: str, initial_build: bool = False):
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
 
@@ -53,15 +51,17 @@ class BaseLeanLSPClient:
         # Asyncio infrastructure for non-blocking requests
         self._loop = asyncio.new_event_loop()
         self._futures = {}  # {request_id: asyncio.Future}
-        self._notification_handlers: DefaultDict[str, set[Callable[[dict], Any]]] = defaultdict(set)
-        
+        self._notification_handlers: DefaultDict[str, set[Callable[[dict], Any]]] = (
+            defaultdict(set)
+        )
+
         # Start event loop in a separate thread
         self._loop_thread = threading.Thread(
             target=self._run_event_loop,
             daemon=True,
         )
         self._loop_thread.start()
-        
+
         # Thread to read stdout
         self._stdout_thread_stop_event = threading.Event()
         self._stdout_thread = threading.Thread(
@@ -88,7 +88,7 @@ class BaseLeanLSPClient:
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
 
         self._send_notification("initialized", {})
-        
+
         # Register cleanup at exit in case user forgets to call close()
         atexit.register(self.close)
 
@@ -117,22 +117,24 @@ class BaseLeanLSPClient:
             atexit.unregister(self.close)
         except Exception:
             pass
-        
+
         # Terminate the language server process
         self.process.terminate()
-        
+
         try:
             self.process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            logger.warning("Language server did not terminate in time. Killing process.")
+            logger.warning(
+                "Language server did not terminate in time. Killing process."
+            )
             self.process.kill()
             self.process.wait()
-        
+
         # Signal stdout thread to stop and stop event loop
         self._stdout_thread_stop_event.set()
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
-        
+
         # Close event loop (wait a moment for it to stop gracefully)
         if self._loop and not self._loop.is_closed():
             # Give the loop thread a moment to finish
@@ -193,7 +195,7 @@ class BaseLeanLSPClient:
         """Run the asyncio event loop in a separate thread."""
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
-    
+
     def _read_stdout_loop(self, stop_event: threading.Event):
         """Read the stdout of the language server in a separate thread.
 
@@ -217,30 +219,28 @@ class BaseLeanLSPClient:
             content_length = int(header.split(":")[1])
             next(self.stdout)
             msg = orjson.loads(self.stdout.read(content_length))
-            
+
             # Dispatch to futures and notification handlers
             msg_id = msg.get("id")
             method = msg.get("method")
-            
+
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
                 continue
-            
+
             # Handle response to a request
             if msg_id is not None and msg_id in self._futures:
                 future = self._futures.pop(msg_id)
                 if "error" in msg:
                     self._loop.call_soon_threadsafe(
-                        future.set_exception, 
-                        Exception(f"LSP Error: {msg['error']}")
+                        future.set_exception, Exception(f"LSP Error: {msg['error']}")
                     )
                 else:
                     self._loop.call_soon_threadsafe(
-                        future.set_result, 
-                        msg.get("result", msg)
+                        future.set_result, msg.get("result", msg)
                     )
                 continue
-            
+
             # Handle notification with registered handler
             if method is not None and method in self._notification_handlers:
                 handlers_snapshot = tuple(self._notification_handlers[method])
@@ -306,7 +306,9 @@ class BaseLeanLSPClient:
         self._futures[req_id] = future
         return future
 
-    def _send_request_sync(self, method: str, params: dict, timeout: float | None = None) -> dict:
+    def _send_request_sync(
+        self, method: str, params: dict, timeout: float | None = None
+    ) -> dict:
         """Send a request and block until response arrives.
 
         Args:
@@ -318,26 +320,28 @@ class BaseLeanLSPClient:
             dict: Response from the language server.
         """
         async_future = self._send_request_async(method, params)
-        
+
         # Wrap the future in an awaitable coroutine
         async def await_future():
             return await async_future
-        
+
         # Use asyncio.run_coroutine_threadsafe to bridge async to sync
-        return asyncio.run_coroutine_threadsafe(await_future(), self._loop).result(timeout=timeout)
-    
+        return asyncio.run_coroutine_threadsafe(await_future(), self._loop).result(
+            timeout=timeout
+        )
+
     def _register_notification_handler(self, method: str, handler):
         """Register a handler for a specific notification method.
-        
+
         Args:
             method (str): Notification method name (e.g., "textDocument/publishDiagnostics").
             handler: Callable that takes the notification message as argument.
         """
         self._notification_handlers[method].add(handler)
-    
+
     def _unregister_notification_handler(self, method: str, handler=None):
         """Unregister a notification handler.
-        
+
         Args:
             method (str): Notification method name.
         """

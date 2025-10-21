@@ -23,10 +23,11 @@ from fixtures import (
 # Session-level fixtures (setup once for all tests)
 # ============================================================================
 
+
 @pytest.fixture(scope="session")
 def test_project_dir():
     """Setup test Lean project once for entire test session.
-    
+
     Returns:
         str: Path to the test environment directory.
     """
@@ -61,6 +62,7 @@ def fast_mathlib_files():
 # Module-level fixtures (reused across test module)
 # ============================================================================
 
+
 @pytest.fixture(scope="module")
 def base_client(test_project_dir):
     """Provide a BaseLeanLSPClient instance."""
@@ -81,15 +83,16 @@ def lsp_client(test_project_dir):
 # Function-level fixtures (fresh for each test)
 # ============================================================================
 
+
 @pytest.fixture
 def clean_lsp_client(test_project_dir):
     """Fresh LeanLSPClient for each test.
-    
+
     Use this when tests need to mutate the client state.
-    
+
     Args:
         test_project_dir: Test project directory path.
-        
+
     Yields:
         LeanLSPClient: Fresh client instance.
     """
@@ -101,11 +104,11 @@ def clean_lsp_client(test_project_dir):
 @pytest.fixture
 def single_file_client(lsp_client, test_file_path):
     """SingleFileClient for the test file.
-    
+
     Args:
         lsp_client: Shared LSP client.
         test_file_path: Path to test file.
-        
+
     Returns:
         SingleFileClient: Client for test file.
     """
@@ -115,19 +118,19 @@ def single_file_client(lsp_client, test_file_path):
 @pytest.fixture
 def temp_lean_file(test_project_dir):
     """Temporary Lean file that auto-cleans after test.
-    
+
     Args:
         test_project_dir: Test project directory path.
-        
+
     Yields:
         tuple: (relative_path, absolute_path) for temporary file.
     """
     filename = f"Temp_{uuid.uuid4().hex[:8]}.lean"
     rel_path = filename
     abs_path = os.path.join(test_project_dir, filename)
-    
+
     yield rel_path, abs_path
-    
+
     if os.path.exists(abs_path):
         os.remove(abs_path)
 
@@ -136,10 +139,11 @@ def temp_lean_file(test_project_dir):
 # Helper fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def sample_document_changes():
     """Sample document changes for testing.
-    
+
     Returns:
         list: List of DocumentContentChange instances.
     """
@@ -153,7 +157,7 @@ def sample_document_changes():
 @pytest.fixture
 def random_fast_mathlib_files():
     """Factory fixture for random fast mathlib files.
-    
+
     Returns:
         callable: Function to get random files.
     """
@@ -163,7 +167,7 @@ def random_fast_mathlib_files():
 @pytest.fixture
 def random_mathlib_files():
     """Factory fixture for random mathlib files.
-    
+
     Returns:
         callable: Function to get random files.
     """

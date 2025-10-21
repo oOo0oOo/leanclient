@@ -23,6 +23,7 @@ EXP_DIAGNOSTIC_WARNINGS = ["declaration uses 'sorry'", "declaration uses 'sorry'
 # Completion tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_completion(lsp_client, test_file_path):
     """Test getting completions at cursor position."""
@@ -44,6 +45,7 @@ def test_completion_item_resolve(lsp_client, test_file_path):
 # Hover tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_hover(lsp_client, test_file_path):
     """Test getting hover information."""
@@ -55,6 +57,7 @@ def test_hover(lsp_client, test_file_path):
 # ============================================================================
 # Declaration/Definition tests
 # ============================================================================
+
 
 @pytest.mark.integration
 def test_declaration(lsp_client, test_file_path):
@@ -80,6 +83,7 @@ def test_request_definition(lsp_client, test_file_path):
 # Reference tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_references(lsp_client, test_file_path):
     """Test getting references."""
@@ -92,6 +96,7 @@ def test_references(lsp_client, test_file_path):
 # Type definition tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_type_definition(lsp_client, test_file_path):
     """Test getting type definitions."""
@@ -103,6 +108,7 @@ def test_type_definition(lsp_client, test_file_path):
 # ============================================================================
 # Document tests
 # ============================================================================
+
 
 @pytest.mark.integration
 def test_document_highlight(lsp_client, test_file_path):
@@ -123,6 +129,7 @@ def test_document_symbol(lsp_client, test_file_path):
 # ============================================================================
 # Semantic tokens tests
 # ============================================================================
+
 
 @pytest.mark.integration
 def test_semantic_tokens_full(lsp_client, test_file_path):
@@ -158,6 +165,7 @@ def test_semantic_tokens_range(lsp_client, test_file_path):
 # Folding range tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_folding_range(lsp_client, test_file_path):
     """Test getting folding ranges."""
@@ -170,13 +178,14 @@ def test_folding_range(lsp_client, test_file_path):
 # Goal tests
 # ============================================================================
 
+
 @pytest.mark.integration
 def test_plain_goal(lsp_client, test_file_path):
     """Test getting proof goal at position."""
     res = lsp_client.get_goal(test_file_path, 9, 12)
     assert isinstance(res, dict)
     assert "⊢" in res["goals"][0]
-    
+
     res = lsp_client.get_goal(test_file_path, 9, 25)
     assert len(res["goals"]) == 0
 
@@ -197,7 +206,7 @@ def test_plain_term_goal(lsp_client, test_file_path):
     res = lsp_client.get_term_goal(test_file_path, 9, 12)
     assert isinstance(res, dict)
     assert "⊢" in res["goal"]
-    
+
     res2 = lsp_client.get_term_goal(test_file_path, 9, 15)
     assert res == res2
 
@@ -205,6 +214,7 @@ def test_plain_term_goal(lsp_client, test_file_path):
 # ============================================================================
 # Code actions tests
 # ============================================================================
+
 
 @pytest.mark.integration
 def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
@@ -214,7 +224,7 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
     # Get code actions
     res = clean_lsp_client.get_code_actions(test_file_path, 12, 8, 12, 18)
     assert isinstance(res, list)
-    
+
     EXP = {
         "data": {
             "params": {
@@ -315,6 +325,7 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
 # Mathlib file tests
 # ============================================================================
 
+
 @pytest.mark.integration
 @pytest.mark.mathlib
 @pytest.mark.slow
@@ -331,13 +342,15 @@ def test_mathlib_file(lsp_client):
     assert uri.endswith("SDiff.lean")
 
     def flatten(ref):
-        return tuple([
-            ref["uri"],
-            ref["range"]["start"]["line"],
-            ref["range"]["start"]["character"],
-            ref["range"]["end"]["line"],
-            ref["range"]["end"]["character"],
-        ])
+        return tuple(
+            [
+                ref["uri"],
+                ref["range"]["start"]["line"],
+                ref["range"]["start"]["character"],
+                ref["range"]["end"]["line"],
+                ref["range"]["end"]["character"],
+            ]
+        )
 
     references = lsp_client.get_references(path, 45, 32)
     flat = set([flatten(ref) for ref in references])
@@ -368,6 +381,7 @@ def test_mathlib_file(lsp_client):
 # Call hierarchy tests
 # ============================================================================
 
+
 @pytest.mark.integration
 @pytest.mark.mathlib
 def test_call_hierarchy(lsp_client):
@@ -389,18 +403,22 @@ def test_call_hierarchy(lsp_client):
 # Empty response tests
 # ============================================================================
 
+
 @pytest.mark.integration
-@pytest.mark.parametrize("method,args,expected", [
-    ("get_goal", (0, 0), None),
-    ("get_term_goal", (0, 0), None),
-    ("get_hover", (0, 0), None),
-    ("get_declarations", (0, 0), []),
-    ("get_definitions", (0, 0), []),
-    ("get_references", (0, 0), []),
-    ("get_type_definitions", (0, 0), []),
-    ("get_document_highlights", (0, 0), []),
-    ("get_semantic_tokens_range", (0, 0, 0, 0), []),
-])
+@pytest.mark.parametrize(
+    "method,args,expected",
+    [
+        ("get_goal", (0, 0), None),
+        ("get_term_goal", (0, 0), None),
+        ("get_hover", (0, 0), None),
+        ("get_declarations", (0, 0), []),
+        ("get_definitions", (0, 0), []),
+        ("get_references", (0, 0), []),
+        ("get_type_definitions", (0, 0), []),
+        ("get_document_highlights", (0, 0), []),
+        ("get_semantic_tokens_range", (0, 0, 0, 0), []),
+    ],
+)
 def test_empty_response(lsp_client, test_file_path, method, args, expected):
     """Test methods return expected empty values at invalid positions."""
     func = getattr(lsp_client, method)
@@ -419,10 +437,10 @@ def test_empty_response_for_empty_file(clean_lsp_client, test_env_dir):
     try:
         res = clean_lsp_client.get_document_symbols(path)
         assert res == []
-        
+
         res = clean_lsp_client.get_semantic_tokens(path)
         assert res == []
-        
+
         res = clean_lsp_client.get_folding_ranges(path)
         assert res == []
     finally:
@@ -433,6 +451,7 @@ def test_empty_response_for_empty_file(clean_lsp_client, test_env_dir):
 # ============================================================================
 # Info trees tests
 # ============================================================================
+
 
 @pytest.mark.integration
 def test_info_trees(lsp_client, test_file_path):
@@ -478,8 +497,9 @@ def test_info_tree_parse(lsp_client, test_file_path):
         assert isinstance(node, dict)
         assert "children" in node
         assert "text" in node
-        assert set(node.keys()).issubset(allowed_keys), \
+        assert set(node.keys()).issubset(allowed_keys), (
             f"Unexpected keys: {set(node.keys()) - allowed_keys}"
+        )
         for child in node["children"]:
             check_node(child)
 
@@ -505,7 +525,7 @@ def test_info_tree_parse_mathlib(lsp_client):
     path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Topology.lean"
     res = lsp_client.get_info_trees(path, parse=True)
     assert isinstance(res, list)
-    
+
     allowed_keys = {
         "text",
         "type",
@@ -516,7 +536,7 @@ def test_info_tree_parse_mathlib(lsp_client):
         "extra",
         "children",
     }
-    
+
     def check_node(node):
         assert isinstance(node, dict)
         assert "children" in node
@@ -524,6 +544,6 @@ def test_info_tree_parse_mathlib(lsp_client):
         assert set(node.keys()).issubset(allowed_keys)
         for child in node["children"]:
             check_node(child)
-    
+
     for tree in res:
         check_node(tree)

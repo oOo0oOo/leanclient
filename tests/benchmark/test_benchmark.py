@@ -10,13 +10,11 @@ from leanclient import LeanLSPClient
 @pytest.fixture(scope="module")
 def benchmark_client(test_project_dir):
     """Client for benchmark tests with limited opened files.
-    
+
     Yields:
         LeanLSPClient: Client configured for benchmarking.
     """
-    client = LeanLSPClient(
-        test_project_dir, max_opened_files=4
-    )
+    client = LeanLSPClient(test_project_dir, max_opened_files=4)
     yield client
     client.close()
 
@@ -24,6 +22,7 @@ def benchmark_client(test_project_dir):
 # ============================================================================
 # File opening benchmarks
 # ============================================================================
+
 
 @pytest.mark.benchmark
 @pytest.mark.mathlib
@@ -78,6 +77,7 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
 # Request benchmarks
 # ============================================================================
 
+
 @pytest.mark.benchmark
 @pytest.mark.mathlib
 @pytest.mark.skip(reason="Benchmark test, run manually as needed")
@@ -107,7 +107,11 @@ def test_bench_all_functions(benchmark_client):
             benchmark_client.get_term_goal,
             (file_path, LINE, COL + 20),
         ),
-        ("get_completions", benchmark_client.get_completions, (file_path, LINE, COL + 20)),
+        (
+            "get_completions",
+            benchmark_client.get_completions,
+            (file_path, LINE, COL + 20),
+        ),
         (
             "get_completion_item_resolve",
             benchmark_client.get_completion_item_resolve,
@@ -116,7 +120,11 @@ def test_bench_all_functions(benchmark_client):
         ("get_definitions", benchmark_client.get_definitions, (file_path, LINE, COL)),
         ("get_hover", benchmark_client.get_hover, (file_path, LINE, COL)),
         ("get_declarations", benchmark_client.get_declarations, (file_path, LINE, COL)),
-        ("get_references", benchmark_client.get_references, (file_path, LINE, COL + 20)),
+        (
+            "get_references",
+            benchmark_client.get_references,
+            (file_path, LINE, COL + 20),
+        ),
         (
             "get_type_definitions",
             benchmark_client.get_type_definitions,

@@ -80,53 +80,53 @@ def _utf16_len(char: str) -> int:
 def _utf16_pos_to_utf8_pos(text: str, line: int, utf16_character: int) -> int:
     """
     Convert LSP position (line, UTF-16 character offset) to UTF-8 byte index.
-    
+
     This matches the Lean LSP server implementation:
     - line is 0-indexed
     - character is a UTF-16 code unit offset
     - character is accepted liberally: actual character := min(line length, character)
-    
+
     Args:
         text: The text content (UTF-8 encoded, with LF newlines)
         line: 0-indexed line number
         utf16_character: UTF-16 code unit offset within the line
-    
+
     Returns:
         UTF-8 byte offset into text
     """
     if line < 0:
         return 0
-    
+
     lines = text.split("\n")
     if line >= len(lines):
         return len(text)
-    
+
     # Get byte offset to start of line
     line_start_byte = sum(len(lines[i]) + 1 for i in range(line))  # +1 for '\n'
-    
+
     # Convert UTF-16 character offset to UTF-8 byte offset within the line
     line_content = lines[line]
     utf16_offset = 0
     utf8_offset = 0
-    
+
     for char in line_content:
         if utf16_offset >= utf16_character:
             break
         utf16_offset += _utf16_len(char)
-        utf8_offset += len(char.encode('utf-8'))
-    
+        utf8_offset += len(char.encode("utf-8"))
+
     return line_start_byte + utf8_offset
 
 
 def _index_from_line_character(text: str, line: int, character: int) -> int:
     """
     Convert LSP position to UTF-8 byte index.
-    
+
     Args:
         text: The text content
         line: 0-indexed line number
         character: UTF-16 code unit offset
-    
+
     Returns:
         UTF-8 byte index
     """
@@ -226,9 +226,7 @@ def experimental(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        logger.warning(
-            "%s() is experimental! Use with caution.", func.__name__
-        )
+        logger.warning("%s() is experimental! Use with caution.", func.__name__)
         return func(self, *args, **kwargs)
 
     # Change __doc__ to include a sphinx warning

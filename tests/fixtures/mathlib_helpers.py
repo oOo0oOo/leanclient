@@ -46,17 +46,17 @@ FAST_MATHLIB_FILES = [
 
 def get_all_mathlib_files() -> List[str]:
     """Get all mathlib files in the test environment.
-    
+
     Returns:
         List[str]: List of relative paths to mathlib files.
     """
     file_paths = []
     l = len(TEST_ENV_DIR)
     path = TEST_ENV_DIR + ".lake/packages/mathlib/Mathlib"
-    
+
     if not os.path.exists(path):
         return []
-    
+
     for root, __, files in os.walk(path):
         file_paths += [root[l:] + "/" + f for f in files if f.endswith(".lean")]
     return file_paths
@@ -64,11 +64,11 @@ def get_all_mathlib_files() -> List[str]:
 
 def get_random_mathlib_files(num: int, seed: int = None) -> List[str]:
     """Get random mathlib files.
-    
+
     Args:
         num: Number of files to return.
         seed: Random seed for reproducibility.
-        
+
     Returns:
         List[str]: List of random mathlib file paths.
     """
@@ -84,11 +84,11 @@ def get_random_mathlib_files(num: int, seed: int = None) -> List[str]:
 
 def get_random_fast_mathlib_files(num: int, seed: int = None) -> List[str]:
     """Get random fast-loading mathlib files.
-    
+
     Args:
         num: Number of files to return.
         seed: Random seed for reproducibility.
-        
+
     Returns:
         List[str]: List of random fast mathlib file paths.
     """

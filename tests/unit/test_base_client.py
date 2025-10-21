@@ -17,7 +17,7 @@ def test_initial_build(test_project_dir):
 def test_get_env_as_dict(base_client):
     """Test getting environment variables as dictionary."""
     env = base_client.get_env()
-    
+
     expected_keys = [
         "ELAN",
         "ELAN_HOME",

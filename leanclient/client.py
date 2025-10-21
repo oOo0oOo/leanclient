@@ -29,9 +29,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         E.g. ".lake/packages/mathlib/Mathlib/Init.lean" can be a valid path.
 
         To control logging output, configure the 'leanclient' logger:
-        
+
         .. code-block:: python
-        
+
             import logging
             logging.getLogger('leanclient').setLevel(logging.WARNING)  # Show warnings and errors
             logging.getLogger('leanclient').setLevel(logging.DEBUG)    # Show all messages
@@ -43,10 +43,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     """
 
     def __init__(
-        self,
-        project_path: str,
-        max_opened_files: int = 4,
-        initial_build: bool = False
+        self, project_path: str, max_opened_files: int = 4, initial_build: bool = False
     ):
         BaseLeanLSPClient.__init__(self, project_path, initial_build)
         LSPFileManager.__init__(self, max_opened_files)
@@ -943,6 +940,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             if "LSP Error:" in str(e):
                 error_msg = str(e).replace("LSP Error: ", "")
                 import ast
+
                 try:
                     error_dict = ast.literal_eval(error_msg)
                     return {"error": error_dict}

@@ -14,6 +14,7 @@ from leanclient.utils import apply_changes_to_text
 
 class WrappedFileManager(LSPFileManager, BaseLeanLSPClient):
     """Test wrapper combining FileManager and BaseClient."""
+
     def __init__(self, *args, **kwargs):
         BaseLeanLSPClient.__init__(self, *args, **kwargs)
         LSPFileManager.__init__(self)
@@ -22,7 +23,7 @@ class WrappedFileManager(LSPFileManager, BaseLeanLSPClient):
 @pytest.fixture
 def file_manager(test_project_dir):
     """Create WrappedFileManager for testing.
-    
+
     Yields:
         WrappedFileManager: Test file manager instance.
     """
@@ -34,6 +35,7 @@ def file_manager(test_project_dir):
 # ============================================================================
 # File opening tests
 # ============================================================================
+
 
 @pytest.mark.integration
 @pytest.mark.mathlib
@@ -69,7 +71,9 @@ def test_open_file_receives_diagnostics_without_wait(file_manager, test_file_pat
         time.sleep(0.1)
 
     try:
-        assert fatal_error is False, "Unexpected fatal error while waiting for diagnostics"
+        assert fatal_error is False, (
+            "Unexpected fatal error while waiting for diagnostics"
+        )
         assert error is None, f"Unexpected error while waiting for diagnostics: {error}"
         assert diagnostics, "Expected diagnostics to arrive without waitForDiagnostics"
     finally:
@@ -79,6 +83,7 @@ def test_open_file_receives_diagnostics_without_wait(file_manager, test_file_pat
 # ============================================================================
 # File update tests
 # ============================================================================
+
 
 @pytest.mark.integration
 @pytest.mark.mathlib
@@ -106,9 +111,10 @@ def test_file_update(file_manager, random_fast_mathlib_files, test_env_dir):
     if len(diags2) == 1:
         assert diags2[0]["message"] == "unterminated comment"
     else:
-        assert len(diags2) >= NUM_CHANGES // 2, \
+        assert len(diags2) >= NUM_CHANGES // 2, (
             f"Expected {NUM_CHANGES // 2} diagnostics got {len(diags2)}:\n\n{diags2}\n\n"
-    
+        )
+
     duration = time.time() - t0
     print(f"Updated {len(changes)} changes in one call: {duration:.2f} s")
 
@@ -176,40 +182,41 @@ def test_update_file_mathlib(file_manager, test_env_dir):
         ".lake/packages/mathlib/Mathlib/Data/Num/Prime.lean",
         ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean",
     ]
-    
+
     for file in files:
         # Open the file and get initial content
         file_manager.open_file(file)
         diag = file_manager.get_diagnostics(file)
         assert diag == [], f"Expected no diagnostics for {file}, got {diag}"
-        
+
         original_text = file_manager.get_file_content(file)
-        
+
         # Apply changes with extreme character positions to test UTF-16 handling
         changes = [
             DocumentContentChange("--", [42, 20], [42, 30]),
             DocumentContentChange("/a/b/c\\", [89, 20], [93, 20]),
             DocumentContentChange("\n\n\n\n\n\n\n\n\n", [95, 100000], [105, 100000]),
         ]
-        
+
         # Apply changes locally to predict expected result
         expected_text = original_text
         for change in changes:
             expected_text = apply_changes_to_text(expected_text, [change])
-        
+
         # Apply changes via LSP server
         file_manager.update_file(file, changes)
-        
+
         # Get server's version and compare
         server_text = file_manager.get_file_content(file)
-        assert server_text == expected_text, \
-            f"Server text doesn't match expected for {file}\n" \
+        assert server_text == expected_text, (
+            f"Server text doesn't match expected for {file}\n"
             f"Length diff: {len(server_text)} vs {len(expected_text)}"
-        
+        )
+
         # Should get diagnostics since we broke the code
         diag_updated = file_manager.get_diagnostics(file)
         assert len(diag_updated) > 0, f"Expected diagnostics after breaking {file}"
-        
+
         # Clean up
         file_manager.close_files([file])
 
@@ -257,6 +264,7 @@ def test_update_try_tactics(file_manager):
 # ============================================================================
 # File close tests
 # ============================================================================
+
 
 @pytest.mark.integration
 @pytest.mark.mathlib

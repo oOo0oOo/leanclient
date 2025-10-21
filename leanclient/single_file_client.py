@@ -24,7 +24,7 @@ class SingleFileClient:
         self.client = client
         self.file_path = file_path
 
-    def build_project(self, get_cache: bool = True):        
+    def build_project(self, get_cache: bool = True):
         """Build the Lean project by running `lake build`.
 
         Args:
