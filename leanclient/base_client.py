@@ -103,44 +103,36 @@ class BaseLeanLSPClient:
     def close(self, timeout: float | None = 2):
         """Always close the client when done!
 
-        Terminates the language server process and close all pipes.
+        Terminates the language server process and cleans up resources.
 
         Args:
             timeout (float | None): Time to wait for the process to terminate. Defaults to 2 seconds.
         """
-        self._stdout_thread_stop_event.set()
-        
-        # Close asyncio event loop
-        if self._loop and self._loop.is_running():
-            self._loop.call_soon_threadsafe(self._loop.stop)
-        
+        # Terminate the language server process
         self.process.terminate()
-
-        for pipe in (self.stdin, self.stdout):
-            if pipe:
-                try:
-                    pipe.close()
-                except OSError:
-                    pass
-
+        
         try:
-            if timeout is not None:
-                self.process.wait(timeout=timeout)
-            else:
-                self.process.wait()
+            self.process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            logger.warning(
-                "Language server did not terminate in time. Killing process."
-            )
+            logger.warning("Language server did not terminate in time. Killing process.")
             self.process.kill()
             self.process.wait()
         
-        # Close event loop after process is terminated
-        try:
-            if self._loop and not self._loop.is_closed():
-                self._loop.close()
-        except Exception:
-            pass
+        # Signal stdout thread to stop and stop event loop
+        self._stdout_thread_stop_event.set()
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        
+        # Close event loop (wait a moment for it to stop gracefully)
+        if self._loop and not self._loop.is_closed():
+            # Give the loop thread a moment to finish
+            self._loop_thread.join(timeout=0.5)
+            if not self._loop.is_closed():
+                try:
+                    self._loop.close()
+                except RuntimeError:
+                    # Event loop might still be running, force close in thread
+                    pass
 
     # URI HANDLING
     def _local_to_uri(self, local_path: str | os.PathLike[str]) -> str:
