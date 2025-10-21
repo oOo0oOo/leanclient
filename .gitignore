@@ -5,6 +5,7 @@ dist/
 .benchmarks/
 .pytest_cache/
 htmlcov/
+.ruff_cache/
 
 .test_env/
 tests/profile*.png
