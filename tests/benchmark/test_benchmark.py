@@ -15,7 +15,7 @@ def benchmark_client(test_project_dir):
         LeanLSPClient: Client configured for benchmarking.
     """
     client = LeanLSPClient(
-        test_project_dir, initial_build=False, max_opened_files=4
+        test_project_dir, max_opened_files=4
     )
     yield client
     client.close()

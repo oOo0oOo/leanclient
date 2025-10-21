@@ -39,14 +39,14 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     Args:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once. Defaults to 4.
-        initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
+        initial_build (bool): Whether to run `lake build` on initialization. Defaults to False. The Lean LSP server does not require a build to function - it will build dependencies on-demand when files are opened.
     """
 
     def __init__(
         self,
         project_path: str,
         max_opened_files: int = 4,
-        initial_build: bool = True
+        initial_build: bool = False
     ):
         BaseLeanLSPClient.__init__(self, project_path, initial_build)
         LSPFileManager.__init__(self, max_opened_files)

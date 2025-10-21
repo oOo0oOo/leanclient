@@ -234,7 +234,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         return results
 
-    def open_files(self, paths: list[str]) -> None:
+    def open_files(self, paths: list[str], dependency_build_mode: str = "never") -> None:
         """Open files in the language server.
 
         Use :meth:`get_diagnostics` to get diagnostics.
@@ -244,6 +244,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             paths (list[str]): List of relative file paths to open.
+            dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never". Can be "once", "never" or "always".
         """
         if len(paths) > self.max_opened_files:
             raise RuntimeError(
@@ -256,7 +257,7 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             new_files = [p for p in paths if p not in self.opened_files]
         if new_files:
-            self._open_new_files(new_files)
+            self._open_new_files(new_files, dependency_build_mode)
 
         # Remove files if over limit
         with self._opened_files_lock:
@@ -272,15 +273,16 @@ class LSPFileManager(BaseLeanLSPClient):
         if remove_count > 0:
             self.close_files(removable_paths)
 
-    def open_file(self, path: str) -> None:
+    def open_file(self, path: str, dependency_build_mode: str = "never") -> None:
         """Open a file in the language server.
 
         Use :meth:`get_diagnostics` to get diagnostics for the file.
 
         Args:
             path (str): Relative file path to open.
+            dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never". Can be "once", "never" or "always".
         """
-        self.open_files([path])
+        self.open_files([path], dependency_build_mode=dependency_build_mode)
 
     def update_file(
         self, path: str, changes: list[DocumentContentChange]

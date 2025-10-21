@@ -63,30 +63,16 @@ def fast_mathlib_files():
 
 @pytest.fixture(scope="module")
 def base_client(test_project_dir):
-    """Shared BaseLeanLSPClient for a test module.
-    
-    Args:
-        test_project_dir: Test project directory path.
-        
-    Yields:
-        BaseLeanLSPClient: Initialized client.
-    """
-    client = BaseLeanLSPClient(test_project_dir, initial_build=False)
+    """Provide a BaseLeanLSPClient instance."""
+    client = BaseLeanLSPClient(test_project_dir)
     yield client
     client.close()
 
 
 @pytest.fixture(scope="module")
 def lsp_client(test_project_dir):
-    """Shared LeanLSPClient for a test module.
-    
-    Args:
-        test_project_dir: Test project directory path.
-        
-    Yields:
-        LeanLSPClient: Initialized client.
-    """
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    """Provide a LeanLSPClient instance."""
+    client = LeanLSPClient(test_project_dir)
     yield client
     client.close()
 

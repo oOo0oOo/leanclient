@@ -55,7 +55,7 @@ def test_no_lingering_processes_after_close(test_project_dir):
     """Test that client.close() terminates the lake serve process."""
     initial_count = len(_get_lake_serve_processes())
     
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    client = LeanLSPClient(test_project_dir)
     client_pid = client.process.pid
     
     assert psutil.pid_exists(client_pid), "Client process should exist"
@@ -74,7 +74,7 @@ def test_multiple_clients_cleanup(test_project_dir):
     clients = []
     pids = []
     for _ in range(3):
-        client = LeanLSPClient(test_project_dir, initial_build=False)
+        client = LeanLSPClient(test_project_dir)
         clients.append(client)
         pids.append(client.process.pid)
     
@@ -104,7 +104,7 @@ def test_signal_during_operation(test_project_dir, test_file_path, sig, timeout)
     """Test cleanup when process receives various signals during operation."""
     initial_count = len(_get_lake_serve_processes())
     
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    client = LeanLSPClient(test_project_dir)
     client_pid = client.process.pid
     
     _send_signal_during_operation(client, test_file_path, sig)
@@ -119,7 +119,7 @@ def test_close_already_dead_process(test_project_dir):
     """Test cleanup when process has already died before close() is called."""
     initial_count = len(_get_lake_serve_processes())
     
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    client = LeanLSPClient(test_project_dir)
     client_pid = client.process.pid
     
     # Kill the process directly
@@ -142,7 +142,7 @@ def test_force_kill_on_timeout(test_project_dir):
     """Test that process is force killed if it doesn't terminate gracefully."""
     initial_count = len(_get_lake_serve_processes())
     
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    client = LeanLSPClient(test_project_dir)
     client_pid = client.process.pid
     
     # Close with very short timeout to trigger force kill

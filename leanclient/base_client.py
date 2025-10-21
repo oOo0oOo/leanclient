@@ -30,7 +30,7 @@ class BaseLeanLSPClient:
     """
 
     def __init__(
-        self, project_path: str, initial_build: bool = True
+        self, project_path: str, initial_build: bool = False
     ):
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
