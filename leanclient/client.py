@@ -28,21 +28,27 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         E.g. ".lake/packages/mathlib/Mathlib/Init.lean" can be a valid path.
 
+        To control logging output, configure the 'leanclient' logger:
+        
+        .. code-block:: python
+        
+            import logging
+            logging.getLogger('leanclient').setLevel(logging.WARNING)  # Show warnings and errors
+            logging.getLogger('leanclient').setLevel(logging.DEBUG)    # Show all messages
+
     Args:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once. Defaults to 4.
         initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
-        print_warnings (bool): Whether to print warnings about experimental features.
     """
 
     def __init__(
         self,
         project_path: str,
         max_opened_files: int = 4,
-        initial_build: bool = True,
-        print_warnings: bool = True,
+        initial_build: bool = True
     ):
-        BaseLeanLSPClient.__init__(self, project_path, initial_build, print_warnings)
+        BaseLeanLSPClient.__init__(self, project_path, initial_build)
         LSPFileManager.__init__(self, max_opened_files)
 
     def create_file_client(self, file_path: str) -> SingleFileClient:

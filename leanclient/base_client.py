@@ -3,6 +3,7 @@ import subprocess
 import urllib.parse
 import threading
 import asyncio
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable, DefaultDict
@@ -10,6 +11,8 @@ from typing import Any, Callable, DefaultDict
 import orjson
 
 from .utils import SemanticTokenProcessor
+
+logger = logging.getLogger(__name__)
 
 # Methods from the server that should be ignored
 IGNORED_METHODS = {
@@ -27,9 +30,8 @@ class BaseLeanLSPClient:
     """
 
     def __init__(
-        self, project_path: str, initial_build: bool = True, print_warnings: bool = True
+        self, project_path: str, initial_build: bool = True
     ):
-        self.print_warnings = print_warnings
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
 
@@ -127,10 +129,9 @@ class BaseLeanLSPClient:
             else:
                 self.process.wait()
         except subprocess.TimeoutExpired:
-            if self.print_warnings:
-                print(
-                    "Warning: Language server did not terminate in time. Killing process."
-                )
+            logger.warning(
+                "Language server did not terminate in time. Killing process."
+            )
             self.process.kill()
             self.process.wait()
         
@@ -245,8 +246,7 @@ class BaseLeanLSPClient:
                     try:
                         handler(msg)
                     except Exception as e:
-                        if self.print_warnings:
-                            print(f"Warning: Notification handler for {method} failed: {e}")
+                        logger.warning(f"Notification handler for {method} failed: {e}")
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool

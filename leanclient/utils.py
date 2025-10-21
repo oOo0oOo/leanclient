@@ -2,6 +2,9 @@
 from dataclasses import dataclass
 from functools import wraps
 from typing import Tuple
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Mapping SymbolKinds ints to string names:
 # https://github.com/leanprover/lean4/blob/8422d936cff3b609bd2a1396e82356c82c383386/src/Lean/Data/Lsp/LanguageFeatures.lean#L202C1-L229C27
@@ -223,14 +226,13 @@ def experimental(func):
 
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        if self.print_warnings:
-            print(
-                f"Warning: {func.__name__}() is experimental! Set print_warnings=False to mute."
-            )
+        logger.warning(
+            "%s() is experimental! Use with caution.", func.__name__
+        )
         return func(self, *args, **kwargs)
 
     # Change __doc__ to include a sphinx warning
-    warning = "\n        .. admonition:: Experimental\n\n            This method is experimental. Use with caution.\n"
+    warning = "\n        .. admonition:: Experimental\n\n            This method is experimental. Use with caution.\n            Warnings are logged via the 'leanclient' logger.\n"
     doc_lines = wrapper.__doc__.split("\n")
     doc_lines.insert(1, warning)
     wrapper.__doc__ = "\n".join(doc_lines)

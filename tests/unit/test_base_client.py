@@ -9,7 +9,7 @@ from leanclient.base_client import BaseLeanLSPClient
 @pytest.mark.slow
 def test_initial_build(test_project_dir):
     """Test BaseLeanLSPClient initialization with initial build."""
-    lsp = BaseLeanLSPClient(test_project_dir, initial_build=True, print_warnings=False)
+    lsp = BaseLeanLSPClient(test_project_dir, initial_build=True)
     lsp.close()
 
 

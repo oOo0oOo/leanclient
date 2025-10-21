@@ -3,10 +3,13 @@ from dataclasses import dataclass, field
 import time
 import threading
 import urllib.parse
+import logging
 from typing import Any
 
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 from .base_client import BaseLeanLSPClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -364,8 +367,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 if all(ready):
                     break
                 if time.monotonic() >= deadline:
-                    if self.print_warnings:
-                        print("WARNING: close_files timed out waiting for diagnostics flush.")
+                    logger.warning("close_files timed out waiting for diagnostics flush.")
                     break
                 time.sleep(0.02)
             with self._opened_files_lock:
@@ -453,19 +455,16 @@ class LSPFileManager(BaseLeanLSPClient):
         # Return diagnostics or error
         with self._opened_files_lock:
             state = self.opened_files[path]
-            if self.print_warnings:
-                print(
-                    "DEBUG get_diagnostics: path=%s, diag=%s, error=%s, processing=%s, "
-                    "version=%s, diag_version=%s"
-                    % (
-                        path,
-                        state.diagnostics,
-                        state.error,
-                        state.processing,
-                        state.version,
-                        state.diagnostics_version,
-                    )
-                )
+            logger.debug(
+                "get_diagnostics: path=%s, diag=%s, error=%s, processing=%s, "
+                "version=%s, diag_version=%s",
+                path,
+                state.diagnostics,
+                state.error,
+                state.processing,
+                state.version,
+                state.diagnostics_version,
+            )
             if state.error:
                 return [state.error]
             # If we saw a fatal error but have no diagnostics, return generic error message
@@ -548,8 +547,7 @@ class LSPFileManager(BaseLeanLSPClient):
         while pending_uris:
             elapsed = time.monotonic() - start_time
             if elapsed > timeout:
-                if self.print_warnings:
-                    print(f"WARNING: `_wait_for_diagnostics` timed out after {timeout} seconds.")
+                logger.warning("_wait_for_diagnostics timed out after %s seconds.", timeout)
                 break
             
             done_uris = [uri for uri in pending_uris if futures_by_uri[uri].done()]

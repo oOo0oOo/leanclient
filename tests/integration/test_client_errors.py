@@ -299,14 +299,14 @@ def test_invalid_path_with_spaces(clean_lsp_client, test_file_path, path_with_sp
 def test_invalid_root_not_found():
     """Test initialization with non-existent path."""
     with pytest.raises(FileNotFoundError):
-        LeanLSPClient("invalid_path", initial_build=False, print_warnings=False)
+        LeanLSPClient("invalid_path", initial_build=False)
 
 
 @pytest.mark.unit
 def test_invalid_root_not_directory():
     """Test initialization with file instead of directory."""
     with pytest.raises(NotADirectoryError):
-        LeanLSPClient("leanclient/client.py", initial_build=False, print_warnings=False)
+        LeanLSPClient("leanclient/client.py", initial_build=False)
 
 
 @pytest.mark.unit
@@ -342,7 +342,7 @@ def test_invalid_coordinates_crashes_lake(test_project_dir, random_fast_mathlib_
     path = random_fast_mathlib_files(1, 42)[0]
     position = {"line": -1, "character": 0}
     
-    lsp = LeanLSPClient(test_project_dir, initial_build=False, print_warnings=False)
+    lsp = LeanLSPClient(test_project_dir, initial_build=False)
     res = lsp.get_declarations(path, **position)
     assert "Cannot parse request params:" in res["error"]["message"]
     lsp.close()

@@ -71,7 +71,7 @@ def base_client(test_project_dir):
     Yields:
         BaseLeanLSPClient: Initialized client.
     """
-    client = BaseLeanLSPClient(test_project_dir, initial_build=False, print_warnings=False)
+    client = BaseLeanLSPClient(test_project_dir, initial_build=False)
     yield client
     client.close()
 
@@ -86,7 +86,7 @@ def lsp_client(test_project_dir):
     Yields:
         LeanLSPClient: Initialized client.
     """
-    client = LeanLSPClient(test_project_dir, initial_build=False, print_warnings=False)
+    client = LeanLSPClient(test_project_dir, initial_build=False)
     yield client
     client.close()
 
@@ -107,7 +107,7 @@ def clean_lsp_client(test_project_dir):
     Yields:
         LeanLSPClient: Fresh client instance.
     """
-    client = LeanLSPClient(test_project_dir, initial_build=False, print_warnings=False)
+    client = LeanLSPClient(test_project_dir, initial_build=False)
     yield client
     client.close()
 
