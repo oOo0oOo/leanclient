@@ -1,14 +1,26 @@
 import os
-import pathlib
-from pprint import pprint
 import subprocess
 import urllib.parse
-import queue
 import threading
+import asyncio
+import logging
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Callable, DefaultDict
 
 import orjson
 
 from .utils import SemanticTokenProcessor
+
+logger = logging.getLogger(__name__)
+
+# Methods from the server that should be ignored
+IGNORED_METHODS = {
+    "workspace/didChangeWatchedFiles",
+    "workspace/semanticTokens/refresh",
+    "client/registerCapability",
+    "workspace/inlayHint/refresh",
+}
 
 
 class BaseLeanLSPClient:
@@ -18,11 +30,10 @@ class BaseLeanLSPClient:
     """
 
     def __init__(
-        self, project_path: str, initial_build: bool = True, print_warnings: bool = True
+        self, project_path: str, initial_build: bool = True
     ):
-        self.print_warnings = print_warnings
-        self.project_path = os.path.abspath(project_path)
-        self.request_id = 0
+        self.project_path = Path(project_path).resolve()
+        self.request_id = 0  # Counter for generating unique request IDs
 
         if initial_build:
             self.build_project()
@@ -38,19 +49,30 @@ class BaseLeanLSPClient:
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
 
+        # Asyncio infrastructure for non-blocking requests
+        self._loop = asyncio.new_event_loop()
+        self._futures = {}  # {request_id: asyncio.Future}
+        self._notification_handlers: DefaultDict[str, set[Callable[[dict], Any]]] = defaultdict(set)
+        
+        # Start event loop in a separate thread
+        self._loop_thread = threading.Thread(
+            target=self._run_event_loop,
+            daemon=True,
+        )
+        self._loop_thread.start()
+        
         # Thread to read stdout
-        self._stdout_queue = queue.Queue()
         self._stdout_thread_stop_event = threading.Event()
         self._stdout_thread = threading.Thread(
             target=self._read_stdout_loop,
-            args=(self._stdout_queue, self._stdout_thread_stop_event),
+            args=(self._stdout_thread_stop_event,),
             daemon=True,
         )
         self._stdout_thread.start()
 
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
-        self._send_request_rpc(
+        server_info = self._send_request_sync(
             "initialize",
             {
                 "processId": os.getpid(),
@@ -59,9 +81,7 @@ class BaseLeanLSPClient:
                     "editDelay": 1  # It seems like this has no effect.
                 },
             },
-            is_notification=False,
         )
-        server_info = self._read_stdout()["result"]
 
         legend = server_info["capabilities"]["semanticTokensProvider"]["legend"]
         self.token_processor = SemanticTokenProcessor(legend["tokenTypes"])
@@ -89,6 +109,11 @@ class BaseLeanLSPClient:
             timeout (float | None): Time to wait for the process to terminate. Defaults to 2 seconds.
         """
         self._stdout_thread_stop_event.set()
+        
+        # Close asyncio event loop
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        
         self.process.terminate()
 
         for pipe in (self.stdin, self.stdout):
@@ -104,15 +129,21 @@ class BaseLeanLSPClient:
             else:
                 self.process.wait()
         except subprocess.TimeoutExpired:
-            if self.print_warnings:
-                print(
-                    "Warning: Language server did not terminate in time. Killing process."
-                )
+            logger.warning(
+                "Language server did not terminate in time. Killing process."
+            )
             self.process.kill()
             self.process.wait()
+        
+        # Close event loop after process is terminated
+        try:
+            if self._loop and not self._loop.is_closed():
+                self._loop.close()
+        except Exception:
+            pass
 
     # URI HANDLING
-    def _local_to_uri(self, local_path: str) -> str:
+    def _local_to_uri(self, local_path: str | os.PathLike[str]) -> str:
         """Convert a local file path to a URI.
 
         User API is based on local file paths (relative to project path) but internally we use URIs.
@@ -127,31 +158,45 @@ class BaseLeanLSPClient:
         Returns:
             str: URI representation of the file.
         """
-        uri = pathlib.Path(self.project_path, local_path).as_uri()
-        return urllib.parse.unquote(uri)
+        path = (self.project_path / Path(local_path)).resolve()
+        return urllib.parse.unquote(path.as_uri())
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
         """See :meth:`_local_to_uri`"""
         return [self._local_to_uri(path) for path in local_paths]
 
-    def _uri_to_abs(self, uri: str) -> str:
+    def _uri_to_abs(self, uri: str) -> Path:
         """See :meth:`_local_to_uri`"""
-        path = urllib.parse.urlparse(uri).path
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme and parsed.scheme != "file":
+            raise ValueError(f"Unsupported URI scheme: {parsed.scheme}")
+
+        path = urllib.parse.unquote(parsed.path)
         # On windows we need to remove the leading slash
         if os.name == "nt" and path.startswith("/"):
             path = path[1:]
-        return path
+        return Path(path)
 
     def _uri_to_local(self, uri: str) -> str:
         """See :meth:`_local_to_uri`"""
-        abs_path = self._uri_to_abs(uri)
-        return os.path.relpath(abs_path, self.project_path)
+        abs_path = self._uri_to_abs(uri).resolve()
+        try:
+            rel_path = abs_path.relative_to(self.project_path)
+        except ValueError:
+            return str(abs_path)
+        return str(rel_path)
 
     # LANGUAGE SERVER RPC INTERACTION
-    def _read_stdout_loop(self, queue: queue.Queue, stop_event: threading.Event):
+    def _run_event_loop(self):
+        """Run the asyncio event loop in a separate thread."""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+    
+    def _read_stdout_loop(self, stop_event: threading.Event):
         """Read the stdout of the language server in a separate thread.
 
         This is necessary to avoid blocking the main thread.
+        Dispatches responses to futures and notifications to handlers.
         """
         while not stop_event.is_set():
             if self.stdout.closed:
@@ -170,25 +215,38 @@ class BaseLeanLSPClient:
             content_length = int(header.split(":")[1])
             next(self.stdout)
             msg = orjson.loads(self.stdout.read(content_length))
-            queue.put(msg)
-
-        queue.put(None)  # This prevents blocking when the thread is stopped.
-
-    def _read_stdout(self, timeout: float | None = None) -> dict:
-        """Read the next message from the language server.
-
-        This is the main blocking function in this synchronous client.
-
-        Args:
-            timeout (float | None): Time to wait for a message. Defaults to None (wait indefinitely).
-
-        Returns:
-            dict: JSON response from the language server.
-        """
-        try:
-            return self._stdout_queue.get(timeout=timeout)
-        except queue.Empty:
-            return {}
+            
+            # Dispatch to futures and notification handlers
+            msg_id = msg.get("id")
+            method = msg.get("method")
+            
+            # Ignore certain methods from the server
+            if method in IGNORED_METHODS:
+                continue
+            
+            # Handle response to a request
+            if msg_id is not None and msg_id in self._futures:
+                future = self._futures.pop(msg_id)
+                if "error" in msg:
+                    self._loop.call_soon_threadsafe(
+                        future.set_exception, 
+                        Exception(f"LSP Error: {msg['error']}")
+                    )
+                else:
+                    self._loop.call_soon_threadsafe(
+                        future.set_result, 
+                        msg.get("result", msg)
+                    )
+                continue
+            
+            # Handle notification with registered handler
+            if method is not None and method in self._notification_handlers:
+                handlers_snapshot = tuple(self._notification_handlers[method])
+                for handler in handlers_snapshot:
+                    try:
+                        handler(msg)
+                    except Exception as e:
+                        logger.warning(f"Notification handler for {method} failed: {e}")
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
@@ -230,6 +288,68 @@ class BaseLeanLSPClient:
             params (dict): Parameters for the method.
         """
         self._send_request_rpc(method, params, is_notification=True)
+
+    def _send_request_async(self, method: str, params: dict) -> asyncio.Future:
+        """Send a request and return an asyncio.Future immediately (non-blocking).
+
+        Args:
+            method (str): Method name.
+            params (dict): Parameters for the method.
+
+        Returns:
+            asyncio.Future: Future that will be resolved when the response arrives.
+        """
+        req_id = self._send_request_rpc(method, params, is_notification=False)
+        future = self._loop.create_future()
+        self._futures[req_id] = future
+        return future
+
+    def _send_request_sync(self, method: str, params: dict, timeout: float | None = None) -> dict:
+        """Send a request and block until response arrives.
+
+        Args:
+            method (str): Method name.
+            params (dict): Parameters for the method.
+            timeout (float | None): Timeout in seconds. None means wait indefinitely.
+
+        Returns:
+            dict: Response from the language server.
+        """
+        async_future = self._send_request_async(method, params)
+        
+        # Wrap the future in an awaitable coroutine
+        async def await_future():
+            return await async_future
+        
+        # Use asyncio.run_coroutine_threadsafe to bridge async to sync
+        return asyncio.run_coroutine_threadsafe(await_future(), self._loop).result(timeout=timeout)
+    
+    def _register_notification_handler(self, method: str, handler):
+        """Register a handler for a specific notification method.
+        
+        Args:
+            method (str): Notification method name (e.g., "textDocument/publishDiagnostics").
+            handler: Callable that takes the notification message as argument.
+        """
+        self._notification_handlers[method].add(handler)
+    
+    def _unregister_notification_handler(self, method: str, handler=None):
+        """Unregister a notification handler.
+        
+        Args:
+            method (str): Notification method name.
+        """
+        handlers = self._notification_handlers.get(method)
+        if not handlers:
+            return
+
+        if handler is None:
+            handlers.clear()
+        else:
+            handlers.discard(handler)
+
+        if not handlers:
+            self._notification_handlers.pop(method, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:

@@ -7,6 +7,7 @@ from leanclient.utils import DocumentContentChange
 
 
 @pytest.mark.integration
+@pytest.mark.unimportant
 def test_method_overlap():
     """Test that SingleFileClient has similar methods to LeanLSPClient."""
     method_client = dir(LeanLSPClient)
@@ -28,6 +29,7 @@ def test_method_overlap():
 
 
 @pytest.mark.integration
+@pytest.mark.unimportant
 def test_creation(lsp_client, test_file_path):
     """Test creating SingleFileClient instances."""
     # Instantiate a SingleFileClient
@@ -46,6 +48,7 @@ def test_creation(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 def test_requests(lsp_client, test_file_path):
     """Test various request methods on SingleFileClient."""
     sfc = lsp_client.create_file_client(test_file_path)
@@ -64,9 +67,8 @@ def test_requests(lsp_client, test_file_path):
     res.append(sfc.get_folding_ranges())
     res.append(sfc.get_goal(9, 15))
     res.append(sfc.get_term_goal(9, 15))
-    res.append(sfc.get_diagnostics())
-    res.append(sfc.get_diagnostics_multi([test_file_path]))
     res.append(sfc.get_file_content())
+    res.append(sfc.get_diagnostics())
     assert all(res)
 
     item = sfc.get_call_hierarchy_items(1, 15)[0]

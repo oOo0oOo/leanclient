@@ -51,6 +51,7 @@ python_functions = ["test_*"]
 
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unimportant: marks tests as unimportant (deselect with '-m \"not unimportant\"')",
     "benchmark: performance tests",
     "integration: integration tests",
     "unit: fast unit tests",
@@ -61,9 +62,10 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=leanclient",
-    "--cov-report=html",
-    "--cov-report=term-missing:skip-covered",
+    "--no-header",
+    # "--cov=leanclient",
+    # "--cov-report=html",
+    # "--cov-report=term-missing:skip-covered",
 ]
 
 timeout = 300

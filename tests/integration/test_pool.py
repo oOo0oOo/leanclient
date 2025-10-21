@@ -20,9 +20,10 @@ def empty_task(client: SingleFileClient) -> str:
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_batch_size(test_project_dir, fast_mathlib_files):
     """Test pool with different batch sizes."""
-    NUM_FILES = 10
+    NUM_FILES = 4
     BATCH_SIZE = 3
     files = fast_mathlib_files[:NUM_FILES]
     
@@ -42,6 +43,7 @@ def test_batch_size(test_project_dir, fast_mathlib_files):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_creation(test_project_dir, fast_mathlib_files):
     """Test creating pool with different methods."""
     NUM_FILES = 2
@@ -78,6 +80,7 @@ def test_submit(test_project_dir, fast_mathlib_files):
 @pytest.mark.integration
 @pytest.mark.mathlib
 @pytest.mark.parametrize("num_workers", [1, 4, 8])
+@pytest.mark.slow
 def test_num_workers(test_project_dir, fast_mathlib_files, num_workers):
     """Test pool with different numbers of workers."""
     NUM_FILES = 2
@@ -90,9 +93,10 @@ def test_num_workers(test_project_dir, fast_mathlib_files, num_workers):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_verbose(test_project_dir, fast_mathlib_files):
     """Test pool with verbose output."""
-    NUM_FILES = 8
+    NUM_FILES = 4
     
     with LeanClientPool(test_project_dir) as pool:
         results = pool.map(

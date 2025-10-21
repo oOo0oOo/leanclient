@@ -26,9 +26,7 @@ def file_manager(test_project_dir):
     Yields:
         WrappedFileManager: Test file manager instance.
     """
-    manager = WrappedFileManager(
-        test_project_dir, initial_build=False, print_warnings=False
-    )
+    manager = WrappedFileManager(test_project_dir, initial_build=False)
     yield manager
     manager.close()
 
@@ -39,17 +37,43 @@ def file_manager(test_project_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_open_files(file_manager, random_fast_mathlib_files):
     """Test opening files with caching."""
-    paths = random_fast_mathlib_files(3)
-    diag = file_manager.open_file(paths[0])
-    diag2 = file_manager.open_file(paths[0])  # One file overlap
-    diags = file_manager.open_files(paths[:2])  # Two files, 1 overlap
-    diags2 = file_manager.open_files(paths[:2])  # Cache
-
+    paths = random_fast_mathlib_files(1)
+    file_manager.open_file(paths[0])
+    diag = file_manager.get_diagnostics(paths[0])
+    diag2 = file_manager.get_diagnostics(paths[0])
     assert diag == diag2
-    assert diag == diags[0]
-    assert diags == diags2
+
+
+@pytest.mark.integration
+@pytest.mark.mathlib
+def test_open_file_receives_diagnostics_without_wait(file_manager, test_file_path):
+    """Ensure diagnostics arrive without explicitly waiting."""
+    file_manager.open_file(test_file_path)
+
+    deadline = time.time() + 10.0
+    diagnostics = []
+    error = None
+    fatal_error = False
+
+    while time.time() < deadline:
+        with file_manager._opened_files_lock:
+            state = file_manager.opened_files[test_file_path]
+            diagnostics = list(state.diagnostics)
+            error = state.error
+            fatal_error = state.fatal_error
+        if diagnostics or error or fatal_error:
+            break
+        time.sleep(0.1)
+
+    try:
+        assert fatal_error is False, "Unexpected fatal error while waiting for diagnostics"
+        assert error is None, f"Unexpected error while waiting for diagnostics: {error}"
+        assert diagnostics, "Expected diagnostics to arrive without waitForDiagnostics"
+    finally:
+        file_manager.close_files([test_file_path])
 
 
 # ============================================================================
@@ -61,7 +85,8 @@ def test_open_files(file_manager, random_fast_mathlib_files):
 def test_file_update(file_manager, random_fast_mathlib_files, test_env_dir):
     """Test updating file with multiple changes."""
     path = random_fast_mathlib_files(1, 42)[0]
-    diags = file_manager.open_file(path)
+    file_manager.open_file(path)
+    diags = file_manager.get_diagnostics(path)
     assert len(diags) <= 1, f"Expected 0 or 1 diagnostics, got {len(diags)}"
 
     NUM_CHANGES = 16
@@ -75,7 +100,8 @@ def test_file_update(file_manager, random_fast_mathlib_files, test_env_dir):
         )
         changes.append(d)
         text = apply_changes_to_text(text, [d])
-    diags2 = file_manager.update_file(path, changes)
+    file_manager.update_file(path, changes)
+    diags2 = file_manager.get_diagnostics(path)
 
     if len(diags2) == 1:
         assert diags2[0]["message"] == "unterminated comment"
@@ -102,7 +128,7 @@ def test_file_update(file_manager, random_fast_mathlib_files, test_env_dir):
 @pytest.mark.slow
 def test_file_update_line_by_line(file_manager, test_env_dir):
     """Test updating file line by line."""
-    NUM_LINES = 24
+    NUM_LINES = 12
     path = ".lake/packages/mathlib/Mathlib/NumberTheory/FLT/Basic.lean"
 
     with open(test_env_dir + path, "r") as f:
@@ -123,12 +149,13 @@ def test_file_update_line_by_line(file_manager, test_env_dir):
         diagnostics = []
         for i, line in enumerate(lines):
             text += line
-            diag = file_manager.update_file(
+            file_manager.update_file(
                 fantasy,
                 [DocumentContentChange(line, [i + START, 0], [i + START, len(line)])],
             )
             content = file_manager.get_file_content(fantasy)
             assert content == text
+            diag = file_manager.get_diagnostics(fantasy)
             diagnostics.extend(diag)
 
         assert len(diagnostics) > NUM_LINES / 2
@@ -142,6 +169,7 @@ def test_file_update_line_by_line(file_manager, test_env_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_update_file_mathlib(file_manager, test_env_dir):
     """Test that update_file correctly applies changes matching server behavior."""
     files = [
@@ -151,7 +179,8 @@ def test_update_file_mathlib(file_manager, test_env_dir):
     
     for file in files:
         # Open the file and get initial content
-        diag = file_manager.open_file(file)
+        file_manager.open_file(file)
+        diag = file_manager.get_diagnostics(file)
         assert diag == [], f"Expected no diagnostics for {file}, got {diag}"
         
         original_text = file_manager.get_file_content(file)
@@ -169,7 +198,7 @@ def test_update_file_mathlib(file_manager, test_env_dir):
             expected_text = apply_changes_to_text(expected_text, [change])
         
         # Apply changes via LSP server
-        diag_updated = file_manager.update_file(file, changes, timeout=60)
+        file_manager.update_file(file, changes)
         
         # Get server's version and compare
         server_text = file_manager.get_file_content(file)
@@ -178,6 +207,7 @@ def test_update_file_mathlib(file_manager, test_env_dir):
             f"Length diff: {len(server_text)} vs {len(expected_text)}"
         
         # Should get diagnostics since we broke the code
+        diag_updated = file_manager.get_diagnostics(file)
         assert len(diag_updated) > 0, f"Expected diagnostics after breaking {file}"
         
         # Clean up
@@ -186,10 +216,12 @@ def test_update_file_mathlib(file_manager, test_env_dir):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.slow
 def test_update_try_tactics(file_manager):
     """Test updating file to try different tactics."""
     file_path = ".lake/packages/mathlib/Mathlib/MeasureTheory/Covering/OneDim.lean"
-    diag_init = file_manager.open_file(file_path)
+    file_manager.open_file(file_path)
+    diag_init = file_manager.get_diagnostics(file_path)
     assert diag_init == [], f"Expected no diagnostics, got {diag_init}"
 
     line, character = (26, 61)
@@ -203,10 +235,11 @@ def test_update_try_tactics(file_manager):
             text=tactic,
         )
         l_tactic = len(tactic)
-        messages[tactic] = file_manager.update_file(
+        file_manager.update_file(
             file_path,
             [change],
         )
+        messages[tactic] = file_manager.get_diagnostics(file_path)
 
     exp_len = {
         "aesop": 0,

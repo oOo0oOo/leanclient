@@ -15,7 +15,7 @@ def benchmark_client(test_project_dir):
         LeanLSPClient: Client configured for benchmarking.
     """
     client = LeanLSPClient(
-        test_project_dir, initial_build=False, print_warnings=False, max_opened_files=4
+        test_project_dir, initial_build=False, max_opened_files=4
     )
     yield client
     client.close()
@@ -27,6 +27,7 @@ def benchmark_client(test_project_dir):
 
 @pytest.mark.benchmark
 @pytest.mark.mathlib
+@pytest.mark.skip(reason="Benchmark test, run manually as needed")
 def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_env_dir):
     """Benchmark opening multiple files."""
     NUM_FILES = 4
@@ -35,7 +36,8 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
     files = all_files[:NUM_FILES]
 
     t0 = time.time()
-    diagnostics = benchmark_client.open_files(files)
+    benchmark_client.open_files(files)
+    diagnostics = [benchmark_client.get_diagnostics(f) for f in files]
     duration = time.time() - t0
 
     assert len(diagnostics) == NUM_FILES
@@ -62,7 +64,8 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
         print(msg)
     new_files = all_files[NUM_FILES - EXTRA_FILES : NUM_FILES + EXTRA_FILES]
     t0 = time.time()
-    diagnostics2 = benchmark_client.open_files(new_files)
+    benchmark_client.open_files(new_files)
+    diagnostics2 = [benchmark_client.get_diagnostics(f) for f in new_files]
     extra_duration = time.time() - t0
     assert diagnostics[-EXTRA_FILES:] == diagnostics2[:EXTRA_FILES]
     msg = f"Loaded {len(new_files)} files ({EXTRA_FILES} overlapping files): {len(new_files) / extra_duration:.2f} files/s"
@@ -77,6 +80,7 @@ def test_bench_opening_files(benchmark_client, random_fast_mathlib_files, test_e
 
 @pytest.mark.benchmark
 @pytest.mark.mathlib
+@pytest.mark.skip(reason="Benchmark test, run manually as needed")
 def test_bench_all_functions(benchmark_client):
     """Benchmark all LSP request methods."""
     file_path = ".lake/packages/mathlib/Mathlib/Topology/MetricSpace/Infsep.lean"

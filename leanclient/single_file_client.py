@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 from leanclient.utils import DocumentContentChange, experimental
 
@@ -17,13 +17,12 @@ class SingleFileClient:
 
     def __init__(self, client, file_path: str):
         # Check if file exists
-        path = os.path.join(client.project_path, file_path)
-        if not os.path.exists(path):
+        path = (client.project_path / Path(file_path)).resolve()
+        if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
         self.client = client
         self.file_path = file_path
-        self.print_warnings = client.print_warnings
 
     def build_project(self, get_cache: bool = True):        
         """Build the Lean project by running `lake build`.
@@ -57,19 +56,13 @@ class SingleFileClient:
         """
         return self.client.close_files([self.file_path], blocking)
 
-    def update_file(
-        self, changes: list[DocumentContentChange], timeout: float = 30
-    ) -> list:
+    def update_file(self, changes: list[DocumentContentChange]) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
-        return self.client.update_file(self.file_path, changes, timeout)
+        return self.client.update_file(self.file_path, changes)
 
     def get_diagnostics(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(self.file_path)
-
-    def get_diagnostics_multi(self, paths: list[str]) -> list:
-        """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics_multi`"""
-        return self.client.get_diagnostics_multi(paths)
 
     def get_file_content(self) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""

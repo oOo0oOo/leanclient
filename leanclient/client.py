@@ -28,21 +28,27 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         E.g. ".lake/packages/mathlib/Mathlib/Init.lean" can be a valid path.
 
+        To control logging output, configure the 'leanclient' logger:
+        
+        .. code-block:: python
+        
+            import logging
+            logging.getLogger('leanclient').setLevel(logging.WARNING)  # Show warnings and errors
+            logging.getLogger('leanclient').setLevel(logging.DEBUG)    # Show all messages
+
     Args:
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once. Defaults to 4.
         initial_build (bool): Whether to run `lake build` on initialization. This is usually not required, but is the only check whether the project is valid.
-        print_warnings (bool): Whether to print warnings about experimental features.
     """
 
     def __init__(
         self,
         project_path: str,
         max_opened_files: int = 4,
-        initial_build: bool = True,
-        print_warnings: bool = True,
+        initial_build: bool = True
     ):
-        BaseLeanLSPClient.__init__(self, project_path, initial_build, print_warnings)
+        BaseLeanLSPClient.__init__(self, project_path, initial_build)
         LSPFileManager.__init__(self, max_opened_files)
 
     def create_file_client(self, file_path: str) -> SingleFileClient:
@@ -578,6 +584,9 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Call hierarchy items.
         """
+        # Ensure diagnostics are up-to-date so the server has processed the file.
+        self.get_diagnostics(path)
+
         return self._send_request(
             path,
             "textDocument/prepareCallHierarchy",
@@ -926,14 +935,20 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         except:
             pass
 
-        rid = self._send_request_rpc("codeAction/resolve", code_action, False)
-        for __ in range(100):  # Just in case
-            res = self._read_stdout()
-            if "error" in res:
-                return res
-            elif res.get("id") == rid:
-                return res.get("result")
-        return code_action
+        try:
+            result = self._send_request_sync("codeAction/resolve", code_action)
+            return result
+        except Exception as e:
+            # Return error in the old format for backward compatibility
+            if "LSP Error:" in str(e):
+                error_msg = str(e).replace("LSP Error: ", "")
+                import ast
+                try:
+                    error_dict = ast.literal_eval(error_msg)
+                    return {"error": error_dict}
+                except:
+                    return {"error": {"message": str(e)}}
+            raise
 
     def apply_code_action_resolve(self, code_action_resolved: dict) -> None:
         """Apply all edits of a resolved code action.
@@ -1087,7 +1102,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             changes.append(
                 DocumentContentChange(text="#info_trees in\n", start=pos, end=pos)
             )
-        diagnostics = self.update_file(path, changes)
+        self.update_file(path, changes)
+        diagnostics = self.get_diagnostics(path)
 
         # Revert the changes to remove the added lines
         revert_changes = [
