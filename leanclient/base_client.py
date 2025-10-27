@@ -11,7 +11,7 @@ from typing import Any, Callable, DefaultDict
 
 import orjson
 
-from .utils import SemanticTokenProcessor
+from .utils import SemanticTokenProcessor, has_mathlib_dependency
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,21 @@ class BaseLeanLSPClient:
     See :meth:`leanclient.client.LeanLSPClient` for more information.
     """
 
-    def __init__(self, project_path: str, initial_build: bool = False):
+    def __init__(self, project_path: str, initial_build: bool = False, prevent_cache_get: bool = False):
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
 
         if initial_build:
-            self.build_project()
+            self.build_project(get_cache=not prevent_cache_get)
+        elif not prevent_cache_get and has_mathlib_dependency(self.project_path):
+            # Get cached builds for mathlib projects to avoid slow on-demand builds
+            subprocess.run(
+                ["lake", "exe", "cache", "get"],
+                cwd=self.project_path,
+                check=False,
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+            )
 
         # Run the lean4 language server in a subprocess
         self.process = subprocess.Popen(
@@ -231,14 +240,16 @@ class BaseLeanLSPClient:
             # Handle response to a request
             if msg_id is not None and msg_id in self._futures:
                 future = self._futures.pop(msg_id)
-                if "error" in msg:
-                    self._loop.call_soon_threadsafe(
-                        future.set_exception, Exception(f"LSP Error: {msg['error']}")
-                    )
-                else:
-                    self._loop.call_soon_threadsafe(
-                        future.set_result, msg.get("result", msg)
-                    )
+                # Check if event loop is still running before dispatching
+                if self._loop and not self._loop.is_closed():
+                    if "error" in msg:
+                        self._loop.call_soon_threadsafe(
+                            future.set_exception, Exception(f"LSP Error: {msg['error']}")
+                        )
+                    else:
+                        self._loop.call_soon_threadsafe(
+                            future.set_result, msg.get("result", msg)
+                        )
                 continue
 
             # Handle notification with registered handler

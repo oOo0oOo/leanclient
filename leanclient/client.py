@@ -40,12 +40,13 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         project_path (str): Path to the root folder of a Lean project.
         max_opened_files (int): Maximum number of files to keep open at once. Defaults to 4.
         initial_build (bool): Whether to run `lake build` on initialization. Defaults to False. The Lean LSP server does not require a build to function - it will build dependencies on-demand when files are opened.
+        prevent_cache_get (bool): Prevent automatic `lake exe cache get` for mathlib projects. Defaults to False. Useful for tests to avoid repeated cache downloads.
     """
 
     def __init__(
-        self, project_path: str, max_opened_files: int = 4, initial_build: bool = False
+        self, project_path: str, max_opened_files: int = 4, initial_build: bool = False, prevent_cache_get: bool = False
     ):
-        BaseLeanLSPClient.__init__(self, project_path, initial_build)
+        BaseLeanLSPClient.__init__(self, project_path, initial_build, prevent_cache_get)
         LSPFileManager.__init__(self, max_opened_files)
 
     def create_file_client(self, file_path: str) -> SingleFileClient:

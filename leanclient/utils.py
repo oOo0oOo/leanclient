@@ -2,7 +2,10 @@
 from dataclasses import dataclass
 from functools import wraps
 from typing import Tuple
+from pathlib import Path
 import logging
+
+import orjson
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +222,28 @@ def get_diagnostics_in_range(
         if diag["range"]["start"]["line"] <= end_line
         and diag["range"]["end"]["line"] >= start_line
     ]
+
+
+def has_mathlib_dependency(project_path: str | Path) -> bool:
+    """Check if the project has mathlib as a dependency.
+
+    Args:
+        project_path: Path to the Lean project root directory.
+
+    Returns:
+        bool: True if mathlib is found in lake-manifest.json.
+    """
+    manifest_path = Path(project_path) / "lake-manifest.json"
+    if not manifest_path.exists():
+        return False
+
+    try:
+        with open(manifest_path, "r") as f:
+            manifest = orjson.loads(f.read())
+        packages = manifest.get("packages", [])
+        return any(pkg.get("name") == "mathlib" for pkg in packages)
+    except Exception:
+        return False
 
 
 def experimental(func):

@@ -16,7 +16,7 @@ from leanclient import LeanLSPClient
 @pytest.mark.integration
 def test_no_lingering_processes_after_close(test_project_dir):
     """Test that client.close() terminates the lake serve process."""
-    client = LeanLSPClient(test_project_dir)
+    client = LeanLSPClient(test_project_dir, prevent_cache_get=True)
     client_pid = client.process.pid
 
     assert psutil.pid_exists(client_pid), "Client process should exist"
@@ -34,7 +34,7 @@ def test_multiple_clients_cleanup(test_project_dir):
     pids = []
 
     for _ in range(3):
-        client = LeanLSPClient(test_project_dir)
+        client = LeanLSPClient(test_project_dir, prevent_cache_get=True)
         clients.append(client)
         pids.append(client.process.pid)
 

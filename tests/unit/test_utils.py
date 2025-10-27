@@ -6,6 +6,7 @@ from leanclient.utils import (
     DocumentContentChange,
     normalize_newlines,
     _utf16_pos_to_utf8_pos,
+    has_mathlib_dependency,
 )
 
 
@@ -173,3 +174,24 @@ def test_apply_normalizes_input():
     changes = [DocumentContentChange("X", [1, 0], [1, 0])]
     result = apply_changes_to_text(original, changes)
     assert result == "hello\nXworld"
+
+
+@pytest.mark.unit
+def test_has_mathlib_dependency_with_mathlib(test_project_dir):
+    """Test detection when mathlib is present in lake-manifest.json."""
+    assert has_mathlib_dependency(test_project_dir) is True
+
+
+@pytest.mark.unit
+def test_has_mathlib_dependency_without_manifest(tmp_path):
+    """Test when lake-manifest.json doesn't exist."""
+    assert has_mathlib_dependency(tmp_path) is False
+
+
+@pytest.mark.unit
+def test_has_mathlib_dependency_without_mathlib(tmp_path):
+    """Test when manifest exists but mathlib is not listed."""
+    manifest_path = tmp_path / "lake-manifest.json"
+    manifest_path.write_text('{"packages": [{"name": "batteries"}]}')
+    assert has_mathlib_dependency(tmp_path) is False
+

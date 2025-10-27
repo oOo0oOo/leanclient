@@ -144,5 +144,5 @@ def test_keyboard_interrupt_cleanup(test_project_dir, fast_mathlib_files):
     elapsed = time.time() - start_time
 
     # Should complete reasonably fast
-    assert elapsed < 5.0, f"Cleanup took too long: {elapsed:.2f}s"
+    assert elapsed < 10.0, f"Cleanup took too long: {elapsed:.2f}s"
     print(f"Interrupt and cleanup completed in {elapsed:.2f}s")

@@ -359,7 +359,7 @@ def test_invalid_coordinates_crashes_lake(test_project_dir, random_fast_mathlib_
     path = random_fast_mathlib_files(1, 42)[0]
     position = {"line": -1, "character": 0}
 
-    lsp = LeanLSPClient(test_project_dir)
+    lsp = LeanLSPClient(test_project_dir, prevent_cache_get=True)
     res = lsp.get_declarations(path, **position)
     assert "Cannot parse request params:" in res["error"]["message"]
     lsp.close()

@@ -13,6 +13,8 @@ def _init_worker(project_path: str, kwargs: dict):
     global client
     if "initial_build" not in kwargs:
         kwargs["initial_build"] = False
+    if "prevent_cache_get" not in kwargs:
+        kwargs["prevent_cache_get"] = True
     client = LeanLSPClient(project_path, **kwargs)
 
 
@@ -69,9 +71,8 @@ class LeanClientPool:
             results2 = [fut.get() for fut in futures]
 
     Note:
-
-        By default, the initial_build is turned off in all workers.
-        Use the `initial_build` kwarg to turn it on.
+        By default, the initial_build is turned off and prevent_cache_get is enabled in all workers.
+        Use the `initial_build` / `prevent_cache_get` kwargs to influence this.
 
     Args:
         project_path(str): The path to the Lean project.

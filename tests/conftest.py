@@ -66,7 +66,7 @@ def fast_mathlib_files():
 @pytest.fixture(scope="module")
 def base_client(test_project_dir):
     """Provide a BaseLeanLSPClient instance."""
-    client = BaseLeanLSPClient(test_project_dir)
+    client = BaseLeanLSPClient(test_project_dir, prevent_cache_get=True)
     yield client
     client.close()
 
@@ -74,7 +74,7 @@ def base_client(test_project_dir):
 @pytest.fixture(scope="module")
 def lsp_client(test_project_dir):
     """Provide a LeanLSPClient instance."""
-    client = LeanLSPClient(test_project_dir)
+    client = LeanLSPClient(test_project_dir, prevent_cache_get=True)
     yield client
     client.close()
 
@@ -96,7 +96,7 @@ def clean_lsp_client(test_project_dir):
     Yields:
         LeanLSPClient: Fresh client instance.
     """
-    client = LeanLSPClient(test_project_dir, initial_build=False)
+    client = LeanLSPClient(test_project_dir, initial_build=False, prevent_cache_get=True)
     yield client
     client.close()
 
