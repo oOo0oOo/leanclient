@@ -441,10 +441,6 @@ class LSPFileManager(BaseLeanLSPClient):
                 need_to_open = False
 
         if need_to_open:
-            with self._opened_files_lock:
-                if path in self._recently_closed:
-                    self._recently_closed.discard(path)
-                    return []
             self.open_files([path])
 
         # Check if we need to wait

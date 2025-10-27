@@ -276,3 +276,59 @@ def test_close(file_manager):
     file_manager.close_files([fpath], blocking=False)
     file_manager.close(timeout=0.01)
     assert file_manager.process.poll() == -15  # SIGTERM despite kill?
+
+
+# ============================================================================
+# _recently_closed cache bug tests
+# ============================================================================
+
+
+@pytest.mark.integration
+def test_get_diagnostics_after_close(file_manager, test_file_path):
+    """Verify get_diagnostics reopens recently closed files instead of returning []."""
+    file_manager.open_file(test_file_path)
+    initial_diags = file_manager.get_diagnostics(test_file_path)
+    assert len(initial_diags) > 0
+
+    file_manager.close_files([test_file_path])
+    diags_after_close = file_manager.get_diagnostics(test_file_path)
+
+    assert len(diags_after_close) > 0, (
+        "_recently_closed cache returns [] instead of reopening file"
+    )
+
+
+@pytest.mark.integration
+def test_file_edit_reload_workflow(file_manager, test_env_dir):
+    """Verify diagnostics are returned after close+reload simulating file edit."""
+    test_file = "EditTest.lean"
+    test_path = os.path.join(test_env_dir, test_file)
+
+    with open(test_path, "w") as f:
+        f.write("def valid : Nat := 42\n")
+
+    try:
+        file_manager.open_file(test_file)
+        valid_diags = file_manager.get_diagnostics(test_file)
+        errors = [d for d in valid_diags if d.get("severity") == 1]
+        assert len(errors) == 0
+
+        with open(test_path, "w") as f:
+            f.write("def invalid : Nat := \n")
+
+        file_manager.close_files([test_file])
+        diags_after_edit = file_manager.get_diagnostics(test_file)
+
+        assert len(diags_after_edit) > 0, (
+            "_recently_closed cache returns [] after file edit and reload"
+        )
+        errors = [d for d in diags_after_edit if d.get("severity") == 1]
+        assert len(errors) > 0
+
+    finally:
+        if os.path.exists(test_path):
+            os.remove(test_path)
+        try:
+            file_manager.close_files([test_file])
+        except:
+            pass
