@@ -41,13 +41,13 @@ def read_rpc_message(stdout, timeout=1.0):
         if not ready:
             return None
 
-    header = stdout.readline().decode("utf-8")
+    header = stdout.readline().decode("utf-8", errors="replace")
     if not header:
         return None
 
     content_length = int(header.split(":")[1].strip())
     stdout.readline()  # Skip empty line
-    body = stdout.read(content_length).decode("utf-8")
+    body = stdout.read(content_length).decode("utf-8", errors="replace")
     return json.loads(body)
 
 

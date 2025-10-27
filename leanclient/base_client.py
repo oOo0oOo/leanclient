@@ -224,7 +224,8 @@ class BaseLeanLSPClient:
                 break
 
             # Parse message
-            header = header.decode("utf-8")
+            # Use errors='replace' to handle invalid UTF-8 bytes on Windows
+            header = header.decode("utf-8", errors="replace")
             content_length = int(header.split(":")[1])
             next(self.stdout)
             msg = orjson.loads(self.stdout.read(content_length))
