@@ -44,7 +44,11 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
     """
 
     def __init__(
-        self, project_path: str, max_opened_files: int = 4, initial_build: bool = False, prevent_cache_get: bool = False
+        self,
+        project_path: str,
+        max_opened_files: int = 4,
+        initial_build: bool = False,
+        prevent_cache_get: bool = False,
     ):
         BaseLeanLSPClient.__init__(self, project_path, initial_build, prevent_cache_get)
         LSPFileManager.__init__(self, max_opened_files)

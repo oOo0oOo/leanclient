@@ -61,7 +61,9 @@ def _create_project(path, name, version, use_mathlib=False, force=False):
     lib_dir = os.path.join(path, name)
     if not os.path.exists(lib_dir):
         # Try to run lake init (may fail if package already initialized)
-        result = subprocess.run(f"lake init {name}", shell=True, cwd=path, capture_output=True)
+        result = subprocess.run(
+            f"lake init {name}", shell=True, cwd=path, capture_output=True
+        )
 
         # If lake init failed because package is already initialized,
         # manually create the library directory and Basic.lean

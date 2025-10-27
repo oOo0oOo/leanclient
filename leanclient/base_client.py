@@ -30,7 +30,12 @@ class BaseLeanLSPClient:
     See :meth:`leanclient.client.LeanLSPClient` for more information.
     """
 
-    def __init__(self, project_path: str, initial_build: bool = False, prevent_cache_get: bool = False):
+    def __init__(
+        self,
+        project_path: str,
+        initial_build: bool = False,
+        prevent_cache_get: bool = False,
+    ):
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
 
@@ -245,7 +250,8 @@ class BaseLeanLSPClient:
                 if self._loop and not self._loop.is_closed():
                     if "error" in msg:
                         self._loop.call_soon_threadsafe(
-                            future.set_exception, Exception(f"LSP Error: {msg['error']}")
+                            future.set_exception,
+                            Exception(f"LSP Error: {msg['error']}"),
                         )
                     else:
                         self._loop.call_soon_threadsafe(

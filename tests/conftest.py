@@ -96,7 +96,9 @@ def clean_lsp_client(test_project_dir):
     Yields:
         LeanLSPClient: Fresh client instance.
     """
-    client = LeanLSPClient(test_project_dir, initial_build=False, prevent_cache_get=True)
+    client = LeanLSPClient(
+        test_project_dir, initial_build=False, prevent_cache_get=True
+    )
     yield client
     client.close()
 

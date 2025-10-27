@@ -194,4 +194,3 @@ def test_has_mathlib_dependency_without_mathlib(tmp_path):
     manifest_path = tmp_path / "lake-manifest.json"
     manifest_path.write_text('{"packages": [{"name": "batteries"}]}')
     assert has_mathlib_dependency(tmp_path) is False
-
