@@ -1,4 +1,3 @@
-import collections
 from dataclasses import dataclass, field
 import time
 import threading
@@ -57,11 +56,11 @@ class LSPFileManager(BaseLeanLSPClient):
             raise RuntimeError(msg)
 
         self.max_opened_files = max_opened_files
-        # Unified state tracking for opened files
-        self.opened_files: collections.OrderedDict[str, FileState] = (
-            collections.OrderedDict()
-        )
+        self.opened_files: dict[str, FileState] = {}
         self._opened_files_lock = threading.Lock()
+        self._close_condition = threading.Condition(
+            self._opened_files_lock
+        )
         self._recently_closed: set[str] = set()
 
         # Setup global handlers for diagnostics and file progress
@@ -78,6 +77,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
             path = self._uri_to_local(uri)
             needs_rebuild = False
+            notify_close = False
 
             with self._opened_files_lock:
                 state = self.opened_files.get(path)
@@ -93,6 +93,7 @@ class LSPFileManager(BaseLeanLSPClient):
                         state.diagnostics_version = diag_version
                         if state.close_pending and not diagnostics:
                             state.close_ready = True
+                            notify_close = True
 
                         # Auto-rebuild stale imports (one-time only)
                         if not state.dependency_rebuild_attempted and any(
@@ -102,6 +103,11 @@ class LSPFileManager(BaseLeanLSPClient):
                         ):
                             state.dependency_rebuild_attempted = True
                             needs_rebuild = True
+
+            # Notify waiting threads outside the lock to avoid deadlock
+            if notify_close:
+                with self._close_condition:
+                    self._close_condition.notify_all()
 
             # Outside lock: send rebuild notifications
             if needs_rebuild:
@@ -396,21 +402,22 @@ class LSPFileManager(BaseLeanLSPClient):
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
 
-        # Wait for published diagnostics if blocking
+        # Wait for published diagnostics if blocking (event-driven, not polling)
         if blocking:
             deadline = time.monotonic() + 5
-            while True:
-                with self._opened_files_lock:
+            with self._close_condition:
+                while True:
                     ready = [self.opened_files[p].close_ready for p in paths]
-                if all(ready):
-                    break
-                if time.monotonic() >= deadline:
-                    logger.warning(
-                        "close_files timed out waiting for diagnostics flush."
-                    )
-                    break
-                time.sleep(0.02)
-            with self._opened_files_lock:
+                    if all(ready):
+                        break
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        logger.warning(
+                            "close_files timed out waiting for diagnostics flush."
+                        )
+                        break
+                    self._close_condition.wait(timeout=remaining)
+
                 for path in paths:
                     # Reset flags; file about to be removed
                     if path in self.opened_files:
@@ -590,24 +597,24 @@ class LSPFileManager(BaseLeanLSPClient):
                 )
                 break
 
-            done_uris = [uri for uri in pending_uris if futures_by_uri[uri].done()]
             completed_uris: set[str] = set()
 
             with self._opened_files_lock:
-                for uri in done_uris:
-                    path = path_by_uri[uri]
+                # First, process futures that completed
+                for uri in list(pending_uris):
                     future = futures_by_uri[uri]
-                    try:
-                        future.result()
-                    except Exception as e:
+                    if future.done():
+                        path = path_by_uri[uri]
                         state = self.opened_files[path]
-                        state.error = {"message": str(e)}
-                        state.processing = False
-                    finally:
-                        state = self.opened_files[path]
+                        try:
+                            future.result()
+                        except Exception as e:
+                            state.error = {"message": str(e)}
+                            state.processing = False
                         state.complete = True
                         completed_uris.add(uri)
 
+                # Then check remaining URIs for state changes via notification handlers
                 for uri in pending_uris - completed_uris:
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
@@ -628,6 +635,4 @@ class LSPFileManager(BaseLeanLSPClient):
             if not pending_uris:
                 break
 
-            remaining_time = timeout - elapsed
-            wait_time = min(0.02, max(0.001, remaining_time))
-            time.sleep(wait_time)
+            time.sleep(0.001)
