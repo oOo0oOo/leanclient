@@ -27,6 +27,7 @@ class FileState:
     complete: bool = False
     close_pending: bool = False
     close_ready: bool = False
+    dependency_rebuild_attempted: bool = False
 
     def reset_after_change(self):
         """Reset diagnostics-related state after a content change."""
@@ -76,9 +77,9 @@ class LSPFileManager(BaseLeanLSPClient):
             diag_version = msg["params"].get("version", -2)
 
             path = self._uri_to_local(uri)
+            needs_rebuild = False
 
             with self._opened_files_lock:
-                # Only update if file is still open
                 state = self.opened_files.get(path)
                 if state is None:
                     return
@@ -87,13 +88,45 @@ class LSPFileManager(BaseLeanLSPClient):
                 if diag_version >= state.diagnostics_version:
                     has_error = state.error is not None
 
-                    # Always update diagnostics unless we have an error
-                    # (Server sends empty [] first, then progressively more diagnostics)
                     if not has_error:
                         state.diagnostics = diagnostics
                         state.diagnostics_version = diag_version
                         if state.close_pending and not diagnostics:
                             state.close_ready = True
+
+                        # Auto-rebuild stale imports (one-time only)
+                        if not state.dependency_rebuild_attempted and any(
+                            d.get("severity") == 1
+                            and "Imports are out of date" in d.get("message", "")
+                            for d in diagnostics
+                        ):
+                            state.dependency_rebuild_attempted = True
+                            needs_rebuild = True
+
+            # Outside lock: send rebuild notifications
+            if needs_rebuild:
+                logger.info(f"Auto-rebuilding stale imports for {path}")
+                self._send_notification(
+                    "textDocument/didClose", {"textDocument": {"uri": uri}}
+                )
+
+                # Reopen with dependency rebuild
+                with self._opened_files_lock:
+                    state = self.opened_files.get(path)
+                    if state:  # Only rebuild if file still open
+                        state.version += 1
+                        state.reset_after_change()
+
+                        open_params = {
+                            "textDocument": {
+                                "uri": uri,
+                                "text": state.content,
+                                "languageId": "lean",
+                                "version": state.version,
+                            },
+                            "dependencyBuildMode": "once",
+                        }
+                        self._send_notification("textDocument/didOpen", open_params)
 
         def handle_file_progress(msg):
             """Handle $/lean/fileProgress notifications."""

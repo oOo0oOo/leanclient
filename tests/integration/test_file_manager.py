@@ -332,3 +332,113 @@ def test_file_edit_reload_workflow(file_manager, test_env_dir):
             file_manager.close_files([test_file])
         except:
             pass
+
+
+@pytest.mark.integration
+def test_stale_imports_auto_rebuild(file_manager, test_env_dir):
+    """Test automatic rebuild when imports are out of date."""
+    base_file = "LeanTestProject/DepModule.lean"
+    importing_file = "LeanTestProject/ImportModule.lean"
+
+    try:
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def myNum : Nat := 42\n")
+        with open(os.path.join(test_env_dir, importing_file), "w") as f:
+            f.write("import LeanTestProject.DepModule\n")
+
+        file_manager.open_file(base_file)
+        file_manager.open_file(importing_file)
+        file_manager.close_files([base_file, importing_file])
+
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def myNum : Nat := 100\n")
+
+        diags = file_manager.get_diagnostics(importing_file)
+        errors = [d for d in diags if d.get("severity") == 1]
+
+        assert len(errors) == 0, f"Should auto-rebuild stale imports: {errors}"
+
+    finally:
+        for f in [base_file, importing_file]:
+            path = os.path.join(test_env_dir, f)
+            if os.path.exists(path):
+                os.remove(path)
+
+
+@pytest.mark.integration
+def test_stale_imports_with_concurrent_update(file_manager, test_env_dir):
+    """Test that auto-rebuild doesn't interfere with concurrent file updates."""
+    base_file = "LeanTestProject/DepMod2.lean"
+    importing_file = "LeanTestProject/ImportMod2.lean"
+
+    try:
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def x : Nat := 1\n")
+        with open(os.path.join(test_env_dir, importing_file), "w") as f:
+            f.write("import LeanTestProject.DepMod2\ndef y : Nat := 2\n")
+
+        file_manager.open_file(base_file)
+        file_manager.open_file(importing_file)
+        file_manager.close_files([base_file, importing_file])
+
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def x : Nat := 10\n")
+
+        file_manager.open_file(importing_file)
+        time.sleep(0.1)
+
+        from leanclient import DocumentContentChange
+
+        file_manager.update_file(
+            importing_file,
+            [DocumentContentChange("\ndef z : Nat := 3\n", [2, 0], [2, 0])],
+        )
+
+        diags = file_manager.get_diagnostics(importing_file)
+        stale_errors = [
+            d
+            for d in diags
+            if d.get("severity") == 1 and "out of date" in d.get("message", "").lower()
+        ]
+        assert len(stale_errors) == 0, (
+            f"Concurrent update caused issues: {stale_errors}"
+        )
+
+    finally:
+        for f in [base_file, importing_file]:
+            path = os.path.join(test_env_dir, f)
+            if os.path.exists(path):
+                os.remove(path)
+
+
+@pytest.mark.integration
+def test_stale_imports_with_close_race(file_manager, test_env_dir):
+    """Test that closing file during auto-rebuild doesn't crash."""
+    base_file = "LeanTestProject/DepMod3.lean"
+    importing_file = "LeanTestProject/ImportMod3.lean"
+
+    try:
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def a : Nat := 5\n")
+        with open(os.path.join(test_env_dir, importing_file), "w") as f:
+            f.write("import LeanTestProject.DepMod3\n")
+
+        file_manager.open_file(base_file)
+        file_manager.open_file(importing_file)
+        file_manager.close_files([base_file, importing_file])
+
+        with open(os.path.join(test_env_dir, base_file), "w") as f:
+            f.write("def a : Nat := 50\n")
+
+        file_manager.open_file(importing_file)
+        file_manager.close_files([importing_file], blocking=False)
+
+        file_manager.open_file(base_file)
+        diags = file_manager.get_diagnostics(base_file)
+        assert isinstance(diags, list), "Should continue working after close race"
+
+    finally:
+        for f in [base_file, importing_file]:
+            path = os.path.join(test_env_dir, f)
+            if os.path.exists(path):
+                os.remove(path)
