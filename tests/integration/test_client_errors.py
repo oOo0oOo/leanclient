@@ -1,8 +1,6 @@
 """Integration tests for LeanLSPClient error handling."""
 
 import os
-import random
-import time
 
 import pytest
 import orjson
@@ -189,7 +187,7 @@ def test_lake_error_content_length(clean_lsp_client, test_file_path):
         },
     }
     body = orjson.dumps(request)
-    header = f"Content-Length: 3.14\r\n\r\n".encode("ascii")
+    header = "Content-Length: 3.14\r\n\r\n".encode("ascii")
     clean_lsp_client.stdin.write(header + body)
     clean_lsp_client.stdin.flush()
 
@@ -216,8 +214,10 @@ def test_lake_error_content_length(clean_lsp_client, test_file_path):
 )
 def test_invalid_path(clean_lsp_client, invalid_path, test_file_path):
     """Test various operations with invalid file paths."""
+
     # Random path for each method call
-    p = lambda: invalid_path
+    def p():
+        return invalid_path
 
     # Check all methods
     with pytest.raises(FileNotFoundError):

@@ -330,7 +330,7 @@ def test_file_edit_reload_workflow(file_manager, test_env_dir):
             os.remove(test_path)
         try:
             file_manager.close_files([test_file])
-        except:
+        except Exception:
             pass
 
 

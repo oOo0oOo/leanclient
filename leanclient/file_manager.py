@@ -58,9 +58,7 @@ class LSPFileManager(BaseLeanLSPClient):
         self.max_opened_files = max_opened_files
         self.opened_files: dict[str, FileState] = {}
         self._opened_files_lock = threading.Lock()
-        self._close_condition = threading.Condition(
-            self._opened_files_lock
-        )
+        self._close_condition = threading.Condition(self._opened_files_lock)
         self._recently_closed: set[str] = set()
 
         # Setup global handlers for diagnostics and file progress
@@ -235,7 +233,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 try:
                     error_dict = ast.literal_eval(error_msg)
                     return {"error": error_dict}
-                except:
+                except Exception:
                     return {"error": {"message": str(e)}}
             raise
 

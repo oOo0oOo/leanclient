@@ -51,14 +51,16 @@ def get_all_mathlib_files() -> List[str]:
         List[str]: List of relative paths to mathlib files.
     """
     file_paths = []
-    l = len(TEST_ENV_DIR)
+    base_path_len = len(TEST_ENV_DIR)
     path = TEST_ENV_DIR + ".lake/packages/mathlib/Mathlib"
 
     if not os.path.exists(path):
         return []
 
     for root, __, files in os.walk(path):
-        file_paths += [root[l:] + "/" + f for f in files if f.endswith(".lean")]
+        file_paths += [
+            root[base_path_len:] + "/" + f for f in files if f.endswith(".lean")
+        ]
     return file_paths
 
 

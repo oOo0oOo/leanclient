@@ -6,9 +6,6 @@ import time
 
 import pytest
 
-from leanclient import LeanLSPClient
-from leanclient.utils import DocumentContentChange
-
 
 # Expected diagnostic messages from test file
 EXP_DIAGNOSTIC_ERRORS = [
@@ -392,10 +389,10 @@ def test_call_hierarchy(lsp_client):
     ch_item = lsp_client.get_call_hierarchy_items(path, 46, 30)[0]
     assert ch_item["data"]["name"] == "Multiset.nodup_of_le"
 
-    res = lsp_client.get_call_hierarchy_incoming(ch_item)
+    lsp_client.get_call_hierarchy_incoming(ch_item)
     # Note: Result count may vary
 
-    res = lsp_client.get_call_hierarchy_outgoing(ch_item)
+    lsp_client.get_call_hierarchy_outgoing(ch_item)
     # Note: Result count may vary
 
 

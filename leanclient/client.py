@@ -1,5 +1,4 @@
 from collections import defaultdict
-from pprint import pprint
 
 from leanclient.info_tree import parse_info_tree
 from leanclient.single_file_client import SingleFileClient
@@ -934,7 +933,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             # Hoping for the best
             uri = code_action["edit"]["changes"].keys()[0]
             self.open_file(uri)
-        except:
+        except Exception:
             pass
 
         try:
@@ -949,7 +948,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 try:
                     error_dict = ast.literal_eval(error_msg)
                     return {"error": error_dict}
-                except:
+                except Exception:
                     return {"error": {"message": str(e)}}
             raise
 

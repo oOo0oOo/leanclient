@@ -4,7 +4,7 @@ import os
 import uuid
 import pytest
 
-from leanclient import LeanLSPClient, SingleFileClient
+from leanclient import LeanLSPClient
 from leanclient.base_client import BaseLeanLSPClient
 from leanclient.utils import DocumentContentChange
 
