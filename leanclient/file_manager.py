@@ -281,7 +281,7 @@ class LSPFileManager(BaseLeanLSPClient):
         return results
 
     def open_files(
-        self, paths: list[str], dependency_build_mode: str = "never"
+        self, paths: list[str], dependency_build_mode: str = "never", force_reopen: bool = False
     ) -> None:
         """Open files in the language server.
 
@@ -293,6 +293,7 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             paths (list[str]): List of relative file paths to open.
             dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never". Can be "once", "never" or "always".
+            force_reopen (bool): If True, close and reopen files that are already open. If False (default), sync content from disk using update for already-open files.
         """
         if len(paths) > self.max_opened_files:
             raise RuntimeError(
@@ -301,9 +302,38 @@ class LSPFileManager(BaseLeanLSPClient):
 
         paths = [urllib.parse.unquote(p) for p in paths]
 
-        # Open new files
+        # Separate files into categories
         with self._opened_files_lock:
             new_files = [p for p in paths if p not in self.opened_files]
+            already_open = [p for p in paths if p in self.opened_files]
+        
+        # Handle already-open files
+        if already_open:
+            if force_reopen:
+                # Close and reopen
+                self.close_files(already_open)
+                new_files.extend(already_open)
+            else:
+                # Sync from disk using update
+                for path in already_open:
+                    abs_path = self._uri_to_abs(self._local_to_uri(path))
+                    with open(abs_path, "r") as f:
+                        new_content = normalize_newlines(f.read())
+                    
+                    with self._opened_files_lock:
+                        state = self.opened_files[path]
+                        old_content = state.content
+                    
+                    if old_content != new_content:
+                        # Replace entire content
+                        change = DocumentContentChange(
+                            text=new_content,
+                            start=(0, 0),
+                            end=(len(old_content.splitlines()), 0)
+                        )
+                        self.update_file(path, [change])
+        
+        # Open new files
         if new_files:
             self._open_new_files(new_files, dependency_build_mode)
 
@@ -317,7 +347,7 @@ class LSPFileManager(BaseLeanLSPClient):
         if remove_count > 0:
             self.close_files(removable_paths)
 
-    def open_file(self, path: str, dependency_build_mode: str = "never") -> None:
+    def open_file(self, path: str, dependency_build_mode: str = "never", force_reopen: bool = False) -> None:
         """Open a file in the language server.
 
         Use :meth:`get_diagnostics` to get diagnostics for the file.
@@ -325,8 +355,9 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             path (str): Relative file path to open.
             dependency_build_mode (str): Whether to automatically rebuild dependencies. Defaults to "never". Can be "once", "never" or "always".
+            force_reopen (bool): If True, always close and reopen the file. If False (default), sync file content from disk using update if already open.
         """
-        self.open_files([path], dependency_build_mode=dependency_build_mode)
+        self.open_files([path], dependency_build_mode=dependency_build_mode, force_reopen=force_reopen)
 
     def update_file(self, path: str, changes: list[DocumentContentChange]) -> None:
         """Update a file in the language server.
@@ -374,6 +405,40 @@ class LSPFileManager(BaseLeanLSPClient):
         )
 
         self._send_notification(*params)
+    
+    def update_file_content(self, path: str, content: str) -> None:
+        """Update the entire content of a file in the language server.
+        
+        This is a convenience method that replaces the entire file content.
+        More efficient than closing and reopening when the file is already open.
+        
+        Note:
+            Changes are not written to disk! This only updates the LSP server's view.
+        
+        Use :meth:`get_diagnostics` to get diagnostics after the update.
+        Raises a FileNotFoundError if the file is not open.
+        
+        Args:
+            path (str): Relative file path to update.
+            content (str): New complete file content.
+        """
+        content = normalize_newlines(content)
+        
+        with self._opened_files_lock:
+            if path not in self.opened_files:
+                raise FileNotFoundError(
+                    f"File {path} is not open. Call open_file first."
+                )
+            state = self.opened_files[path]
+            old_content = state.content
+        
+        # Create change that replaces entire content
+        change = DocumentContentChange(
+            text=content,
+            start=(0, 0),
+            end=(len(old_content.splitlines()), 0)
+        )
+        self.update_file(path, [change])
 
     def close_files(self, paths: list[str], blocking: bool = True):
         """Close files in the language server.

@@ -60,6 +60,10 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
 
+    def update_file_content(self, content: str) -> None:
+        """See :meth:`leanclient.client.LeanLSPClient.update_file_content`"""
+        return self.client.update_file_content(self.file_path, content)
+
     def get_diagnostics(self) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(self.file_path)
