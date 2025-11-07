@@ -21,6 +21,7 @@ class FileState:
     diagnostics: list[Any] = field(default_factory=list)
     diagnostics_version: int = -1
     processing: bool = True
+    current_processing: list[dict] = field(default_factory=list)
     error: dict | None = None
     fatal_error: bool = False
     complete: bool = False
@@ -40,6 +41,34 @@ class FileState:
         self.close_pending = False
         self.close_ready = False
         self.last_activity = time.monotonic()
+
+    def is_line_range_complete(self, start_line: int, end_line: int) -> bool:
+        """Check if line range is complete based on current processing state."""
+        if not self.current_processing:
+            return True
+
+        for item in self.current_processing:
+            range_info = item.get("range", {})
+            proc_start = range_info.get("start", {}).get("line", 0)
+            proc_end = range_info.get("end", {}).get("line", float("inf"))
+
+            if proc_start <= end_line and proc_end >= start_line:
+                return False
+
+        return True
+
+    def filter_diagnostics_by_range(self, start_line: int, end_line: int) -> list[dict]:
+        """Filter diagnostics to only those within the specified line range."""
+        filtered = []
+        for diag in self.diagnostics:
+            diag_range = diag.get("range", {})
+            diag_start = diag_range.get("start", {}).get("line", 0)
+            diag_end = diag_range.get("end", {}).get("line", 0)
+
+            if diag_start <= end_line and diag_end >= start_line:
+                filtered.append(diag)
+
+        return filtered
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -148,11 +177,11 @@ class LSPFileManager(BaseLeanLSPClient):
                 if state is None:
                     return
 
-                # Always check for fatal errors regardless of version
+                # Store current processing ranges for line range completion
+                state.current_processing = processing
+
                 # Check for fatal error (kind == 2)
                 if processing and processing[-1].get("kind") == 2:
-                    # Mark that we saw a fatal error, but don't set error message yet
-                    # We'll set it later if no diagnostics arrive
                     state.fatal_error = True
                     state.processing = False
                     state.complete = True
@@ -160,7 +189,6 @@ class LSPFileManager(BaseLeanLSPClient):
 
                 # Mark processing complete when processing array is empty
                 if not processing:
-                    # Processing complete (but may still get more diagnostics)
                     state.processing = False
 
         # Register permanent handlers
@@ -507,8 +535,17 @@ class LSPFileManager(BaseLeanLSPClient):
             for path in paths:
                 del self.opened_files[path]
 
-    def get_diagnostics(self, path: str, inactivity_timeout: float = 3.0) -> list | None:
-        """Get diagnostics for a single file.
+    def get_diagnostics(
+        self,
+        path: str,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        inactivity_timeout: float = 3.0,
+    ) -> list | None:
+        """Get diagnostics for a single file, optionally waiting only for a specific line range.
+
+        If start_line and end_line are provided, returns as soon as that line range
+        is complete (based on parallel processing ranges from $/lean/fileProgress).~
 
         If the file is not open, it will be opened first and wait for diagnostics.
         If the file is already open but diagnostics not yet loaded, waits for them.
@@ -545,12 +582,22 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             path (str): Relative file path.
-            inactivity_timeout (float): Maximum time to wait since last diagnostics activity. Defaults to 3 seconds.
+            start_line (int | None): Start line of range to wait for (0-based). If None, waits for entire file.
+            end_line (int | None): End line of range to wait for (0-based, inclusive). If None, waits for entire file.
+            inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 3 seconds.
 
         Returns:
-            list | None: Diagnostics of file or None if timed out
+            list | None: Diagnostics of file (filtered by range if specified) or None if timed out
+
+        Raises:
+            ValueError: If start_line > end_line
         """
-        # Open file if not already open
+        if start_line is not None and end_line is not None:
+            if start_line > end_line:
+                raise ValueError("start_line must be <= end_line")
+
+        use_range = start_line is not None and end_line is not None
+
         with self._opened_files_lock:
             if path not in self.opened_files:
                 need_to_open = True
@@ -560,39 +607,35 @@ class LSPFileManager(BaseLeanLSPClient):
         if need_to_open:
             self.open_files([path])
 
-        # Check if we need to wait
         with self._opened_files_lock:
             state = self.opened_files[path]
-            is_complete = state.complete
+            if use_range:
+                is_complete = state.is_line_range_complete(start_line, end_line)
+            else:
+                is_complete = state.complete
             uri = state.uri
 
-        need_to_wait = not is_complete
+        if not is_complete:
+            if use_range:
+                self._wait_for_line_range(
+                    [uri], start_line, end_line, inactivity_timeout
+                )
+            else:
+                self._wait_for_diagnostics([uri], inactivity_timeout=inactivity_timeout)
 
-        if need_to_wait:
-            # Wait for diagnostics to be ready
-            self._wait_for_diagnostics([uri], inactivity_timeout=inactivity_timeout)
-
-        # Return diagnostics or error
         with self._opened_files_lock:
             state = self.opened_files[path]
-            logger.debug(
-                "get_diagnostics: path=%s, diag=%s, error=%s, processing=%s, "
-                "version=%s, diag_version=%s",
-                path,
-                state.diagnostics,
-                state.error,
-                state.processing,
-                state.version,
-                state.diagnostics_version,
-            )
             if state.error:
                 return [state.error]
-            # If we saw a fatal error but have no diagnostics, return generic error message
             if state.fatal_error and not state.diagnostics:
                 return [
                     {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
                 ]
-            return state.diagnostics
+
+            if use_range:
+                return state.filter_diagnostics_by_range(start_line, end_line)
+            else:
+                return state.diagnostics
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
@@ -723,6 +766,102 @@ class LSPFileManager(BaseLeanLSPClient):
                     "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
                     inactivity_timeout,
                     total_elapsed,
+                )
+                break
+
+            time.sleep(0.001)
+
+    def _wait_for_line_range(
+        self,
+        uris: list[str],
+        start_line: int,
+        end_line: int,
+        inactivity_timeout: float = 3.0,
+    ) -> None:
+        """Wait for specific line range to complete based on parallel processing ranges.
+
+        This method polls the current_processing state to determine when the requested
+        line range is no longer being processed. Unlike _wait_for_diagnostics, this
+        doesn't use LSP's waitForDiagnostics request since we only care about a subset
+        of the file.
+
+        Args:
+            uris (list[str]): List of URIs to wait for.
+            start_line (int): Start line of range (0-based).
+            end_line (int): End line of range (0-based, inclusive).
+            inactivity_timeout (float): Maximum time to wait since last activity.
+        """
+        paths = [self._uri_to_local(uri) for uri in uris]
+        path_by_uri = dict(zip(uris, paths))
+
+        with self._opened_files_lock:
+            missing = [p for p in paths if p not in self.opened_files]
+            if missing:
+                raise FileNotFoundError(
+                    f"Files {missing} are not open. Call open_files first."
+                )
+
+        # Check if already complete
+        with self._opened_files_lock:
+            uris_needing_wait = []
+            for uri in uris:
+                path = path_by_uri[uri]
+                state = self.opened_files[path]
+
+                # Check for early completion or errors
+                if state.error or (state.fatal_error and not state.diagnostics):
+                    continue
+
+                if not state.is_line_range_complete(start_line, end_line):
+                    uris_needing_wait.append(uri)
+
+        if not uris_needing_wait:
+            # All ranges already complete
+            return
+
+        # Wait for line range completion
+        start_time = time.monotonic()
+        pending_uris = set(uris_needing_wait)
+
+        while pending_uris:
+            current_time = time.monotonic()
+            total_elapsed = current_time - start_time
+            completed_uris: set[str] = set()
+            max_inactivity = 0.0
+
+            with self._opened_files_lock:
+                for uri in list(pending_uris):
+                    path = path_by_uri[uri]
+                    state = self.opened_files[path]
+
+                    # Check for error conditions that should terminate waiting
+                    if state.error or (state.fatal_error and not state.diagnostics):
+                        completed_uris.add(uri)
+                        continue
+
+                    # Check if range is complete
+                    range_complete = state.is_line_range_complete(start_line, end_line)
+
+                    if range_complete:
+                        completed_uris.add(uri)
+                    else:
+                        # Track inactivity
+                        inactivity = current_time - state.last_activity
+                        max_inactivity = max(max_inactivity, inactivity)
+
+            pending_uris.difference_update(completed_uris)
+
+            if not pending_uris:
+                break
+
+            # Check inactivity timeout
+            if max_inactivity > inactivity_timeout:
+                logger.warning(
+                    "_wait_for_line_range timed out after %.1fs of inactivity (%.1fs total) for range %d-%d.",
+                    inactivity_timeout,
+                    total_elapsed,
+                    start_line,
+                    end_line,
                 )
                 break
 

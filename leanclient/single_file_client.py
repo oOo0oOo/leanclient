@@ -32,20 +32,15 @@ class SingleFileClient:
         """
         return self.client.build_project(get_cache)
 
-    def open_file(self, inactivity_timeout: float = 3.0) -> list:
-        """Open the file.
-
-        This is usually called automatically when a method is called that requires an open file.
-        Use this to open the file manually and recieve its diagnostics.
-
-        Args:
-            inactivity_timeout (float): Maximum time to wait since last diagnostics activity. Defaults to 3 seconds.
-
-        Returns:
-            list: The diagnostic messages of the file.
-        """
-        self.client.open_file(self.file_path)
-        return self.client.get_diagnostics(self.file_path, inactivity_timeout=inactivity_timeout)
+    def open_file(
+        self, dependency_build_mode: str = "never", force_reopen: bool = False
+    ) -> None:
+        """See :meth:`leanclient.client.LeanLSPClient.open_file`"""
+        self.client.open_file(
+            self.file_path,
+            dependency_build_mode=dependency_build_mode,
+            force_reopen=force_reopen,
+        )
 
     def close_file(self, blocking: bool = True):
         """Close the file.
@@ -65,9 +60,19 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.update_file_content`"""
         return self.client.update_file_content(self.file_path, content)
 
-    def get_diagnostics(self) -> list:
+    def get_diagnostics(
+        self,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        inactivity_timeout: float = 3.0,
+    ) -> list | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
-        return self.client.get_diagnostics(self.file_path)
+        return self.client.get_diagnostics(
+            self.file_path,
+            start_line=start_line,
+            end_line=end_line,
+            inactivity_timeout=inactivity_timeout,
+        )
 
     def get_file_content(self) -> str:
         """See :meth:`leanclient.client.LeanLSPClient.get_file_content`"""
