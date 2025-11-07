@@ -135,8 +135,12 @@ class LSPFileManager(BaseLeanLSPClient):
                             needs_rebuild = True
 
             # Notify waiting threads outside the lock to avoid deadlock
-            if notify_close:
-                with self._close_condition:
+            # Notify on every diagnostics update to wake waiters immediately
+            with self._close_condition:
+                if notify_close:
+                    self._close_condition.notify_all()
+                else:
+                    # Wake up any threads waiting for diagnostics
                     self._close_condition.notify_all()
 
             # Outside lock: send rebuild notifications
@@ -190,6 +194,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 # Mark processing complete when processing array is empty
                 if not processing:
                     state.processing = False
+
+            # Notify waiting threads on processing changes
+            with self._close_condition:
+                self._close_condition.notify_all()
 
         # Register permanent handlers
         self._register_notification_handler(
@@ -707,7 +715,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 "textDocument/waitForDiagnostics", params
             )
 
-        # Wait for completion with adaptive timeout
+        # Wait for completion with adaptive timeout using condition variable
         start_time = time.monotonic()
         pending_uris = set(uris_needing_wait)
 
@@ -769,7 +777,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 )
                 break
 
-            time.sleep(0.001)
+            # Use condition variable wait with timeout instead of busy polling
+            # Wake up on notification or after 10ms, whichever comes first
+            with self._close_condition:
+                self._close_condition.wait(timeout=0.01)
 
     def _wait_for_line_range(
         self,
@@ -865,4 +876,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 )
                 break
 
-            time.sleep(0.001)
+            # Use condition variable wait with timeout instead of busy polling
+            # Wake up on notification or after 10ms, whichever comes first
+            with self._close_condition:
+                self._close_condition.wait(timeout=0.01)

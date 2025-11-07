@@ -260,13 +260,18 @@ class BaseLeanLSPClient:
                 continue
 
             # Handle notification with registered handler
-            if method is not None and method in self._notification_handlers:
-                handlers_snapshot = tuple(self._notification_handlers[method])
-                for handler in handlers_snapshot:
-                    try:
-                        handler(msg)
-                    except Exception as e:
-                        logger.warning(f"Notification handler for {method} failed: {e}")
+            if method is not None:
+                handlers = self._notification_handlers.get(method)
+                if handlers:
+                    # Create snapshot to avoid holding lock during handler execution
+                    handlers_snapshot = list(handlers)
+                    for handler in handlers_snapshot:
+                        try:
+                            handler(msg)
+                        except Exception as e:
+                            logger.warning(
+                                f"Notification handler for {method} failed: {e}"
+                            )
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
