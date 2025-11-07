@@ -359,10 +359,14 @@ def test_mathlib_file(lsp_client):
         lines = f.readlines()
 
     # Find positions
-    finset_line, finset_char = find_position(lines, "instance instSDiff : SDiff (Finset", "Finset")
+    finset_line, finset_char = find_position(
+        lines, "instance instSDiff : SDiff (Finset", "Finset"
+    )
     assert finset_line is not None, "Could not find 'instance instSDiff' line"
 
-    sdiff_val_line, sdiff_val_char = find_position(lines, "theorem mem_sdiff", "mem_sdiff", offset=4)
+    sdiff_val_line, sdiff_val_char = find_position(
+        lines, "theorem mem_sdiff", "mem_sdiff", offset=4
+    )
     assert sdiff_val_line is not None, "Could not find 'theorem mem_sdiff' line"
 
     lsp_client.open_file(path)
@@ -388,7 +392,9 @@ def test_mathlib_file(lsp_client):
     flat = set([flatten(ref) for ref in references])
     # Reference count can vary between mathlib versions
     flat_count = len(flat)
-    assert flat_count > 200, f"Expected > 200 unique Finset references, got {flat_count}"
+    assert flat_count > 200, (
+        f"Expected > 200 unique Finset references, got {flat_count}"
+    )
 
     res = lsp_client.get_declarations(path, finset_line, finset_char)
     assert len(res) == 1
@@ -401,11 +407,20 @@ def test_mathlib_file(lsp_client):
     res = lsp_client.get_references(path, sdiff_val_line, sdiff_val_char)
     assert len(res) >= 1, f"Expected at least 1 reference to mem_sdiff, got {len(res)}"
 
-    res = lsp_client.get_references(path, sdiff_val_line, sdiff_val_char, include_declaration=True)
-    assert len(res) >= 2, f"Expected at least 2 references (with declaration) to mem_sdiff, got {len(res)}"
+    res = lsp_client.get_references(
+        path, sdiff_val_line, sdiff_val_char, include_declaration=True
+    )
+    assert len(res) >= 2, (
+        f"Expected at least 2 references (with declaration) to mem_sdiff, got {len(res)}"
+    )
 
     res = lsp_client.get_references(
-        path, sdiff_val_line, sdiff_val_char, include_declaration=True, max_retries=1, retry_delay=0
+        path,
+        sdiff_val_line,
+        sdiff_val_char,
+        include_declaration=True,
+        max_retries=1,
+        retry_delay=0,
     )
     assert len(res) >= 2
 
