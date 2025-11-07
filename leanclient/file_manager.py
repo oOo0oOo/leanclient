@@ -27,6 +27,7 @@ class FileState:
     close_pending: bool = False
     close_ready: bool = False
     dependency_rebuild_attempted: bool = False
+    last_activity: float = field(default_factory=time.monotonic)
 
     def reset_after_change(self):
         """Reset diagnostics-related state after a content change."""
@@ -38,6 +39,7 @@ class FileState:
         self.complete = False
         self.close_pending = False
         self.close_ready = False
+        self.last_activity = time.monotonic()
 
 
 class LSPFileManager(BaseLeanLSPClient):
@@ -89,6 +91,7 @@ class LSPFileManager(BaseLeanLSPClient):
                     if not has_error:
                         state.diagnostics = diagnostics
                         state.diagnostics_version = diag_version
+                        state.last_activity = time.monotonic()
                         if state.close_pending and not diagnostics:
                             state.close_ready = True
                             notify_close = True
@@ -153,6 +156,7 @@ class LSPFileManager(BaseLeanLSPClient):
                     state.fatal_error = True
                     state.processing = False
                     state.complete = True
+                    state.last_activity = time.monotonic()
 
                 # Mark processing complete when processing array is empty
                 if not processing:
@@ -531,15 +535,15 @@ class LSPFileManager(BaseLeanLSPClient):
 
         raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
 
-    def _wait_for_diagnostics(self, uris: list[str], timeout: float = 30) -> None:
+    def _wait_for_diagnostics(self, uris: list[str], inactivity_timeout: float = 3.0) -> None:
         """Wait until file is loaded or an rpc error occurs.
 
-        This method checks state first and only blocks if needed.
-        The global handlers update state automatically in the background.
+        This method uses an adaptive timeout that resets whenever diagnostics are received.
+        This allows long-running operations to complete while quickly detecting stuck states.
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
+            inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 3 seconds.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
@@ -583,19 +587,16 @@ class LSPFileManager(BaseLeanLSPClient):
                 "textDocument/waitForDiagnostics", params
             )
 
-        # Wait for completion
+        # Wait for completion with adaptive timeout
         start_time = time.monotonic()
         pending_uris = set(uris_needing_wait)
 
         while pending_uris:
-            elapsed = time.monotonic() - start_time
-            if elapsed > timeout:
-                logger.warning(
-                    "_wait_for_diagnostics timed out after %s seconds.", timeout
-                )
-                break
+            current_time = time.monotonic()
+            total_elapsed = current_time - start_time
 
             completed_uris: set[str] = set()
+            max_inactivity = 0.0
 
             with self._opened_files_lock:
                 # First, process futures that completed
@@ -610,6 +611,7 @@ class LSPFileManager(BaseLeanLSPClient):
                             state.error = {"message": str(e)}
                             state.processing = False
                         state.complete = True
+                        state.last_activity = current_time
                         completed_uris.add(uri)
 
                 # Then check remaining URIs for state changes via notification handlers
@@ -624,13 +626,26 @@ class LSPFileManager(BaseLeanLSPClient):
                         and state.diagnostics_version >= target_version
                     ):
                         state.complete = True
+                        state.last_activity = current_time
                         completed_uris.add(uri)
                     elif state.complete:
                         completed_uris.add(uri)
+                    else:
+                        # Track maximum inactivity time across all pending URIs
+                        inactivity = current_time - state.last_activity
+                        max_inactivity = max(max_inactivity, inactivity)
 
             pending_uris.difference_update(completed_uris)
 
             if not pending_uris:
+                break
+
+            # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
+            if max_inactivity > inactivity_timeout:
+                logger.warning(
+                    "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
+                    inactivity_timeout, total_elapsed
+                )
                 break
 
             time.sleep(0.001)
