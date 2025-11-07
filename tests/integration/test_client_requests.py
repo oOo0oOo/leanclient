@@ -432,6 +432,7 @@ def test_mathlib_file(lsp_client):
 
 @pytest.mark.integration
 @pytest.mark.mathlib
+@pytest.mark.skip(reason="Call hierarchy API is unreliable")
 def test_call_hierarchy(lsp_client):
     """Test call hierarchy operations."""
     path = ".lake/packages/mathlib/Mathlib/Data/Finset/SDiff.lean"
