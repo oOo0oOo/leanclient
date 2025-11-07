@@ -121,6 +121,12 @@ class LSPFileManager(BaseLeanLSPClient):
                         state.diagnostics = diagnostics
                         state.diagnostics_version = diag_version
                         state.last_activity = time.monotonic()
+
+                        # Mark complete when diagnostics arrive (even if empty for clean files)
+                        # This handles both clean files and files with fatal errors that now have diagnostics
+                        if not state.processing:
+                            state.complete = True
+
                         if state.close_pending and not diagnostics:
                             state.close_ready = True
                             notify_close = True
@@ -188,7 +194,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 if processing and processing[-1].get("kind") == 2:
                     state.fatal_error = True
                     state.processing = False
-                    state.complete = True
+                    # Don't mark complete yet - wait for publishDiagnostics with error details
                     state.last_activity = time.monotonic()
 
                 # Mark processing complete when processing array is empty
@@ -635,15 +641,22 @@ class LSPFileManager(BaseLeanLSPClient):
             state = self.opened_files[path]
             if state.error:
                 return [state.error]
-            if state.fatal_error and not state.diagnostics:
+
+            # Return diagnostics if we have them
+            if state.diagnostics:
+                if use_range:
+                    return state.filter_diagnostics_by_range(start_line, end_line)
+                else:
+                    return state.diagnostics
+
+            # Only return generic fatal error if we truly have no diagnostics after waiting
+            if state.fatal_error:
                 return [
                     {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
                 ]
 
-            if use_range:
-                return state.filter_diagnostics_by_range(start_line, end_line)
-            else:
-                return state.diagnostics
+            # No errors, no diagnostics - clean file
+            return []
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
