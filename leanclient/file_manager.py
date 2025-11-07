@@ -507,7 +507,7 @@ class LSPFileManager(BaseLeanLSPClient):
             for path in paths:
                 del self.opened_files[path]
 
-    def get_diagnostics(self, path: str, timeout: float = 30) -> list | None:
+    def get_diagnostics(self, path: str, inactivity_timeout: float = 3.0) -> list | None:
         """Get diagnostics for a single file.
 
         If the file is not open, it will be opened first and wait for diagnostics.
@@ -545,7 +545,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             path (str): Relative file path.
-            timeout (float): Time to wait for diagnostics. Defaults to 30 seconds.
+            inactivity_timeout (float): Maximum time to wait since last diagnostics activity. Defaults to 3 seconds.
 
         Returns:
             list | None: Diagnostics of file or None if timed out
@@ -570,7 +570,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         if need_to_wait:
             # Wait for diagnostics to be ready
-            self._wait_for_diagnostics([uri], timeout)
+            self._wait_for_diagnostics([uri], inactivity_timeout=inactivity_timeout)
 
         # Return diagnostics or error
         with self._opened_files_lock:

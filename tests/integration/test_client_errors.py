@@ -47,6 +47,20 @@ def test_get_diagnostics(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
+def test_inactivity_timeout_parameter(clean_lsp_client, test_file_path):
+    """Test that inactivity_timeout parameter is accepted and works."""
+    # Should complete successfully with sufficient timeout
+    diag = clean_lsp_client.get_diagnostics(test_file_path, inactivity_timeout=5.0)
+    assert len(diag) > 0
+    assert any(d["severity"] == 1 for d in diag)  # Has errors
+    
+    # Test that parameter is properly passed (no TypeError)
+    clean_lsp_client.close_files([test_file_path])
+    diag2 = clean_lsp_client.get_diagnostics(test_file_path, inactivity_timeout=3.0)
+    assert diag2 == diag  # Same file, same diagnostics
+
+
+@pytest.mark.integration
 @pytest.mark.slow
 def test_non_terminating_waitForDiagnostics(clean_lsp_client, test_env_dir):
     """Test handling of files with unterminated comments."""

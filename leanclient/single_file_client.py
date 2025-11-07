@@ -32,19 +32,20 @@ class SingleFileClient:
         """
         return self.client.build_project(get_cache)
 
-    def open_file(self, timeout: float = 30) -> list:
+    def open_file(self, inactivity_timeout: float = 3.0) -> list:
         """Open the file.
 
         This is usually called automatically when a method is called that requires an open file.
         Use this to open the file manually and recieve its diagnostics.
 
         Args:
-            timeout(float): Time to wait for diagnostics. Defaults to 30 seconds.
+            inactivity_timeout (float): Maximum time to wait since last diagnostics activity. Defaults to 3 seconds.
 
         Returns:
             list: The diagnostic messages of the file.
         """
-        return self.client.open_file(self.file_path, timeout)
+        self.client.open_file(self.file_path)
+        return self.client.get_diagnostics(self.file_path, inactivity_timeout=inactivity_timeout)
 
     def close_file(self, blocking: bool = True):
         """Close the file.
