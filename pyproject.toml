@@ -1,6 +1,6 @@
 [project]
 name = "leanclient"
-version = "0.5.0"
+version = "0.5.1"
 description = "Interact with the Lean theorem prover language server"
 authors = [
     {name = "Oliver Dressler", email = "hey@oli.show"}
