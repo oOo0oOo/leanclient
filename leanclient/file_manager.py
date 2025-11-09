@@ -42,30 +42,58 @@ class FileState:
         self.close_ready = False
         self.last_activity = time.monotonic()
 
-    def is_line_range_complete(self, start_line: int, end_line: int) -> bool:
-        """Check if line range is complete based on current processing state."""
+    def is_line_range_complete(
+        self, start_line: int | None, end_line: int | None
+    ) -> bool:
+        """Check if line range is complete based on current processing state.
+
+        Supports open-ended ranges:
+        - start_line only: check from start_line to EOF
+        - end_line only: check from beginning to end_line
+        - both: check the closed range
+        """
+        if self.diagnostics_version < 0:
+            return False
+
         if not self.current_processing:
             return True
+
+        # Handle open-ended ranges
+        range_start = start_line if start_line is not None else 0
+        range_end = end_line if end_line is not None else float("inf")
 
         for item in self.current_processing:
             range_info = item.get("range", {})
             proc_start = range_info.get("start", {}).get("line", 0)
             proc_end = range_info.get("end", {}).get("line", float("inf"))
 
-            if proc_start <= end_line and proc_end >= start_line:
+            if proc_start <= range_end and proc_end >= range_start:
                 return False
 
         return True
 
-    def filter_diagnostics_by_range(self, start_line: int, end_line: int) -> list[dict]:
-        """Filter diagnostics to only those within the specified line range."""
+    def filter_diagnostics_by_range(
+        self, start_line: int | None, end_line: int | None
+    ) -> list[dict]:
+        """Filter diagnostics to only those within the specified line range.
+
+        Supports open-ended ranges:
+        - start_line only: filter from start_line to EOF
+        - end_line only: filter from beginning to end_line
+        - both: filter the closed range
+        """
         filtered = []
+
+        # Handle open-ended ranges
+        range_start = start_line if start_line is not None else 0
+        range_end = end_line if end_line is not None else float("inf")
+
         for diag in self.diagnostics:
             diag_range = diag.get("range", {})
             diag_start = diag_range.get("start", {}).get("line", 0)
             diag_end = diag_range.get("end", {}).get("line", 0)
 
-            if diag_start <= end_line and diag_end >= start_line:
+            if diag_start <= range_end and diag_end >= range_start:
                 filtered.append(diag)
 
         return filtered
@@ -556,14 +584,10 @@ class LSPFileManager(BaseLeanLSPClient):
         end_line: int | None = None,
         inactivity_timeout: float = 3.0,
     ) -> list | None:
-        """Get diagnostics for a single file, optionally waiting only for a specific line range.
+        """Get diagnostics for a file, optionally filtered to a line range.
 
-        If start_line and end_line are provided, returns as soon as that line range
-        is complete (based on parallel processing ranges from $/lean/fileProgress).~
-
-        If the file is not open, it will be opened first and wait for diagnostics.
-        If the file is already open but diagnostics not yet loaded, waits for them.
-        If diagnostics are already loaded, returns cached value.
+        Supports open-ended ranges (start_line only, end_line only, both, or neither).
+        Opens file if needed and waits for diagnostics to be ready.
 
         **Example diagnostics**:
 
@@ -596,8 +620,8 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             path (str): Relative file path.
-            start_line (int | None): Start line of range to wait for (0-based). If None, waits for entire file.
-            end_line (int | None): End line of range to wait for (0-based, inclusive). If None, waits for entire file.
+            start_line (int | None): Start line (0-based). If None, starts from beginning.
+            end_line (int | None): End line (0-based, inclusive). If None, goes to end of file.
             inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 3 seconds.
 
         Returns:
@@ -610,7 +634,8 @@ class LSPFileManager(BaseLeanLSPClient):
             if start_line > end_line:
                 raise ValueError("start_line must be <= end_line")
 
-        use_range = start_line is not None and end_line is not None
+        # Use range mode if either start_line or end_line is provided (supports open-ended ranges)
+        use_range = start_line is not None or end_line is not None
 
         with self._opened_files_lock:
             if path not in self.opened_files:
@@ -712,7 +737,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 ):
                     state.complete = True
 
-                if not state.complete:
+                if not state.complete or state.diagnostics_version < 0:
                     uris_needing_wait.append(uri)
                     target_versions[uri] = state.version
 

@@ -12,13 +12,18 @@ from leanclient.file_manager import LSPFileManager, FileState
 
 def test_is_line_range_complete_empty_processing():
     """Empty processing list means complete."""
-    state = FileState(uri="file:///test.lean", content="test", current_processing=[])
+    state = FileState(
+        uri="file:///test.lean",
+        content="test",
+        current_processing=[],
+        diagnostics_version=0,
+    )
     assert state.is_line_range_complete(10, 20)
 
 
 def test_is_line_range_complete_basic():
     """Range completes before full file."""
-    state = FileState(uri="file:///test.lean", content="test")
+    state = FileState(uri="file:///test.lean", content="test", diagnostics_version=0)
 
     # Processing lines 0-50: line range 10-20 is still processing
     state.current_processing = [{"range": {"start": {"line": 0}, "end": {"line": 50}}}]
@@ -34,7 +39,7 @@ def test_is_line_range_complete_basic():
 
 def test_is_line_range_complete_single_line():
     """Single line range works."""
-    state = FileState(uri="file:///test.lean", content="test")
+    state = FileState(uri="file:///test.lean", content="test", diagnostics_version=0)
 
     state.current_processing = [{"range": {"start": {"line": 5}, "end": {"line": 15}}}]
 
@@ -44,7 +49,7 @@ def test_is_line_range_complete_single_line():
 
 def test_is_line_range_complete_sequential():
     """Sequential processing pattern works."""
-    state = FileState(uri="file:///test.lean", content="test")
+    state = FileState(uri="file:///test.lean", content="test", diagnostics_version=0)
 
     processing_states = [
         [{"range": {"start": {"line": 0}, "end": {"line": 50}}}],
@@ -66,7 +71,7 @@ def test_is_line_range_complete_sequential():
 
 def test_is_line_range_complete_parallel():
     """Multiple simultaneous ranges work."""
-    state = FileState(uri="file:///test.lean", content="test")
+    state = FileState(uri="file:///test.lean", content="test", diagnostics_version=0)
 
     state.current_processing = [
         {"range": {"start": {"line": 5}, "end": {"line": 10}}},
@@ -174,6 +179,7 @@ def test_get_diagnostics_backward_compatibility(mock_file_manager):
         content="test content",
         diagnostics=[{"message": "test"}],
         complete=True,
+        diagnostics_version=0,
     )
     mock_file_manager.opened_files["test.lean"] = state
 
@@ -191,6 +197,7 @@ def test_get_diagnostics_fatal_error_no_diagnostics(mock_file_manager):
         fatal_error=True,
         diagnostics=[],
         complete=True,
+        diagnostics_version=0,
     )
     mock_file_manager.opened_files["test.lean"] = state
 
@@ -215,6 +222,7 @@ def test_get_diagnostics_with_range_filters(mock_file_manager):
         diagnostics=diagnostics,
         complete=True,
         current_processing=[],
+        diagnostics_version=0,
     )
     mock_file_manager.opened_files["test.lean"] = state
 
