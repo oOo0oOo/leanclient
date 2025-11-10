@@ -781,7 +781,7 @@ class LSPFileManager(BaseLeanLSPClient):
                             state.last_activity = current_time
                             completed_uris.add(uri)
                             continue
-                        
+
                         # waitForDiagnostics completed successfully
                         # But we should only mark complete if publishDiagnostics has arrived
                         if state.diagnostics_version >= target_version:

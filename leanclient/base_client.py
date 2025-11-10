@@ -263,9 +263,7 @@ class BaseLeanLSPClient:
                     try:
                         handler(msg)
                     except Exception as e:
-                        logger.warning(
-                            f"Notification handler for {method} failed: {e}"
-                        )
+                        logger.warning(f"Notification handler for {method} failed: {e}")
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
