@@ -771,14 +771,24 @@ class LSPFileManager(BaseLeanLSPClient):
                     if future.done():
                         path = path_by_uri[uri]
                         state = self.opened_files[path]
+                        target_version = target_versions[uri]
                         try:
                             future.result()
                         except Exception as e:
                             state.error = {"message": str(e)}
                             state.processing = False
-                        state.complete = True
-                        state.last_activity = current_time
-                        completed_uris.add(uri)
+                            state.complete = True
+                            state.last_activity = current_time
+                            completed_uris.add(uri)
+                            continue
+                        
+                        # waitForDiagnostics completed successfully
+                        # But we should only mark complete if publishDiagnostics has arrived
+                        if state.diagnostics_version >= target_version:
+                            state.complete = True
+                            state.last_activity = current_time
+                            completed_uris.add(uri)
+                        # else: keep waiting for publishDiagnostics notification
 
                 # Then check remaining URIs for state changes via notification handlers
                 for uri in pending_uris - completed_uris:

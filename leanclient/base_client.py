@@ -5,9 +5,8 @@ import threading
 import asyncio
 import logging
 import atexit
-from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable, DefaultDict
+from typing import Any, Callable
 
 import orjson
 
@@ -65,9 +64,7 @@ class BaseLeanLSPClient:
         # Asyncio infrastructure for non-blocking requests
         self._loop = asyncio.new_event_loop()
         self._futures = {}  # {request_id: asyncio.Future}
-        self._notification_handlers: DefaultDict[str, set[Callable[[dict], Any]]] = (
-            defaultdict(set)
-        )
+        self._notification_handlers: dict[str, Callable[[dict], Any]] = {}
 
         # Start event loop in a separate thread
         self._loop_thread = threading.Thread(
@@ -261,17 +258,14 @@ class BaseLeanLSPClient:
 
             # Handle notification with registered handler
             if method is not None:
-                handlers = self._notification_handlers.get(method)
-                if handlers:
-                    # Create snapshot to avoid holding lock during handler execution
-                    handlers_snapshot = list(handlers)
-                    for handler in handlers_snapshot:
-                        try:
-                            handler(msg)
-                        except Exception as e:
-                            logger.warning(
-                                f"Notification handler for {method} failed: {e}"
-                            )
+                handler = self._notification_handlers.get(method)
+                if handler:
+                    try:
+                        handler(msg)
+                    except Exception as e:
+                        logger.warning(
+                            f"Notification handler for {method} failed: {e}"
+                        )
 
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
@@ -360,25 +354,15 @@ class BaseLeanLSPClient:
             method (str): Notification method name (e.g., "textDocument/publishDiagnostics").
             handler: Callable that takes the notification message as argument.
         """
-        self._notification_handlers[method].add(handler)
+        self._notification_handlers[method] = handler
 
-    def _unregister_notification_handler(self, method: str, handler=None):
+    def _unregister_notification_handler(self, method: str):
         """Unregister a notification handler.
 
         Args:
             method (str): Notification method name.
         """
-        handlers = self._notification_handlers.get(method)
-        if not handlers:
-            return
-
-        if handler is None:
-            handlers.clear()
-        else:
-            handlers.discard(handler)
-
-        if not handlers:
-            self._notification_handlers.pop(method, None)
+        self._notification_handlers.pop(method, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:

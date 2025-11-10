@@ -232,3 +232,33 @@ theorem late : 1 = 2 := by sorry  -- Line 5
     assert len(to_line_3) >= 1
 
     clean_lsp_client.close_files([test_file])
+
+
+@pytest.mark.integration  
+def test_wait_for_diagnostics_race_condition(clean_lsp_client, test_env_dir):
+    """Race: waitForDiagnostics completes before publishDiagnostics arrives."""
+    import time
+    
+    test_file = "RaceTest.lean"
+    with open(test_env_dir + test_file, "w") as f:
+        f.write("theorem test : 1 = 2 := by sorry\n")
+    
+    original_handler = clean_lsp_client._notification_handlers["textDocument/publishDiagnostics"]
+    
+    def delayed_handler(msg):
+        time.sleep(0.05)
+        original_handler(msg)
+    
+    clean_lsp_client._notification_handlers["textDocument/publishDiagnostics"] = delayed_handler
+    
+    try:
+        clean_lsp_client.open_file(test_file)
+        diags = clean_lsp_client.get_diagnostics(test_file, inactivity_timeout=1.0)
+        state = clean_lsp_client.opened_files[test_file]
+        
+        assert state.diagnostics_version >= 0
+        assert len(diags) > 0
+    finally:
+        clean_lsp_client._notification_handlers["textDocument/publishDiagnostics"] = original_handler
+        if test_file in clean_lsp_client.opened_files:
+            clean_lsp_client.close_files([test_file])
