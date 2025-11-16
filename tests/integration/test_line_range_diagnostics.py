@@ -233,3 +233,50 @@ def test_get_diagnostics_with_range_filters(mock_file_manager):
 
     assert len(result) == 1
     assert result[0]["message"] == "inside"
+
+@pytest.mark.integration
+@pytest.mark.parametrize("method_name", [
+    "get_document_symbols",
+    "get_folding_ranges",
+])
+def test_file_level_requests_wait_for_elaboration(lsp_client, method_name):
+    """File-level requests wait for elaboration to complete (fix for bug #61).
+
+    Verifies that get_document_symbols and get_folding_ranges block until
+    file elaboration is complete, ensuring consistent non-empty results.
+    """
+    import os
+    import tempfile
+
+    lean_code = """import Mathlib.Algebra.Ring.Basic
+
+theorem test_wait : 1 + 1 = 2 := rfl
+"""
+
+    with tempfile.NamedTemporaryFile(
+        mode='w', suffix='.lean', dir=lsp_client.project_path, delete=False
+    ) as f:
+        f.write(lean_code)
+        temp_path = f.name
+
+    try:
+        rel_path = os.path.relpath(temp_path, lsp_client.project_path)
+        method = getattr(lsp_client, method_name)
+
+        result = method(rel_path)
+
+        assert isinstance(result, list), f"{method_name} should return list"
+
+        # For document_symbols, verify we got the expected symbol
+        if method_name == "get_document_symbols":
+            assert result, f"{method_name} should return non-empty"
+            symbol_names = [s.get("name") for s in result]
+            assert "test_wait" in symbol_names, f"Expected 'test_wait' in {symbol_names}"
+
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+
+
