@@ -148,11 +148,11 @@ class LSPFileManager(BaseLeanLSPClient):
                     if not has_error:
                         state.diagnostics = diagnostics
                         state.diagnostics_version = diag_version
-                        state.last_activity = time.monotonic()
+                        
+                        if diagnostics or not state.fatal_error:
+                            state.last_activity = time.monotonic()
 
-                        # Mark complete when diagnostics arrive (even if empty for clean files)
-                        # This handles both clean files and files with fatal errors that now have diagnostics
-                        if not state.processing:
+                        if not state.processing and (diagnostics or not state.fatal_error):
                             state.complete = True
 
                         if state.close_pending and not diagnostics:
@@ -217,13 +217,14 @@ class LSPFileManager(BaseLeanLSPClient):
 
                 # Store current processing ranges for line range completion
                 state.current_processing = processing
+                # Update activity on ANY processing change to prevent premature timeout
+                state.last_activity = time.monotonic()
 
                 # Check for fatal error (kind == 2)
                 if processing and processing[-1].get("kind") == 2:
                     state.fatal_error = True
                     state.processing = False
                     # Don't mark complete yet - wait for publishDiagnostics with error details
-                    state.last_activity = time.monotonic()
 
                 # Mark processing complete when processing array is empty
                 if not processing:
@@ -582,7 +583,7 @@ class LSPFileManager(BaseLeanLSPClient):
         path: str,
         start_line: int | None = None,
         end_line: int | None = None,
-        inactivity_timeout: float = 3.0,
+        inactivity_timeout: float = 15.0,
     ) -> list | None:
         """Get diagnostics for a file, optionally filtered to a line range.
 
@@ -622,7 +623,7 @@ class LSPFileManager(BaseLeanLSPClient):
             path (str): Relative file path.
             start_line (int | None): Start line (0-based). If None, starts from beginning.
             end_line (int | None): End line (0-based, inclusive). If None, goes to end of file.
-            inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 3 seconds.
+            inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 15 seconds.
 
         Returns:
             list | None: Diagnostics of file (filtered by range if specified) or None if timed out
@@ -700,7 +701,7 @@ class LSPFileManager(BaseLeanLSPClient):
         raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
 
     def _wait_for_diagnostics(
-        self, uris: list[str], inactivity_timeout: float = 3.0
+        self, uris: list[str], inactivity_timeout: float = 15.0
     ) -> None:
         """Wait until file is loaded or an rpc error occurs.
 
@@ -709,7 +710,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
-            inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 3 seconds.
+            inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 15 seconds.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
