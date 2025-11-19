@@ -278,5 +278,52 @@ theorem test_wait : 1 + 1 = 2 := rfl
             os.unlink(temp_path)
 
 
+@pytest.mark.integration
+def test_update_file_changes_persist_across_queries(lsp_client, test_file_path):
+    """Test that update_file() changes persist and aren't undone by query functions (Issue #14).
+    
+    Reproduces the bug where query functions see old disk content instead of 
+    in-memory changes made by update_file(), and then overwrite those changes.
+    """
+    import leanclient as lc
+    import tempfile
+    import os
+    
+    # Create a simple test file with one definition
+    with tempfile.NamedTemporaryFile(
+        mode='w', suffix='.lean', dir=lsp_client.project_path, delete=False
+    ) as f:
+        f.write('def hello := "world"\n')
+        temp_path = f.name
+    
+    try:
+        file_path = os.path.relpath(temp_path, lsp_client.project_path)
+        lsp_client.open_file(file_path)
+        
+        # Update file in memory with new theorem (doesn't change disk)
+        new_content = 'theorem my_proof (n : Nat) : n = n := by\n  sorry'
+        change = lc.DocumentContentChange(text=new_content, start=(0, 0), end=(2, 0))
+        lsp_client.update_file(file_path, [change])
+        
+        # Verify update was applied in memory
+        assert lsp_client.get_file_content(file_path) == new_content
+        
+        # BUG: get_document_symbols() sees old disk content and reverts the change
+        symbols = lsp_client.get_document_symbols(file_path)
+        symbol_names = [s.get("name") for s in symbols]
+        
+        # Should see new symbol, not old one
+        assert "my_proof" in symbol_names, f"Expected 'my_proof', got: {symbol_names}"
+        assert "hello" not in symbol_names, f"Should not have 'hello', got: {symbol_names}"
+        
+        # Should still have updated content after query
+        assert lsp_client.get_file_content(file_path) == new_content, \
+            "File content was reverted to disk after query"
+        
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
 
 

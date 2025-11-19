@@ -443,7 +443,14 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Document symbols.
         """
-        self.open_file(path)
+        with self._opened_files_lock:
+            if path not in self.opened_files:
+                needs_open = True
+            else:
+                needs_open = False
+        
+        if needs_open:
+            self.open_file(path)
         
         # Wait for file to be processed if needed
         with self._opened_files_lock:
@@ -563,7 +570,14 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Folding ranges.
         """
-        self.open_file(path)
+        with self._opened_files_lock:
+            if path not in self.opened_files:
+                needs_open = True
+            else:
+                needs_open = False
+        
+        if needs_open:
+            self.open_file(path)
         
         # Wait for file to be processed if needed
         with self._opened_files_lock:

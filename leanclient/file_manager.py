@@ -283,7 +283,15 @@ class LSPFileManager(BaseLeanLSPClient):
         Returns:
             dict: Response or error.
         """
-        self.open_file(path)
+        with self._opened_files_lock:
+            if path not in self.opened_files:
+                needs_open = True
+            else:
+                needs_open = False
+        
+        if needs_open:
+            self.open_file(path)
+        
         with self._opened_files_lock:
             state = self.opened_files[path]
             uri = state.uri
