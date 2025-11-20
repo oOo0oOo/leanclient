@@ -298,17 +298,27 @@ def test_lean_4_22_prebuilt_diagnostics():
     from leanclient import LeanLSPClient
     from tests.fixtures.project_setup import TEST_ENV_DIR
     import subprocess
+    import os
     
     test_file = "LeanTestProject/Clean.lean"
-    subprocess.run(["lake", "build", "LeanTestProject.Clean"], cwd=TEST_ENV_DIR,
-                   check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    client = LeanLSPClient(TEST_ENV_DIR, initial_build=False, prevent_cache_get=True)
+    # Create the file with content that produces diagnostics
+    with open(TEST_ENV_DIR + test_file, "w") as f:
+        f.write("theorem clean : 1 = 1 := by sorry\n")
+
     try:
-        diags = client.get_diagnostics(test_file, inactivity_timeout=3.0)
-        assert len(diags) > 0, "Lean 4.22 sends empty publishDiagnostics for pre-built files"
+        subprocess.run(["lake", "build", "LeanTestProject.Clean"], cwd=TEST_ENV_DIR,
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        client = LeanLSPClient(TEST_ENV_DIR, initial_build=False, prevent_cache_get=True)
+        try:
+            diags = client.get_diagnostics(test_file, inactivity_timeout=3.0)
+            assert len(diags) > 0, "Lean 4.22 sends empty publishDiagnostics for pre-built files"
+        finally:
+            client.close()
     finally:
-        client.close()
+        if os.path.exists(TEST_ENV_DIR + test_file):
+            os.remove(TEST_ENV_DIR + test_file)
 
 
 # ============================================================================

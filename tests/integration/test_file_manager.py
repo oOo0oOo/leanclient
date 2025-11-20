@@ -27,7 +27,9 @@ def file_manager(test_project_dir):
     Yields:
         WrappedFileManager: Test file manager instance.
     """
-    manager = WrappedFileManager(test_project_dir, initial_build=False)
+    manager = WrappedFileManager(
+        test_project_dir, initial_build=False, prevent_cache_get=True
+    )
     yield manager
     manager.close()
 

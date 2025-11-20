@@ -76,7 +76,7 @@ sys.path.insert(0, '{sys.path[0]}')
 from leanclient import LeanLSPClient
 
 # Create client without closing
-client = LeanLSPClient('{test_project_dir}')
+client = LeanLSPClient('{test_project_dir}', prevent_cache_get=True)
 print(f"PID={{client.process.pid}}")
 # Exit without calling close() - atexit should clean up
 """

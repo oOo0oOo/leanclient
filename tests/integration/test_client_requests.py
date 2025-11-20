@@ -292,7 +292,7 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
         },
         "isPreferred": True,
         "kind": "quickfix",
-        "title": "Update #guard_msgs with tactic output",
+        "title": "Update #guard_msgs with generated message",
     }
     assert_subset(res[0], EXP)
 
@@ -323,7 +323,7 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
         },
         "isPreferred": True,
         "kind": "quickfix",
-        "title": "Update #guard_msgs with tactic output",
+        "title": "Update #guard_msgs with generated message",
     }
     assert_subset(res3, EXP)
 
