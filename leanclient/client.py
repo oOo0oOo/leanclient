@@ -977,9 +977,10 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             dict: Resolved code action.
         """
         try:
-            # Hoping for the best
-            uri = code_action["edit"]["changes"].keys()[0]
-            self.open_file(uri)
+            uri = list(code_action["edit"]["changes"].keys())[0]
+            with self._opened_files_lock:
+                if uri not in self.opened_files:
+                    self.open_file(uri)
         except Exception:
             pass
 
