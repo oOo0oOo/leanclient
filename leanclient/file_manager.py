@@ -134,9 +134,8 @@ class LSPFileManager(BaseLeanLSPClient):
 
             path = self._uri_to_local(uri)
             needs_rebuild = False
-            notify_close = False
 
-            with self._opened_files_lock:
+            with self._close_condition:
                 state = self.opened_files.get(path)
                 if state is None:
                     return
@@ -148,16 +147,19 @@ class LSPFileManager(BaseLeanLSPClient):
                     if not has_error:
                         state.diagnostics = diagnostics
                         state.diagnostics_version = diag_version
-                        
+
                         if diagnostics or not state.fatal_error:
                             state.last_activity = time.monotonic()
 
-                        if not state.processing and (diagnostics or not state.fatal_error):
+                        if not state.processing and (
+                            diagnostics or not state.fatal_error
+                        ):
                             state.complete = True
 
                         if state.close_pending and not diagnostics:
                             state.close_ready = True
-                            notify_close = True
+
+                        self._close_condition.notify_all()
 
                         # Auto-rebuild stale imports (one-time only)
                         if not state.dependency_rebuild_attempted and any(
@@ -167,15 +169,6 @@ class LSPFileManager(BaseLeanLSPClient):
                         ):
                             state.dependency_rebuild_attempted = True
                             needs_rebuild = True
-
-            # Notify waiting threads outside the lock to avoid deadlock
-            # Notify on every diagnostics update to wake waiters immediately
-            with self._close_condition:
-                if notify_close:
-                    self._close_condition.notify_all()
-                else:
-                    # Wake up any threads waiting for diagnostics
-                    self._close_condition.notify_all()
 
             # Outside lock: send rebuild notifications
             if needs_rebuild:
@@ -209,7 +202,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
             path = self._uri_to_local(uri)
 
-            with self._opened_files_lock:
+            with self._close_condition:
                 # Only update if file is still open
                 state = self.opened_files.get(path)
                 if state is None:
@@ -230,8 +223,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 if not processing:
                     state.processing = False
 
-            # Notify waiting threads on processing changes
-            with self._close_condition:
+                # Notify waiting threads on processing changes
                 self._close_condition.notify_all()
 
         # Register permanent handlers
@@ -773,7 +765,7 @@ class LSPFileManager(BaseLeanLSPClient):
             completed_uris: set[str] = set()
             max_inactivity = 0.0
 
-            with self._opened_files_lock:
+            with self._close_condition:
                 # First, process futures that completed
                 for uri in list(pending_uris):
                     future = futures_by_uri[uri]
@@ -820,23 +812,22 @@ class LSPFileManager(BaseLeanLSPClient):
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
 
-            pending_uris.difference_update(completed_uris)
+                pending_uris.difference_update(completed_uris)
 
-            if not pending_uris:
-                break
+                if not pending_uris:
+                    break
 
-            # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
-            if max_inactivity > inactivity_timeout:
-                logger.warning(
-                    "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
-                    inactivity_timeout,
-                    total_elapsed,
-                )
-                break
+                # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
+                if max_inactivity > inactivity_timeout:
+                    logger.warning(
+                        "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
+                        inactivity_timeout,
+                        total_elapsed,
+                    )
+                    break
 
-            # Use condition variable wait with timeout instead of busy polling
-            # Wake up on notification or after 10ms, whichever comes first
-            with self._close_condition:
+                # Use condition variable wait with timeout instead of busy polling
+                # Wake up on notification or after 10ms, whichever comes first
                 self._close_condition.wait(timeout=0.01)
 
     def _wait_for_line_range(
@@ -897,7 +888,7 @@ class LSPFileManager(BaseLeanLSPClient):
             completed_uris: set[str] = set()
             max_inactivity = 0.0
 
-            with self._opened_files_lock:
+            with self._close_condition:
                 for uri in list(pending_uris):
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
@@ -917,23 +908,21 @@ class LSPFileManager(BaseLeanLSPClient):
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
 
-            pending_uris.difference_update(completed_uris)
+                pending_uris.difference_update(completed_uris)
 
-            if not pending_uris:
-                break
+                if not pending_uris:
+                    break
 
-            # Check inactivity timeout
-            if max_inactivity > inactivity_timeout:
-                logger.warning(
-                    "_wait_for_line_range timed out after %.1fs of inactivity (%.1fs total) for range %d-%d.",
-                    inactivity_timeout,
-                    total_elapsed,
-                    start_line,
-                    end_line,
-                )
-                break
+                # Check inactivity timeout
+                if max_inactivity > inactivity_timeout:
+                    logger.warning(
+                        "_wait_for_line_range timed out after %.1fs of inactivity (%.1fs total) for range %d-%d.",
+                        inactivity_timeout,
+                        total_elapsed,
+                        start_line,
+                        end_line,
+                    )
+                    break
 
-            # Use condition variable wait with timeout instead of busy polling
-            # Wake up on notification or after 10ms, whichever comes first
-            with self._close_condition:
+                # Wait for line range completion
                 self._close_condition.wait(timeout=0.01)
