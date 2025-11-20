@@ -181,9 +181,7 @@ class SingleFileClient:
 
     def apply_code_action_resolve(self, code_action_resolved: dict) -> None:
         """See :meth:`leanclient.client.LeanLSPClient.apply_code_action_resolve`"""
-        return self.client.apply_code_action_resolve(
-            self.file_path, code_action_resolved
-        )
+        return self.client.apply_code_action_resolve(code_action_resolved)
 
     def get_info_trees(self, parse: bool = False) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_info_trees`"""

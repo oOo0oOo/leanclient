@@ -103,8 +103,6 @@ class LeanClientPool:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            for _ in range(self.num_workers):
-                self.pool.apply(_close_worker)
             self.pool.close()
             self.pool.join()
         except (KeyboardInterrupt, Exception):
