@@ -205,6 +205,24 @@ class BaseLeanLSPClient:
         return str(rel_path)
 
     # LANGUAGE SERVER RPC INTERACTION
+    def clear_history(self):
+        """Clear all stored LSP communication history entries.
+        
+        Note that history tracking must be enabled via `enable_history = True`
+        for new entries to be recorded.
+        
+        Example:
+            >>> client.enable_history = True
+            >>> # ... some LSP communications occur ...
+            >>> len(client.history)
+            5
+            >>> client.enable_history = False
+            >>> client.clear_history()
+            >>> len(client.history)
+            0
+        """
+        self.history.clear()
+    
     def _run_event_loop(self):
         """Run the asyncio event loop in a separate thread."""
         asyncio.set_event_loop(self._loop)
@@ -240,7 +258,7 @@ class BaseLeanLSPClient:
             method = msg.get("method")
 
             if self.enable_history:
-                self._history.append([{'type': 'server', 'content': msg}])
+                self.history.append([{'type': 'server', 'content': msg}])
 
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
@@ -301,7 +319,7 @@ class BaseLeanLSPClient:
         self.stdin.flush()
 
         if self.enable_history:
-            self._history.append([{'type': 'client', 'content': request}])
+            self.history.append([{'type': 'client', 'content': request}])
 
         if not is_notification:
             return request_id
