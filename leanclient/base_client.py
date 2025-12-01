@@ -258,7 +258,7 @@ class BaseLeanLSPClient:
             method = msg.get("method")
 
             if self.enable_history:
-                self.history.append([{'type': 'server', 'content': msg}])
+                self.history.append({'type': 'server', 'content': msg})
 
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
@@ -319,7 +319,7 @@ class BaseLeanLSPClient:
         self.stdin.flush()
 
         if self.enable_history:
-            self.history.append([{'type': 'client', 'content': request}])
+            self.history.append({'type': 'client', 'content': request})
 
         if not is_notification:
             return request_id
