@@ -11,6 +11,10 @@ from .base_client import BaseLeanLSPClient
 logger = logging.getLogger(__name__)
 
 
+# Grace period for Lean 4.22 compatibility (empty diagnostics arrive before real ones)
+DIAGNOSTICS_GRACE_PERIOD = 0.5
+
+
 @dataclass(slots=True)
 class FileState:
     """Represents the mutable state of an open Lean file."""
@@ -29,6 +33,7 @@ class FileState:
     close_ready: bool = False
     dependency_rebuild_attempted: bool = False
     last_activity: float = field(default_factory=time.monotonic)
+    wait_for_diag_done: bool = False  # True when waitForDiagnostics RPC completed
 
     def reset_after_change(self):
         """Reset diagnostics-related state after a content change."""
@@ -41,6 +46,25 @@ class FileState:
         self.close_pending = False
         self.close_ready = False
         self.last_activity = time.monotonic()
+        self.wait_for_diag_done = False
+
+    def is_ready(self, current_time: float | None = None) -> bool:
+        """Check if diagnostics are ready, with grace period for Lean 4.22 compatibility.
+        
+        In Lean 4.22, empty diagnostics may arrive before real ones (same version).
+        However, when waitForDiagnostics RPC completes, real diagnostics have arrived.
+        Grace period only applies when RPC hasn't completed yet.
+        """
+        if self.complete:
+            return True
+        if self.processing:
+            return False
+        # Processing done - ready if we have diagnostics or RPC confirmed completion
+        if self.diagnostics or self.wait_for_diag_done:
+            return True
+        # No diagnostics and RPC not done - apply grace period for Lean 4.22
+        current_time = current_time or time.monotonic()
+        return (current_time - self.last_activity) > DIAGNOSTICS_GRACE_PERIOD
 
     def is_line_range_complete(
         self, start_line: int | None, end_line: int | None
@@ -151,6 +175,8 @@ class LSPFileManager(BaseLeanLSPClient):
                         if diagnostics or not state.fatal_error:
                             state.last_activity = time.monotonic()
 
+                        # Mark complete when: not processing AND (have diagnostics OR no fatal error)
+                        # For 4.22.0: empty diagnostics followed by non-empty is common
                         if not state.processing and (
                             diagnostics or not state.fatal_error
                         ):
@@ -264,13 +290,16 @@ class LSPFileManager(BaseLeanLSPClient):
             }
             self._send_notification("textDocument/didOpen", params)
 
-    def _send_request(self, path: str, method: str, params: dict) -> dict:
+    def _send_request(
+        self, path: str, method: str, params: dict, timeout: float = 30.0
+    ) -> dict:
         """Send request about a document and return a response or and error.
 
         Args:
             path (str): Relative file path.
             method (str): Method name.
             params (dict): Parameters for the method.
+            timeout (float): Timeout in seconds. Defaults to 30.
 
         Returns:
             dict: Response or error.
@@ -295,10 +324,12 @@ class LSPFileManager(BaseLeanLSPClient):
         }
 
         try:
-            result = self._send_request_sync(method, params)
+            result = self._send_request_sync(method, params, timeout=timeout)
             return result
         except EOFError:
             raise EOFError("LeanLSPClient: Language server closed unexpectedly.")
+        except TimeoutError:
+            return {"error": {"message": f"Request timed out after {timeout}s"}}
         except Exception as e:
             # Return error in dict format for backward compatibility
             if "LSP Error:" in str(e):
@@ -731,14 +762,12 @@ class LSPFileManager(BaseLeanLSPClient):
                 path = path_by_uri[uri]
                 state = self.opened_files[path]
 
-                if (
-                    not state.complete
-                    and not state.processing
-                    and state.diagnostics_version >= state.version
-                ):
-                    state.complete = True
+                # Check if already complete based on state
+                if not state.complete and not state.processing:
+                    if state.diagnostics_version >= state.version:
+                        state.complete = True
 
-                if not state.complete or state.diagnostics_version < 0:
+                if not state.complete:
                     uris_needing_wait.append(uri)
                     target_versions[uri] = state.version
 
@@ -784,31 +813,21 @@ class LSPFileManager(BaseLeanLSPClient):
                             continue
 
                         # waitForDiagnostics completed successfully
-                        # But we should only mark complete if publishDiagnostics has arrived
-                        if state.diagnostics_version >= target_version:
+                        # Mark RPC done - real diagnostics have arrived (or file is clean)
+                        state.wait_for_diag_done = True
+                        if state.is_ready(current_time):
                             state.complete = True
-                            state.last_activity = current_time
                             completed_uris.add(uri)
-                        # else: keep waiting for publishDiagnostics notification
 
-                # Then check remaining URIs for state changes via notification handlers
+                # Check remaining URIs for state changes via notification handlers
                 for uri in pending_uris - completed_uris:
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
-                    target_version = target_versions[uri]
 
-                    if (
-                        not state.complete
-                        and not state.processing
-                        and state.diagnostics_version >= target_version
-                    ):
+                    if state.is_ready(current_time):
                         state.complete = True
-                        state.last_activity = current_time
-                        completed_uris.add(uri)
-                    elif state.complete:
                         completed_uris.add(uri)
                     else:
-                        # Track maximum inactivity time across all pending URIs
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
 
@@ -898,13 +917,10 @@ class LSPFileManager(BaseLeanLSPClient):
                         completed_uris.add(uri)
                         continue
 
-                    # Check if range is complete
-                    range_complete = state.is_line_range_complete(start_line, end_line)
-
-                    if range_complete:
+                    # Check if range is complete (processing-wise) and ready (has diagnostics)
+                    if state.is_line_range_complete(start_line, end_line) and state.is_ready(current_time):
                         completed_uris.add(uri)
                     else:
-                        # Track inactivity
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
 
