@@ -208,8 +208,8 @@ class BaseLeanLSPClient:
     def clear_history(self):
         """Clear all stored LSP communication history entries.
         
-        Note that history tracking must be enabled via `enable_history = True`
-        for new entries to be recorded.
+        Note: History tracking is controlled by the ENABLE_LEANCLIENT_HISTORY environment
+        variable at initialization, or can be enabled at runtime via `enable_history = True`.
         
         Example:
             >>> client.enable_history = True
