@@ -29,8 +29,18 @@ jobs:
     
     - name: Install elan (Lean toolchain manager)
       run: |
-        curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | bash -s -- -y --default-toolchain none
+        curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | bash -s -- -y --default-toolchain stable
         echo "$HOME/.elan/bin" >> $GITHUB_PATH
+    
+    - name: Cache Lean toolchain
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.elan
+          ~/.cache/mathlib4
+        key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
+        restore-keys: |
+          ${{ runner.os }}-lean-
     
     - name: Install Python dependencies
       run: |
