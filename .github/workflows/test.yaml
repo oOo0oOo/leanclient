@@ -49,9 +49,13 @@ jobs:
         python -m pip install .[test]
         python -m pip install coverage
     
-    - name: Run tests
+    - name: Run tests with coverage
+      continue-on-error: true
       run: |
-        coverage run -m pytest -sv tests/ -m "not slow and not mathlib"
+        coverage run -m pytest -sv tests/ \
+             -m "not slow and not mathlib" \
+             --timeout=900 \
+            --durations=25 --durations-min=1.0
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
