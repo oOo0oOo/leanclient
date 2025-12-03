@@ -49,4 +49,4 @@ jobs:
     
     - name: Run tests
       run: |
-        pytest -sv tests/ -m "not slow and not mathlib"
+        pytest -sv tests/ -m "unimportant"
