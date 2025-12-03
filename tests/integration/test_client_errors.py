@@ -370,7 +370,7 @@ def test_invalid_coordinates(lsp_client, random_fast_mathlib_files, position):
 @pytest.mark.integration
 def test_invalid_coordinates_crashes_lake(test_project_dir, random_fast_mathlib_files):
     """Test that invalid coordinates can crash lake or return error.
-    
+
     Note: In Lean 4.22.0, this request causes the LSP server to hang (timeout).
     In Lean 4.25.0+, it properly returns an error response.
     """

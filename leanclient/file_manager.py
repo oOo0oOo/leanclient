@@ -50,7 +50,7 @@ class FileState:
 
     def is_ready(self, current_time: float | None = None) -> bool:
         """Check if diagnostics are ready, with grace period for Lean 4.22 compatibility.
-        
+
         In Lean 4.22, empty diagnostics may arrive before real ones (same version).
         However, when waitForDiagnostics RPC completes, real diagnostics have arrived.
         Grace period only applies when RPC hasn't completed yet.
@@ -309,10 +309,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 needs_open = True
             else:
                 needs_open = False
-        
+
         if needs_open:
             self.open_file(path)
-        
+
         with self._opened_files_lock:
             state = self.opened_files[path]
             uri = state.uri
@@ -801,7 +801,6 @@ class LSPFileManager(BaseLeanLSPClient):
                     if future.done():
                         path = path_by_uri[uri]
                         state = self.opened_files[path]
-                        target_version = target_versions[uri]
                         try:
                             future.result()
                         except Exception as e:
@@ -918,7 +917,9 @@ class LSPFileManager(BaseLeanLSPClient):
                         continue
 
                     # Check if range is complete (processing-wise) and ready (has diagnostics)
-                    if state.is_line_range_complete(start_line, end_line) and state.is_ready(current_time):
+                    if state.is_line_range_complete(
+                        start_line, end_line
+                    ) and state.is_ready(current_time):
                         completed_uris.add(uri)
                     else:
                         inactivity = current_time - state.last_activity
