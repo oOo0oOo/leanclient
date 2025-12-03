@@ -6,6 +6,8 @@ import time
 
 import pytest
 
+from leanclient import LeanLSPClient
+
 
 # Expected diagnostic messages from test file
 EXP_DIAGNOSTIC_ERRORS = [
@@ -596,3 +598,23 @@ def test_info_tree_parse_mathlib(lsp_client):
 
     for tree in res:
         check_node(tree)
+
+# ============================================================================
+# History tests
+# ============================================================================
+def test_history(lsp_client: LeanLSPClient, test_file_path):
+    """Test history tracking."""
+    lsp_client.enable_history = True
+    # test for notification
+    lsp_client.history.clear()
+    lsp_client.open_file(test_file_path, force_reopen=True)
+    assert len(lsp_client.history)
+    
+    # test for request
+    lsp_client.history.clear()
+    lsp_client.get_document_symbols(test_file_path)
+    assert len(lsp_client.history)
+    
+    # disable history
+    lsp_client.enable_history = False
+    lsp_client.history.clear()

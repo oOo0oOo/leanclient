@@ -21,6 +21,7 @@ IGNORED_METHODS = {
     "client/registerCapability",
     "workspace/inlayHint/refresh",
 }
+ENABLE_LEANCLIENT_HISTORY = os.getenv("ENABLE_LEANCLIENT_HISTORY", "false").lower() == "true"
 
 
 class BaseLeanLSPClient:
@@ -37,6 +38,8 @@ class BaseLeanLSPClient:
     ):
         self.project_path = Path(project_path).resolve()
         self.request_id = 0  # Counter for generating unique request IDs
+        self.enable_history = ENABLE_LEANCLIENT_HISTORY
+        self.history = []  # List of requests/responses sent/received from the server
 
         if initial_build:
             self.build_project(get_cache=not prevent_cache_get)
@@ -202,6 +205,24 @@ class BaseLeanLSPClient:
         return str(rel_path)
 
     # LANGUAGE SERVER RPC INTERACTION
+    def clear_history(self):
+        """Clear all stored LSP communication history entries.
+        
+        Note: History tracking is controlled by the ENABLE_LEANCLIENT_HISTORY environment
+        variable at initialization, or can be enabled at runtime via `enable_history = True`.
+        
+        Example:
+            >>> client.enable_history = True
+            >>> # ... some LSP communications occur ...
+            >>> len(client.history)
+            5
+            >>> client.enable_history = False
+            >>> client.clear_history()
+            >>> len(client.history)
+            0
+        """
+        self.history.clear()
+    
     def _run_event_loop(self):
         """Run the asyncio event loop in a separate thread."""
         asyncio.set_event_loop(self._loop)
@@ -235,6 +256,9 @@ class BaseLeanLSPClient:
             # Dispatch to futures and notification handlers
             msg_id = msg.get("id")
             method = msg.get("method")
+
+            if self.enable_history:
+                self.history.append({'type': 'server', 'content': msg})
 
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
@@ -293,6 +317,9 @@ class BaseLeanLSPClient:
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
         self.stdin.write(header + body)
         self.stdin.flush()
+
+        if self.enable_history:
+            self.history.append({'type': 'client', 'content': request})
 
         if not is_notification:
             return request_id

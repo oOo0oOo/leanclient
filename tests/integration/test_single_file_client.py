@@ -23,6 +23,7 @@ def test_method_overlap():
         "create_file_client",
         "open_files",
         "get_env",
+        "clear_history",
     ]
     missing = set(missing) - set(ok_missing)
     assert not missing, f"Missing methods in SingleFileClient: {missing}"

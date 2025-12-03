@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import leanclient
 from leanclient.utils import DocumentContentChange, experimental
 
 
@@ -15,7 +16,7 @@ class SingleFileClient:
         file_path(str): The path to the file to interact with.
     """
 
-    def __init__(self, client, file_path: str):
+    def __init__(self, client: 'leanclient.client.LeanLSPClient', file_path: str):
         # Check if file exists
         path = (client.project_path / Path(file_path)).resolve()
         if not path.exists():
