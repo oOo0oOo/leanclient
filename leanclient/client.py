@@ -448,26 +448,26 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 needs_open = True
             else:
                 needs_open = False
-        
+
         if needs_open:
             self.open_file(path)
-        
+
         # Wait for file to be processed if needed
         with self._opened_files_lock:
             state = self.opened_files[path]
             uri = state.uri
             version = state.version
             need_wait = not state.complete
-        
+
         if need_wait:
             self._wait_for_diagnostics([uri], inactivity_timeout=5.0)
             with self._opened_files_lock:
                 version = self.opened_files[path].version
-        
+
         # Send request
         params = {"textDocument": {"uri": uri, "version": version}}
         response = self._send_request_sync("textDocument/documentSymbol", params)
-        
+
         for symbol in response:
             if isinstance(symbol["kind"], int):
                 symbol["kind"] = SYMBOL_KIND_MAP.get(symbol["kind"], "unknown")
@@ -575,22 +575,22 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 needs_open = True
             else:
                 needs_open = False
-        
+
         if needs_open:
             self.open_file(path)
-        
+
         # Wait for file to be processed if needed
         with self._opened_files_lock:
             state = self.opened_files[path]
             uri = state.uri
             version = state.version
             need_wait = not state.complete
-        
+
         if need_wait:
             self._wait_for_diagnostics([uri], inactivity_timeout=5.0)
             with self._opened_files_lock:
                 version = self.opened_files[path].version
-        
+
         # Send request
         params = {"textDocument": {"uri": uri, "version": version}}
         return self._send_request_sync("textDocument/foldingRange", params)

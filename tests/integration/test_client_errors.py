@@ -369,11 +369,23 @@ def test_invalid_coordinates(lsp_client, random_fast_mathlib_files, position):
 
 @pytest.mark.integration
 def test_invalid_coordinates_crashes_lake(test_project_dir, random_fast_mathlib_files):
-    """Test that invalid coordinates can crash lake."""
+    """Test that invalid coordinates can crash lake or return error.
+
+    Note: In Lean 4.22.0, this request causes the LSP server to hang (timeout).
+    In Lean 4.25.0+, it properly returns an error response.
+    """
     path = random_fast_mathlib_files(1, 42)[0]
     position = {"line": -1, "character": 0}
 
     lsp = LeanLSPClient(test_project_dir, prevent_cache_get=True)
-    res = lsp.get_declarations(path, **position)
-    assert "Cannot parse request params:" in res["error"]["message"]
+    # Use internal method with shorter timeout to avoid long test duration
+    res = lsp._send_request(
+        path,
+        "textDocument/declaration",
+        {"position": position},
+        timeout=5.0,
+    )
+    # Accept either proper error response (4.25+) or timeout (4.22)
+    error_msg = res["error"]["message"]
+    assert "Cannot parse request params:" in error_msg or "timed out" in error_msg
     lsp.close()
