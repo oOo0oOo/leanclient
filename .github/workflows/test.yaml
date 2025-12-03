@@ -47,7 +47,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install .[test]
+        python -m pip install coverage
     
     - name: Run tests
       run: |
-        pytest -sv tests/ -m "not slow and not mathlib"
+        coverage run -m pytest -sv tests/ -m "not slow and not mathlib"
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
