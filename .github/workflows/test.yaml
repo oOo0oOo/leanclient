@@ -38,7 +38,7 @@ jobs:
       with:
         path: |
           ~/.elan
-          ~/.cache/mathlib4
+          ~/.cache/mathlib
         key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
         restore-keys: |
           ${{ runner.os }}-lean-
