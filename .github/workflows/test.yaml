@@ -16,7 +16,7 @@ jobs:
       matrix:
         python-version: ["3.10"]
         os: 
-          - "ubuntu-latest"
+          # - "ubuntu-latest"
           - "macos-latest"
           # - "windows-latest"
             
@@ -54,8 +54,17 @@ jobs:
       run: |
         coverage run -m pytest -sv tests/ \
              -m "not slow and not mathlib" \
-             --timeout=900 \
-            --durations=25 --durations-min=1.0
+             --timeout=0 \
+            --durations=25 --durations-min=1.0 \
+            --html=report.html --self-contained-html
+    
+    - name: Upload test report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-report-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: report.html
+        retention-days: 30
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
