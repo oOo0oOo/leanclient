@@ -1177,3 +1177,13 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
                 parse_info_tree(info_tree) for info_tree in info_trees if info_tree
             ]
         return info_trees
+
+    def close(self, timeout: float | None = 2):
+        """Close the language server client.
+
+        Args:
+            timeout (float | None, optional): Timeout in seconds. Defaults to 2.
+        """
+        # Close all open files in the language server
+        self.close_all_files()
+        return super().close(timeout)

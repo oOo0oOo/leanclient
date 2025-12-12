@@ -5,6 +5,7 @@ import threading
 import asyncio
 import logging
 import atexit
+import psutil
 from pathlib import Path
 from typing import Any, Callable
 
@@ -131,8 +132,16 @@ class BaseLeanLSPClient:
             atexit.unregister(self.close)
         except Exception:
             pass
-
+        
         # Terminate the language server process
+        ## terminate children processes: `ps aux | grep lean`
+        try:
+            children = psutil.Process(self.process.pid).children(recursive=True)
+            for child in children:
+                child.terminate()
+        except psutil.NoSuchProcess:
+            pass
+        # terminate main process: `ps aux | grep lake`
         self.process.terminate()
 
         try:

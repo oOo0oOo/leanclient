@@ -608,7 +608,15 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             for path in paths:
                 del self.opened_files[path]
+    
+    def close_all_files(self, blocking: bool = True):
+        """Close all open files in the language server.
 
+        Args:
+            blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
+        """
+        self.close_files(list(self.opened_files.keys()), blocking=blocking)
+    
     def get_diagnostics(
         self,
         path: str,
