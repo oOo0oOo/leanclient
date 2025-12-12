@@ -93,7 +93,8 @@ class BaseLeanLSPClient:
                 "processId": os.getpid(),
                 "rootUri": self._local_to_uri(self.project_path),
                 "initializationOptions": {
-                    "editDelay": 1  # It seems like this has no effect.
+                    "editDelay": 1,
+                    "hasWidgets": True,
                 },
             },
         )
