@@ -141,7 +141,7 @@ class BaseLeanLSPClient:
                 child.terminate()
         except psutil.NoSuchProcess:
             pass
-        # terminate main process: `ps aux | grep lake`
+        ## terminate main process: `ps aux | grep lake`
         self.process.terminate()
 
         try:
