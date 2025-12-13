@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Any
 
 from leanclient.info_tree import parse_info_tree
 from leanclient.single_file_client import SingleFileClient
@@ -11,6 +12,76 @@ from .utils import (
     experimental,
     get_diagnostics_in_range,
 )
+
+
+def _extract_widgets_from_interactive_diag(diag: dict) -> list[dict]:
+    """Recursively extract widget instances from interactive diagnostic message data.
+
+    The interactive diagnostic message structure is:
+    {
+      "message": {
+        "tag": [
+          {
+            "widget": {
+              "wi": { "id": "...", "props": {...}, ... },
+              "alt": {...}
+            }
+          },
+          ...
+        ]
+      }
+    }
+
+    Args:
+        diag: Interactive diagnostic dictionary.
+
+    Returns:
+        List of widget instance dictionaries.
+    """
+    widgets = []
+
+    def extract_from_tagged_text(tt: Any) -> None:
+        """Recursively search TaggedText structure for widget embeds."""
+        if isinstance(tt, dict):
+            # Check if this is a widget embed - structure is {"widget": {"wi": {...}, "alt": ...}}
+            if "widget" in tt:
+                widget_data = tt.get("widget", {})
+                if isinstance(widget_data, dict):
+                    # The actual widget instance is in "wi" field
+                    wi = widget_data.get("wi")
+                    if isinstance(wi, dict):
+                        widgets.append(wi)
+                    elif widget_data.get("id") or widget_data.get("props"):
+                        # Fallback: widget_data itself might be the widget instance
+                        widgets.append(widget_data)
+
+            # Check tag field which may contain list of embeds
+            tag = tt.get("tag")
+            if isinstance(tag, list):
+                for item in tag:
+                    extract_from_tagged_text(item)
+            elif isinstance(tag, dict):
+                extract_from_tagged_text(tag)
+
+            # Recurse into other fields
+            for key in ["text", "append", "children", "alt"]:
+                if key in tt:
+                    val = tt[key]
+                    if isinstance(val, list):
+                        for item in val:
+                            extract_from_tagged_text(item)
+                    elif isinstance(val, dict):
+                        extract_from_tagged_text(val)
+
+        elif isinstance(tt, list):
+            for item in tt:
+                extract_from_tagged_text(item)
+
+    message = diag.get("message")
+    if message:
+        extract_from_tagged_text(message)
+
+    return widgets
 
 
 class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
@@ -1281,3 +1352,104 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         params = {"module": module}
         result = self._send_request_sync("$/lean/moduleHierarchy/importedBy", params)
         return result if result is not None else []
+
+    @experimental
+    def get_widgets(self, path: str, line: int, character: int) -> list[dict]:
+        """Get panel widgets at a file position.
+
+        Panel widgets are interactive UI elements displayed in the Lean infoview,
+        such as proof state visualizations, #png images, or custom widgets.
+
+        This uses the Lean RPC method ``Lean.Widget.getWidgets``.
+
+        Note:
+            Widgets require ``hasWidgets: true`` in initialization options, which
+            is enabled by default in leanclient.
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'id': 'widget-123',
+                    'javascriptHash': 'abc123...',
+                    'range': {'start': {'line': 5, 'character': 0}, ...},
+                    'name?': 'ProofWidgets.HtmlDisplay',
+                    'props': {'html': {...}}  # Widget-specific data
+                }
+            ]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number (0-indexed).
+            character (int): Character number (0-indexed).
+
+        Returns:
+            list[dict]: List of widget instances at the position.
+        """
+        self.open_file(path)
+        uri = self._local_to_uri(path)
+        result = self.rpc_call(
+            uri,
+            "Lean.Widget.getWidgets",
+            {"line": line, "character": character},
+        )
+        return result.get("widgets", [])
+
+    @experimental
+    def get_interactive_diagnostics(
+        self, path: str, start_line: int | None = None, end_line: int | None = None
+    ) -> list[dict]:
+        """Get interactive diagnostics with embedded widget data.
+
+        Interactive diagnostics include widgets embedded in diagnostic messages,
+        such as images from ``#png`` or custom error visualizations.
+
+        This uses the Lean RPC method ``Lean.Widget.getInteractiveDiagnostics``.
+
+        Note:
+            Unlike regular diagnostics, interactive diagnostics contain rich
+            structured data including embedded widgets.
+
+        Args:
+            path (str): Relative file path.
+            start_line (int | None): Start line (0-indexed). If None, gets all diagnostics.
+            end_line (int | None): End line (0-indexed, exclusive). If None, gets all diagnostics.
+
+        Returns:
+            list[dict]: List of interactive diagnostic objects.
+        """
+        self.open_file(path)
+        uri = self._local_to_uri(path)
+
+        params: dict[str, Any] = {}
+        if start_line is not None and end_line is not None:
+            params["lineRange"] = {"start": start_line, "end": end_line}
+
+        result = self.rpc_call(uri, "Lean.Widget.getInteractiveDiagnostics", params)
+        return result if isinstance(result, list) else []
+
+    @experimental
+    def get_diagnostic_widgets(
+        self, path: str, start_line: int | None = None, end_line: int | None = None
+    ) -> list[dict]:
+        """Extract widget instances from interactive diagnostics.
+
+        This is a convenience method that gets interactive diagnostics and extracts
+        any embedded widgets from them. Useful for finding widgets in error messages,
+        such as images from ``#png`` commands.
+
+        Args:
+            path (str): Relative file path.
+            start_line (int | None): Start line (0-indexed). If None, gets all diagnostics.
+            end_line (int | None): End line (0-indexed, exclusive). If None, gets all diagnostics.
+
+        Returns:
+            list[dict]: List of widget instance dictionaries extracted from diagnostics.
+        """
+        diagnostics = self.get_interactive_diagnostics(path, start_line, end_line)
+        widgets = []
+        for diag in diagnostics:
+            widgets.extend(_extract_widgets_from_interactive_diag(diag))
+        return widgets
