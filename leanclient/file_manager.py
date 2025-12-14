@@ -81,6 +81,9 @@ class FileState:
         - start_line only: filter from start_line to EOF
         - end_line only: filter from beginning to end_line
         - both: filter the closed range
+
+        Note: Uses fullRange (with fallback to range) for filtering to capture
+        the semantic span of errors, as Lean may truncate range for display.
         """
         filtered = []
 
@@ -89,7 +92,9 @@ class FileState:
         range_end = end_line if end_line is not None else float("inf")
 
         for diag in self.diagnostics:
-            diag_range = diag.get("range", {})
+            # Use fullRange if available, fall back to range
+            # fullRange preserves semantic span when Lean truncates range for display
+            diag_range = diag.get("fullRange", diag.get("range", {}))
             diag_start = diag_range.get("start", {}).get("line", 0)
             diag_end = diag_range.get("end", {}).get("line", 0)
 
