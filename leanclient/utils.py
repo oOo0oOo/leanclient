@@ -208,6 +208,9 @@ def get_diagnostics_in_range(
 ) -> list:
     """Find overlapping diagnostics for a range of lines.
 
+    Uses fullRange (with fallback to range) for filtering to capture the
+    semantic span of errors, as Lean may truncate range for display purposes.
+
     Args:
         diagnostics (list): List of diagnostics.
         start_line (int): Start line.
@@ -216,12 +219,15 @@ def get_diagnostics_in_range(
     Returns:
         list: Overlapping diagnostics.
     """
-    return [
-        diag
-        for diag in diagnostics
-        if diag["range"]["start"]["line"] <= end_line
-        and diag["range"]["end"]["line"] >= start_line
-    ]
+    result = []
+    for diag in diagnostics:
+        # Use fullRange if available, fall back to range
+        diag_range = diag.get("fullRange", diag.get("range", {}))
+        diag_start = diag_range.get("start", {}).get("line", 0)
+        diag_end = diag_range.get("end", {}).get("line", 0)
+        if diag_start <= end_line and diag_end >= start_line:
+            result.append(diag)
+    return result
 
 
 def has_mathlib_dependency(project_path: str | Path) -> bool:

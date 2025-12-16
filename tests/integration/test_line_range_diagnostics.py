@@ -139,6 +139,31 @@ def test_filter_diagnostics_by_range_empty():
     assert filtered == []
 
 
+def test_filter_diagnostics_by_range_uses_fullrange():
+    """fullRange is used when range is truncated."""
+    diagnostics = [
+        {
+            # range is truncated to line 0, but fullRange shows actual location
+            "range": {"start": {"line": 0}, "end": {"line": 0}},
+            "fullRange": {"start": {"line": 15}, "end": {"line": 15}},
+            "message": "truncated_range",
+        },
+        {
+            # No fullRange - should fall back to range
+            "range": {"start": {"line": 12}, "end": {"line": 12}},
+            "message": "normal_range",
+        },
+    ]
+
+    state = FileState(uri="file:///test.lean", content="test", diagnostics=diagnostics)
+    filtered = state.filter_diagnostics_by_range(10, 20)
+
+    # Both should be included: first via fullRange, second via range fallback
+    assert len(filtered) == 2
+    messages = {d["message"] for d in filtered}
+    assert messages == {"truncated_range", "normal_range"}
+
+
 # ============================================================================
 # Integration-style tests with mocked file manager
 # ============================================================================
