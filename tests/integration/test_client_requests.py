@@ -618,3 +618,37 @@ def test_history(lsp_client: LeanLSPClient, test_file_path):
     # disable history
     lsp_client.enable_history = False
     lsp_client.history.clear()
+
+
+# ============================================================================
+# Widget tests
+# ============================================================================
+
+
+@pytest.mark.integration
+def test_get_widgets(lsp_client, test_file_path):
+    """Test getting widgets at a position."""
+    result = lsp_client.get_widgets(test_file_path, 0, 0)
+    # Test file doesn't have widgets, but API should work
+    assert isinstance(result, list)
+
+
+@pytest.mark.integration
+def test_get_interactive_diagnostics(lsp_client, test_file_path):
+    """Test getting interactive diagnostics."""
+    result = lsp_client.get_interactive_diagnostics(test_file_path)
+    assert isinstance(result, list)
+
+
+@pytest.mark.integration
+def test_get_interactive_diagnostics_with_range(lsp_client, test_file_path):
+    """Test getting interactive diagnostics for a line range."""
+    result = lsp_client.get_interactive_diagnostics(test_file_path, start_line=0, end_line=10)
+    assert isinstance(result, list)
+
+
+@pytest.mark.integration
+def test_get_interactive_diagnostics_extract_widgets(lsp_client, test_file_path):
+    """Test getting interactive diagnostics with widget extraction."""
+    result = lsp_client.get_interactive_diagnostics(test_file_path, extract_widgets=True)
+    assert isinstance(result, list)

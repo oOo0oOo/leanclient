@@ -272,3 +272,75 @@ def experimental(func):
     doc_lines.insert(1, warning)
     wrapper.__doc__ = "\n".join(doc_lines)
     return wrapper
+
+
+def extract_widgets_from_interactive_diag(diag: dict) -> list[dict]:
+    """Recursively extract widget instances from interactive diagnostic message data.
+
+    The interactive diagnostic message structure is:
+    {
+      "message": {
+        "tag": [
+          {
+            "widget": {
+              "wi": { "id": "...", "props": {...}, ... },
+              "alt": {...}
+            }
+          },
+          ...
+        ]
+      }
+    }
+
+    Args:
+        diag: Interactive diagnostic dictionary.
+
+    Returns:
+        List of widget instance dictionaries.
+    """
+    from typing import Any
+
+    widgets = []
+
+    def extract_from_tagged_text(tt: Any) -> None:
+        """Recursively search TaggedText structure for widget embeds."""
+        if isinstance(tt, dict):
+            # Check if this is a widget embed - structure is {"widget": {"wi": {...}, "alt": ...}}
+            if "widget" in tt:
+                widget_data = tt.get("widget", {})
+                if isinstance(widget_data, dict):
+                    # The actual widget instance is in "wi" field
+                    wi = widget_data.get("wi")
+                    if isinstance(wi, dict):
+                        widgets.append(wi)
+                    elif widget_data.get("id") or widget_data.get("props"):
+                        # Fallback: widget_data itself might be the widget instance
+                        widgets.append(widget_data)
+
+            # Check tag field which may contain list of embeds
+            tag = tt.get("tag")
+            if isinstance(tag, list):
+                for item in tag:
+                    extract_from_tagged_text(item)
+            elif isinstance(tag, dict):
+                extract_from_tagged_text(tag)
+
+            # Recurse into other fields
+            for key in ["text", "append", "children", "alt"]:
+                if key in tt:
+                    val = tt[key]
+                    if isinstance(val, list):
+                        for item in val:
+                            extract_from_tagged_text(item)
+                    elif isinstance(val, dict):
+                        extract_from_tagged_text(val)
+
+        elif isinstance(tt, list):
+            for item in tt:
+                extract_from_tagged_text(item)
+
+    message = diag.get("message")
+    if message:
+        extract_from_tagged_text(message)
+
+    return widgets

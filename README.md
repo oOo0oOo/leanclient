@@ -110,6 +110,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Getting code actions, resolving them, then applying the edits.
 - Get InfoTrees of theorems (includes rudimentary parsing).
 - Module hierarchy: Get module info, imports, and reverse dependencies.
+- Interactive diagnostics and widgets (experimental).
 
 ### Missing LSP Interactions
 
@@ -119,11 +120,6 @@ Might be implemented in the future:
 
 - `workspace/symbol`, `workspace/didChangeWatchedFiles`, `workspace/applyEdit`, ...
 - `textDocument/prepareRename`, `textDocument/rename`
-
-Internal Lean methods:
-
-- `$/lean/rpc/connect`, `$/lean/rpc/call`, `$/lean/rpc/release`, `$/lean/rpc/keepAlive`
-- Interactive diagnostics
 - `$/lean/staleDependency`
 
 ### Potential Features

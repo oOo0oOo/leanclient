@@ -199,3 +199,25 @@ class SingleFileClient:
     def get_module_imported_by(self, module: dict) -> list[dict]:
         """See :meth:`leanclient.client.LeanLSPClient.get_module_imported_by`"""
         return self.client.get_module_imported_by(module)
+
+    @experimental
+    def get_widgets(self, line: int, character: int) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_widgets`"""
+        return self.client.get_widgets(self.file_path, line, character)
+
+    @experimental
+    def get_interactive_diagnostics(
+        self,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        extract_widgets: bool = False,
+    ) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_interactive_diagnostics`"""
+        return self.client.get_interactive_diagnostics(
+            self.file_path, start_line, end_line, extract_widgets
+        )
+
+    @experimental
+    def get_widget_source(self, line: int, character: int, widget: dict) -> dict:
+        """See :meth:`leanclient.client.LeanLSPClient.get_widget_source`"""
+        return self.client.get_widget_source(self.file_path, line, character, widget)

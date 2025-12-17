@@ -396,13 +396,17 @@ class BaseLeanLSPClient:
         """
         self._notification_handlers.pop(method, None)
 
-    # LEAN RPC (for widgets)
-    def rpc_connect(self, uri: str, timeout: float = 10) -> str:
+    # LEAN RPC (for widgets) - internal methods, not part of public API
+    def _rpc_connect(self, uri: str, timeout: float = 10) -> str:
         """Connect to Lean RPC for a file and get a session ID.
 
         The Lean server provides RPC capabilities for interactive features like widgets.
         This method establishes an RPC session for a file, which is required before
         making RPC calls.
+
+        Note:
+            This is an internal method. Session management is handled automatically
+            by the widget methods.
 
         Args:
             uri (str): File URI (use _local_to_uri to convert local paths).
@@ -426,12 +430,13 @@ class BaseLeanLSPClient:
         self._rpc_sessions[uri] = session_id
         return session_id
 
-    def rpc_call(
+    def _rpc_call(
         self,
         uri: str,
         method: str,
         params: dict,
-        position: dict | None = None,
+        line: int = 0,
+        character: int = 0,
         timeout: float = 15,
     ) -> dict:
         """Make an RPC call to the Lean server.
@@ -440,42 +445,40 @@ class BaseLeanLSPClient:
         - "Lean.Widget.getWidgets": Get panel widgets at a position
         - "Lean.Widget.getInteractiveDiagnostics": Get diagnostics with embedded widgets
 
+        Note:
+            This is an internal method. Use the public widget methods instead.
+
         Args:
             uri (str): File URI.
             method (str): RPC method name (e.g., "Lean.Widget.getWidgets").
             params (dict): Parameters to pass to the RPC method.
-            position (dict | None): Position for snapshot lookup. If None, uses
-                {"line": 0, "character": 0} or extracts from params if available.
+            line (int): Line number for snapshot lookup (0-indexed). Defaults to 0.
+            character (int): Character number for snapshot lookup (0-indexed). Defaults to 0.
             timeout (float): Timeout in seconds. Defaults to 15.
 
         Returns:
             dict: Response from the RPC call.
-
-        Example:
-            >>> uri = client._local_to_uri("MyFile.lean")
-            >>> widgets = client.rpc_call(
-            ...     uri,
-            ...     "Lean.Widget.getWidgets",
-            ...     {"line": 10, "character": 0}
-            ... )
         """
-        session_id = self.rpc_connect(uri, timeout=timeout)
-
-        # Use explicit position, or extract from params if it looks like a position
-        if position is None:
-            if "line" in params and "character" in params:
-                position = {"line": params["line"], "character": params["character"]}
-            else:
-                position = {"line": 0, "character": 0}
+        session_id = self._rpc_connect(uri, timeout=timeout)
 
         call_params = {
             "textDocument": {"uri": uri},
-            "position": position,
+            "position": {"line": line, "character": character},
             "sessionId": session_id,
             "method": method,
             "params": params,
         }
         return self._send_request_sync("$/lean/rpc/call", call_params, timeout=timeout)
+
+    def _rpc_release_session(self, uri: str) -> None:
+        """Release an RPC session for a file.
+
+        Called when a file is closed/reopened to prevent stale sessions.
+
+        Args:
+            uri (str): File URI.
+        """
+        self._rpc_sessions.pop(uri, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:
