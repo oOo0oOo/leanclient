@@ -180,11 +180,9 @@ class LSPFileManager(BaseLeanLSPClient):
                         if diagnostics or not state.fatal_error:
                             state.last_activity = time.monotonic()
 
-                        # Mark complete when: not processing AND (have diagnostics OR no fatal error)
-                        # For 4.22.0: empty diagnostics followed by non-empty is common
-                        if not state.processing and (
-                            diagnostics or not state.fatal_error
-                        ):
+                        # Mark complete using is_ready() to handle Lean 4.22 grace period
+                        # For 4.22.0: empty diagnostics may arrive before real ones
+                        if not state.processing and state.is_ready():
                             state.complete = True
 
                         if state.close_pending and not diagnostics:
