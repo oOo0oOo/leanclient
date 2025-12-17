@@ -3,7 +3,7 @@ import logging
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 import orjson
 
@@ -298,9 +298,7 @@ def extract_widgets_from_interactive_diag(diag: dict) -> list[dict]:
     Returns:
         List of widget instance dictionaries.
     """
-    from typing import Any
-
-    widgets = []
+    widgets: list[dict] = []
 
     def extract_from_tagged_text(tt: Any) -> None:
         """Recursively search TaggedText structure for widget embeds."""

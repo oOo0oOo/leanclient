@@ -1293,10 +1293,6 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         This uses the Lean RPC method ``Lean.Widget.getWidgets``.
 
-        Note:
-            Widgets require ``hasWidgets: true`` in initialization options, which
-            is enabled by default in leanclient.
-
         Example response:
 
         .. code-block:: python
@@ -1322,11 +1318,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         self.open_file(path)
         uri = self._local_to_uri(path)
         result = self._rpc_call(
-            uri,
-            "Lean.Widget.getWidgets",
-            {"line": line, "character": character},
-            line=line,
-            character=character,
+            uri, "Lean.Widget.getWidgets", {}, line=line, character=character
         )
         return result.get("widgets", [])
 
@@ -1336,7 +1328,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         path: str,
         start_line: int | None = None,
         end_line: int | None = None,
-        extract_widgets: bool = True,
+        extract_widgets: bool = False,
     ) -> list[dict]:
         """Get interactive diagnostics with embedded widget data.
 
@@ -1345,16 +1337,12 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         This uses the Lean RPC method ``Lean.Widget.getInteractiveDiagnostics``.
 
-        Note:
-            Unlike regular diagnostics, interactive diagnostics contain rich
-            structured data including embedded widgets.
-
         Args:
             path (str): Relative file path.
             start_line (int | None): Start line (0-indexed). If None, gets all diagnostics.
             end_line (int | None): End line (0-indexed, exclusive). If None, gets all diagnostics.
             extract_widgets (bool): If True, extract and return widget instances from
-                the diagnostics instead of the full diagnostic objects. Defaults to True.
+                the diagnostics instead of the full diagnostic objects. Defaults to False.
 
         Returns:
             list[dict]: List of interactive diagnostic objects, or list of widget
@@ -1372,13 +1360,14 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         )
         diagnostics = result if isinstance(result, list) else []
 
-        if extract_widgets:
-            widgets = []
-            for diag in diagnostics:
-                widgets.extend(extract_widgets_from_interactive_diag(diag))
-            return widgets
+        if not extract_widgets:
+            return diagnostics
 
-        return diagnostics
+        return [
+            widget
+            for diag in diagnostics
+            for widget in extract_widgets_from_interactive_diag(diag)
+        ]
 
     @experimental
     def get_widget_source(
