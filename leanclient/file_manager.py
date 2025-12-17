@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field
-import time
-import threading
-import urllib.parse
 import logging
+import threading
+import time
+import urllib.parse
+from dataclasses import dataclass, field
 from typing import Any
 
-from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 from .base_client import BaseLeanLSPClient
+from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 
 logger = logging.getLogger(__name__)
 
@@ -848,8 +848,8 @@ class LSPFileManager(BaseLeanLSPClient):
                     break
 
                 # Use condition variable wait with timeout instead of busy polling
-                # Wake up on notification or after 10ms, whichever comes first
-                self._close_condition.wait(timeout=0.01)
+                # Wake up on notification or after 5ms, whichever comes first
+                self._close_condition.wait(timeout=0.005)
 
     def _wait_for_line_range(
         self,
@@ -945,4 +945,4 @@ class LSPFileManager(BaseLeanLSPClient):
                     break
 
                 # Wait for line range completion
-                self._close_condition.wait(timeout=0.01)
+                self._close_condition.wait(timeout=0.005)
