@@ -210,7 +210,7 @@ class SingleFileClient:
         self,
         start_line: int | None = None,
         end_line: int | None = None,
-        extract_widgets: bool = False,
+        extract_widgets: bool = True,
     ) -> list[dict]:
         """See :meth:`leanclient.client.LeanLSPClient.get_interactive_diagnostics`"""
         return self.client.get_interactive_diagnostics(

@@ -635,7 +635,7 @@ def test_get_widgets(lsp_client, test_file_path):
 
 @pytest.mark.integration
 def test_get_interactive_diagnostics(lsp_client, test_file_path):
-    """Test getting interactive diagnostics."""
+    """Test getting interactive diagnostics (extracts widgets by default)."""
     result = lsp_client.get_interactive_diagnostics(test_file_path)
     assert isinstance(result, list)
 
@@ -648,7 +648,7 @@ def test_get_interactive_diagnostics_with_range(lsp_client, test_file_path):
 
 
 @pytest.mark.integration
-def test_get_interactive_diagnostics_extract_widgets(lsp_client, test_file_path):
-    """Test getting interactive diagnostics with widget extraction."""
-    result = lsp_client.get_interactive_diagnostics(test_file_path, extract_widgets=True)
+def test_get_interactive_diagnostics_raw(lsp_client, test_file_path):
+    """Test getting raw interactive diagnostics without widget extraction."""
+    result = lsp_client.get_interactive_diagnostics(test_file_path, extract_widgets=False)
     assert isinstance(result, list)

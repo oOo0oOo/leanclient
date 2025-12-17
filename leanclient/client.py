@@ -1336,7 +1336,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         path: str,
         start_line: int | None = None,
         end_line: int | None = None,
-        extract_widgets: bool = False,
+        extract_widgets: bool = True,
     ) -> list[dict]:
         """Get interactive diagnostics with embedded widget data.
 
@@ -1354,7 +1354,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             start_line (int | None): Start line (0-indexed). If None, gets all diagnostics.
             end_line (int | None): End line (0-indexed, exclusive). If None, gets all diagnostics.
             extract_widgets (bool): If True, extract and return widget instances from
-                the diagnostics instead of the full diagnostic objects. Defaults to False.
+                the diagnostics instead of the full diagnostic objects. Defaults to True.
 
         Returns:
             list[dict]: List of interactive diagnostic objects, or list of widget
