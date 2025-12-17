@@ -46,7 +46,7 @@ pip install leanclient
 uv pip install leanclient
 ```
 
-3) In your python code:
+3) Example:
 
 ```python
 import leanclient as lc
@@ -57,20 +57,40 @@ client = lc.LeanLSPClient(PROJECT_PATH)
 
 # Query a lean file in your project
 file_path = "MyProject/Basic.lean"
-result = client.get_goal(file_path, line=0, character=2)
-print(result)
+diagnostics = client.get_diagnostics(file_path)
+print(f"Found {len(diagnostics)} diagnostics")
 
 # Use a SingleFileClient for simplified interaction with a single file.
 sfc = client.create_file_client(file_path)
-result = sfc.get_term_goal(line=0, character=5)
-print(result)
+
+# Get symbols in the file (theorems, definitions, etc.)
+symbols = sfc.get_document_symbols()
+print(f"File contains {len(symbols)} symbols")
+
+# Get hover information at a specific position
+hover = sfc.get_hover(line=10, character=5)
+if hover:
+    print(f"Hover info: {hover['contents']}")
 
 # Make a change to the document.
-change = lc.DocumentContentChange(text="-- Adding a comment at the head of the file\n", start=[0, 0], end=[0, 0])
+change = lc.DocumentContentChange(
+    text="-- Adding a comment at the head of the file\n", 
+    start=[0, 0], 
+    end=[0, 0]
+)
 sfc.update_file(changes=[change])
 
-# Check the document content as seen by the LSP (changes are not written to disk).
-print(sfc.get_file_content())
+# Verify the change (not written to disk, only in LSP memory)
+content = sfc.get_file_content()
+assert content.startswith("-- Adding a comment")
+
+# Explore module hierarchy (requires .ilean files from built dependencies)
+module = client.prepare_module_hierarchy(".lake/packages/mathlib/Mathlib/Init.lean")
+imports = client.get_module_imports(module)
+print(f"Module {module['name']} has {len(imports)} direct imports")
+
+imported_by = client.get_module_imported_by(module)
+print(f"Module is imported by {len(imported_by)} other modules")
 ```
 
 ### Implemented LSP Interactions
@@ -89,6 +109,7 @@ See the [documentation](https://leanclient.readthedocs.io) for more information 
 - Completions, completion item resolve.
 - Getting code actions, resolving them, then applying the edits.
 - Get InfoTrees of theorems (includes rudimentary parsing).
+- Module hierarchy: Get module info, imports, and reverse dependencies.
 
 ### Missing LSP Interactions
 
