@@ -1,9 +1,9 @@
 # Varia to be sorted later...
+import logging
 from dataclasses import dataclass
 from functools import wraps
-from typing import Tuple
 from pathlib import Path
-import logging
+from typing import Tuple
 
 import orjson
 
@@ -230,26 +230,32 @@ def get_diagnostics_in_range(
     return result
 
 
-def has_mathlib_dependency(project_path: str | Path) -> bool:
-    """Check if the project has mathlib as a dependency.
+def needs_mathlib_cache_get(project_path: Path) -> bool:
+    """Check if `lake exe cache get` should be run for this project.
+
+    Returns True only when mathlib is a dependency AND cache isn't extracted yet.
 
     Args:
         project_path: Path to the Lean project root directory.
 
     Returns:
-        bool: True if mathlib is found in lake-manifest.json.
+        bool: True if cache get should be run, False to skip it.
     """
-    manifest_path = Path(project_path) / "lake-manifest.json"
-    if not manifest_path.exists():
+    project_path = Path(project_path)
+    manifest = project_path / "lake-manifest.json"
+    if not manifest.exists():
         return False
 
     try:
-        with open(manifest_path, "r") as f:
-            manifest = orjson.loads(f.read())
-        packages = manifest.get("packages", [])
-        return any(pkg.get("name") == "mathlib" for pkg in packages)
+        pkgs = orjson.loads(manifest.read_bytes()).get("packages", [])
+        if not any(p.get("name") == "mathlib" for p in pkgs):
+            return False
     except Exception:
         return False
+
+    # Check if mathlib olean files already exist
+    olean_dir = project_path / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib"
+    return not any(olean_dir.glob("*.olean"))
 
 
 def experimental(func):

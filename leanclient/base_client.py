@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 import orjson
 
-from .utils import SemanticTokenProcessor, has_mathlib_dependency
+from .utils import SemanticTokenProcessor, needs_mathlib_cache_get
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,8 @@ class BaseLeanLSPClient:
 
         if initial_build:
             self.build_project(get_cache=not prevent_cache_get)
-        elif not prevent_cache_get and has_mathlib_dependency(self.project_path):
-            # Get cached builds for mathlib projects to avoid slow on-demand builds
+        elif not prevent_cache_get and needs_mathlib_cache_get(self.project_path):
+            # Only run cache get if mathlib dep exists AND olean files missing
             subprocess.run(
                 ["lake", "exe", "cache", "get"],
                 cwd=self.project_path,
