@@ -255,7 +255,7 @@ def test_update_try_tactics(file_manager):
         "linarith": 0,
         "ring": 1,
         "norm_num": 1,
-        "omega": 1,
+        "omega": 0,
         "simp": 1,
     }
 

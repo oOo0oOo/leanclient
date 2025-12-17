@@ -1,10 +1,10 @@
+import asyncio
+import atexit
+import logging
 import os
 import subprocess
-import urllib.parse
 import threading
-import asyncio
-import logging
-import atexit
+import urllib.parse
 from pathlib import Path
 from typing import Any, Callable
 
@@ -21,7 +21,9 @@ IGNORED_METHODS = {
     "client/registerCapability",
     "workspace/inlayHint/refresh",
 }
-ENABLE_LEANCLIENT_HISTORY = os.getenv("ENABLE_LEANCLIENT_HISTORY", "false").lower() == "true"
+ENABLE_LEANCLIENT_HISTORY = (
+    os.getenv("ENABLE_LEANCLIENT_HISTORY", "false").lower() == "true"
+)
 
 
 class BaseLeanLSPClient:
@@ -54,8 +56,9 @@ class BaseLeanLSPClient:
             )
 
         # Run the lean4 language server in a subprocess
+        # -Dserver.reportDelayMs=0 bc we don't need debouncing
         self.process = subprocess.Popen(
-            ["lake", "serve"],
+            ["lake", "serve", "--", "-Dserver.reportDelayMs=0"],
             cwd=self.project_path,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
@@ -207,10 +210,10 @@ class BaseLeanLSPClient:
     # LANGUAGE SERVER RPC INTERACTION
     def clear_history(self):
         """Clear all stored LSP communication history entries.
-        
+
         Note: History tracking is controlled by the ENABLE_LEANCLIENT_HISTORY environment
         variable at initialization, or can be enabled at runtime via `enable_history = True`.
-        
+
         Example:
             >>> client.enable_history = True
             >>> # ... some LSP communications occur ...
@@ -222,7 +225,7 @@ class BaseLeanLSPClient:
             0
         """
         self.history.clear()
-    
+
     def _run_event_loop(self):
         """Run the asyncio event loop in a separate thread."""
         asyncio.set_event_loop(self._loop)
@@ -258,7 +261,7 @@ class BaseLeanLSPClient:
             method = msg.get("method")
 
             if self.enable_history:
-                self.history.append({'type': 'server', 'content': msg})
+                self.history.append({"type": "server", "content": msg})
 
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
@@ -319,7 +322,7 @@ class BaseLeanLSPClient:
         self.stdin.flush()
 
         if self.enable_history:
-            self.history.append({'type': 'client', 'content': request})
+            self.history.append({"type": "client", "content": request})
 
         if not is_notification:
             return request_id
