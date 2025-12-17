@@ -190,7 +190,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Goto Declaration Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration>`_
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
 
         Example response:
 
@@ -235,7 +235,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Goto Definition Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition>`_
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
 
         Example response:
 
@@ -1189,7 +1189,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
 
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
 
         Example response:
 
@@ -1224,7 +1224,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
 
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
 
         Example response:
 
@@ -1263,7 +1263,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
 
         More information:
 
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
 
         Example response format is the same as get_module_imports().
 
