@@ -26,7 +26,7 @@ EXP_DIAGNOSTIC_WARNINGS = ["declaration uses 'sorry'", "declaration uses 'sorry'
 @pytest.mark.integration
 def test_completion(lsp_client, test_file_path):
     """Test getting completions at cursor position."""
-    result = lsp_client.get_completions(test_file_path, 9, 15)
+    result = lsp_client.get_completions(test_file_path, 11, 15)
     assert isinstance(result, list)
     assert len(result) > 100
 
@@ -34,7 +34,7 @@ def test_completion(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_completion_item_resolve(lsp_client, test_file_path):
     """Test resolving completion item details."""
-    result = lsp_client.get_completions(test_file_path, 9, 15)
+    result = lsp_client.get_completions(test_file_path, 11, 15)
     assert isinstance(result, list)
     resolve_res = lsp_client.get_completion_item_resolve(result[0])
     assert resolve_res == "a ∣ c → (a ∣ b + c ↔ a ∣ b)"
@@ -48,7 +48,7 @@ def test_completion_item_resolve(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_hover(lsp_client, test_file_path):
     """Test getting hover information."""
-    res = lsp_client.get_hover(test_file_path, 4, 4)
+    res = lsp_client.get_hover(test_file_path, 6, 4)
     assert isinstance(res, dict)
     assert "Zero, the smallest natural number" in res["contents"]["value"]
 
@@ -61,7 +61,7 @@ def test_hover(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_declaration(lsp_client, test_file_path):
     """Test getting declarations."""
-    res = lsp_client.get_declarations(test_file_path, 6, 4)
+    res = lsp_client.get_declarations(test_file_path, 8, 4)
     assert isinstance(res, list)
     assert "targetUri" in res[0]
 
@@ -69,7 +69,7 @@ def test_declaration(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_request_definition(lsp_client, test_file_path):
     """Test getting definitions."""
-    res = lsp_client.get_definitions(test_file_path, 1, 29)
+    res = lsp_client.get_definitions(test_file_path, 3, 29)
     assert isinstance(res, list)
     res = res[0]
     if "uri" in res:
@@ -86,7 +86,7 @@ def test_request_definition(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_references(lsp_client, test_file_path):
     """Test getting references."""
-    res = lsp_client.get_references(test_file_path, 9, 24)
+    res = lsp_client.get_references(test_file_path, 11, 24)
     assert isinstance(res, list)
     assert len(res) == 1
 
@@ -99,7 +99,7 @@ def test_references(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_type_definition(lsp_client, test_file_path):
     """Test getting type definitions."""
-    res = lsp_client.get_type_definitions(test_file_path, 1, 36)
+    res = lsp_client.get_type_definitions(test_file_path, 3, 36)
     assert isinstance(res, list)
     assert res[0]["targetUri"].endswith("Prelude.lean")
 
@@ -112,7 +112,7 @@ def test_type_definition(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_document_highlight(lsp_client, test_file_path):
     """Test getting document highlights."""
-    res = lsp_client.get_document_highlights(test_file_path, 9, 8)
+    res = lsp_client.get_document_highlights(test_file_path, 11, 8)
     assert isinstance(res, list)
     assert res[0]["range"]["end"]["character"] == 20
 
@@ -148,7 +148,7 @@ def test_semantic_tokens_full(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_semantic_tokens_range(lsp_client, test_file_path):
     """Test getting semantic tokens for range."""
-    res = lsp_client.get_semantic_tokens_range(test_file_path, 0, 0, 2, 0)
+    res = lsp_client.get_semantic_tokens_range(test_file_path, 2, 0, 4, 0)
     assert isinstance(res, list)
     exp = [
         [1, 0, 7, "keyword"],
@@ -181,11 +181,11 @@ def test_folding_range(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_plain_goal(lsp_client, test_file_path):
     """Test getting proof goal at position."""
-    res = lsp_client.get_goal(test_file_path, 9, 12)
+    res = lsp_client.get_goal(test_file_path, 11, 12)
     assert isinstance(res, dict)
     assert "⊢" in res["goals"][0]
 
-    res = lsp_client.get_goal(test_file_path, 9, 25)
+    res = lsp_client.get_goal(test_file_path, 11, 25)
     assert len(res["goals"]) == 0
 
 
@@ -193,7 +193,7 @@ def test_plain_goal(lsp_client, test_file_path):
 def test_goal_with_delay(lsp_client, test_file_path):
     """Test getting goal with random delays between requests."""
     for _ in range(4):
-        goal = lsp_client.get_goal(test_file_path, 9, 12)
+        goal = lsp_client.get_goal(test_file_path, 11, 12)
         assert isinstance(goal, dict)
         assert "⊢" in goal["goals"][0]
         time.sleep(random.uniform(0, 0.5))
@@ -202,11 +202,11 @@ def test_goal_with_delay(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_plain_term_goal(lsp_client, test_file_path):
     """Test getting term goal at position."""
-    res = lsp_client.get_term_goal(test_file_path, 9, 12)
+    res = lsp_client.get_term_goal(test_file_path, 11, 12)
     assert isinstance(res, dict)
     assert "⊢" in res["goal"]
 
-    res2 = lsp_client.get_term_goal(test_file_path, 9, 15)
+    res2 = lsp_client.get_term_goal(test_file_path, 11, 15)
     assert res == res2
 
 
@@ -237,7 +237,7 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
     clean_lsp_client.open_file(test_file_path)
 
     # Get code actions
-    res = clean_lsp_client.get_code_actions(test_file_path, 12, 8, 12, 18)
+    res = clean_lsp_client.get_code_actions(test_file_path, 14, 8, 14, 18)
     assert isinstance(res, list)
 
     EXP = {
@@ -247,21 +247,21 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
                     "diagnostics": [
                         {
                             "fullRange": {
-                                "end": {"character": 42, "line": 12},
-                                "start": {"character": 37, "line": 12},
+                                "end": {"character": 42, "line": 14},
+                                "start": {"character": 37, "line": 14},
                             },
                             "message": "1",
                             "range": {
-                                "end": {"character": 42, "line": 12},
-                                "start": {"character": 37, "line": 12},
+                                "end": {"character": 42, "line": 14},
+                                "start": {"character": 37, "line": 14},
                             },
                             "severity": 3,
                             "source": "Lean 4",
                         },
                         {
                             "fullRange": {
-                                "end": {"character": 26, "line": 12},
-                                "start": {"character": 15, "line": 12},
+                                "end": {"character": 26, "line": 14},
+                                "start": {"character": 15, "line": 14},
                             },
                             "message": "❌️ Docstring on "
                             "`#guard_msgs` "
@@ -272,8 +272,8 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
                             "- info: 2\n"
                             "+ info: 1\n",
                             "range": {
-                                "end": {"character": 26, "line": 12},
-                                "start": {"character": 15, "line": 12},
+                                "end": {"character": 26, "line": 14},
+                                "start": {"character": 15, "line": 14},
                             },
                             "severity": 1,
                             "source": "Lean 4",
@@ -282,8 +282,8 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
                     "triggerKind": 1,
                 },
                 "range": {
-                    "end": {"character": 18, "line": 12},
-                    "start": {"character": 8, "line": 12},
+                    "end": {"character": 18, "line": 14},
+                    "start": {"character": 8, "line": 14},
                 },
                 "textDocument": {
                     "uri": f"file://{os.path.abspath(test_env_dir)}/LeanTestProject/Basic.lean"
@@ -311,8 +311,8 @@ def test_code_actions(clean_lsp_client, test_file_path, test_env_dir):
                         {
                             "newText": "/-- info: 1 -/\n",
                             "range": {
-                                "end": {"character": 15, "line": 12},
-                                "start": {"character": 0, "line": 12},
+                                "end": {"character": 15, "line": 14},
+                                "start": {"character": 0, "line": 14},
                             },
                         }
                     ],
@@ -627,10 +627,30 @@ def test_history(lsp_client: LeanLSPClient, test_file_path):
 
 @pytest.mark.integration
 def test_get_widgets(lsp_client, test_file_path):
-    """Test getting widgets at a position."""
-    result = lsp_client.get_widgets(test_file_path, 0, 0)
-    # Test file doesn't have widgets, but API should work
+    """Test getting widgets at the #html widget position."""
+    # Line 25 (0-indexed) contains: #html <div>Test Widget</div>
+    result = lsp_client.get_widgets(test_file_path, 25, 0)
     assert isinstance(result, list)
+    assert len(result) > 0, "Expected at least one widget from #html command"
+    # Check widget structure
+    widget = result[0]
+    assert "javascriptHash" in widget, "Widget should have javascriptHash"
+
+
+@pytest.mark.integration
+def test_get_widget_source(lsp_client, test_file_path):
+    """Test getting widget source for rendering."""
+    # First get a widget from line 25 (0-indexed): #html <div>Test Widget</div>
+    widgets = lsp_client.get_widgets(test_file_path, 25, 0)
+    assert len(widgets) > 0, "Need at least one widget to test get_widget_source"
+
+    widget = widgets[0]
+    # Get the widget source
+    result = lsp_client.get_widget_source(test_file_path, 25, 0, widget)
+    assert isinstance(result, dict)
+    # Should contain sourcetext (JavaScript module) or an error
+    # The exact structure depends on whether the widget JS is available
+    assert result is not None
 
 
 @pytest.mark.integration

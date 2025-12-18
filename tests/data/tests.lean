@@ -1,3 +1,5 @@
+import ProofWidgets.Component.HtmlDisplay
+
 -- Define a simple theorem: for any natural number n, n + 0 = n
 theorem add_zero_custom (n : Nat) : n + 0 = n := by
   -- Use induction on n
@@ -18,3 +20,7 @@ theorem incomplete' (n : Nat) : n + 1 = n + 1 := by admit
 
 -- Trigger error using syntax errors
 theorem add_zero_custom''
+
+-- Widget test section
+-- This creates an interactive HTML widget for testing get_widgets and get_widget_source
+#html <div>Test Widget</div>
