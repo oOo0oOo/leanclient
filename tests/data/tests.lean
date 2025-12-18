@@ -18,9 +18,10 @@ theorem add_zero_custom (n : Nat) : n + 0 = n := by
 theorem incomplete (n : Nat) : n + 0 = n := by sorry
 theorem incomplete' (n : Nat) : n + 1 = n + 1 := by admit
 
--- Trigger error using syntax errors
-theorem add_zero_custom''
-
 -- Widget test section
 -- This creates an interactive HTML widget for testing get_widgets and get_widget_source
+open scoped ProofWidgets.Jsx in
 #html <div>Test Widget</div>
+
+-- Trigger error using syntax errors (moved to end to not interfere with widget test)
+theorem add_zero_custom''

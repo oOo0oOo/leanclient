@@ -628,8 +628,8 @@ def test_history(lsp_client: LeanLSPClient, test_file_path):
 @pytest.mark.integration
 def test_get_widgets(lsp_client, test_file_path):
     """Test getting widgets at the #html widget position."""
-    # Line 25 (0-indexed) contains: #html <div>Test Widget</div>
-    result = lsp_client.get_widgets(test_file_path, 25, 0)
+    # Line 23 (0-indexed) contains: #html <div>Test Widget</div>
+    result = lsp_client.get_widgets(test_file_path, 23, 0)
     assert isinstance(result, list)
     assert len(result) > 0, "Expected at least one widget from #html command"
     # Check widget structure
@@ -640,13 +640,13 @@ def test_get_widgets(lsp_client, test_file_path):
 @pytest.mark.integration
 def test_get_widget_source(lsp_client, test_file_path):
     """Test getting widget source for rendering."""
-    # First get a widget from line 25 (0-indexed): #html <div>Test Widget</div>
-    widgets = lsp_client.get_widgets(test_file_path, 25, 0)
+    # First get a widget from line 23 (0-indexed): #html <div>Test Widget</div>
+    widgets = lsp_client.get_widgets(test_file_path, 23, 0)
     assert len(widgets) > 0, "Need at least one widget to test get_widget_source"
 
     widget = widgets[0]
     # Get the widget source
-    result = lsp_client.get_widget_source(test_file_path, 25, 0, widget)
+    result = lsp_client.get_widget_source(test_file_path, 23, 0, widget)
     assert isinstance(result, dict)
     # Should contain sourcetext (JavaScript module) or an error
     # The exact structure depends on whether the widget JS is available
