@@ -684,7 +684,11 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             state = self.opened_files[path]
             if use_range:
-                is_complete = state.is_line_range_complete(start_line, end_line)
+                # Check both range completion and readiness to handle Lean 4.22 timing
+                # where processing: [] can arrive before actual diagnostics
+                is_complete = state.is_line_range_complete(
+                    start_line, end_line
+                ) and state.is_ready()
             else:
                 is_complete = state.complete
             uri = state.uri
