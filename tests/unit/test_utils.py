@@ -258,3 +258,118 @@ def test_needs_mathlib_cache_get_real_project(test_project_dir):
     result = needs_mathlib_cache_get(test_project_dir)
     # Should be False if cache is already present
     assert isinstance(result, bool)
+
+
+# ============================================================================
+# Widget extraction tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_empty():
+    """Test widget extraction from empty diagnostic."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    result = extract_widgets_from_interactive_diag({})
+    assert result == []
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_no_widgets():
+    """Test widget extraction from diagnostic without widgets."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [{"text": "Error message"}]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert result == []
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_with_widget():
+    """Test widget extraction from diagnostic with widget."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {
+                    "widget": {
+                        "wi": {
+                            "id": "widget-123",
+                            "javascriptHash": "abc123",
+                            "props": {"data": "test"}
+                        },
+                        "alt": {"text": "fallback"}
+                    }
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 1
+    assert result[0]["id"] == "widget-123"
+    assert result[0]["javascriptHash"] == "abc123"
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_nested():
+    """Test widget extraction from deeply nested diagnostic structure."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {"text": "Some text"},
+                {
+                    "append": [
+                        {
+                            "tag": [
+                                {
+                                    "widget": {
+                                        "wi": {
+                                            "id": "nested-widget",
+                                            "props": {}
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 1
+    assert result[0]["id"] == "nested-widget"
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_multiple_widgets():
+    """Test widget extraction from diagnostic with multiple widgets."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {
+                    "widget": {
+                        "wi": {"id": "widget-1", "props": {}}
+                    }
+                },
+                {
+                    "widget": {
+                        "wi": {"id": "widget-2", "props": {}}
+                    }
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 2
+    assert result[0]["id"] == "widget-1"
+    assert result[1]["id"] == "widget-2"

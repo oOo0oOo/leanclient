@@ -88,6 +88,9 @@ class BaseLeanLSPClient:
         )
         self._stdout_thread.start()
 
+        # RPC session management for widgets
+        self._rpc_sessions: dict[str, str] = {}  # uri -> sessionId
+
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
         server_info = self._send_request_sync(
@@ -96,7 +99,8 @@ class BaseLeanLSPClient:
                 "processId": os.getpid(),
                 "rootUri": self._local_to_uri(self.project_path),
                 "initializationOptions": {
-                    "editDelay": 1  # It seems like this has no effect.
+                    "editDelay": 1,  # It seems like this has no effect.
+                    "hasWidgets": True,  # Enable widget support for interactive diagnostics
                 },
             },
         )
@@ -391,6 +395,90 @@ class BaseLeanLSPClient:
             method (str): Notification method name.
         """
         self._notification_handlers.pop(method, None)
+
+    # LEAN RPC (for widgets) - internal methods, not part of public API
+    def _rpc_connect(self, uri: str, timeout: float = 10) -> str:
+        """Connect to Lean RPC for a file and get a session ID.
+
+        The Lean server provides RPC capabilities for interactive features like widgets.
+        This method establishes an RPC session for a file, which is required before
+        making RPC calls.
+
+        Note:
+            This is an internal method. Session management is handled automatically
+            by the widget methods.
+
+        Args:
+            uri (str): File URI (use _local_to_uri to convert local paths).
+            timeout (float): Timeout in seconds. Defaults to 10.
+
+        Returns:
+            str: Session ID for use in subsequent RPC calls.
+
+        Raises:
+            RuntimeError: If session ID cannot be obtained.
+        """
+        if uri in self._rpc_sessions:
+            return self._rpc_sessions[uri]
+
+        result = self._send_request_sync(
+            "$/lean/rpc/connect", {"uri": uri}, timeout=timeout
+        )
+        session_id = result.get("sessionId")
+        if not session_id:
+            raise RuntimeError(f"Failed to get RPC session for {uri}")
+        self._rpc_sessions[uri] = session_id
+        return session_id
+
+    def _rpc_call(
+        self,
+        uri: str,
+        method: str,
+        params: dict,
+        line: int = 0,
+        character: int = 0,
+        timeout: float = 15,
+    ) -> dict:
+        """Make an RPC call to the Lean server.
+
+        RPC calls are used for interactive features like widgets. Common methods include:
+        - "Lean.Widget.getWidgets": Get panel widgets at a position
+        - "Lean.Widget.getInteractiveDiagnostics": Get diagnostics with embedded widgets
+
+        Note:
+            This is an internal method. Use the public widget methods instead.
+
+        Args:
+            uri (str): File URI.
+            method (str): RPC method name (e.g., "Lean.Widget.getWidgets").
+            params (dict): Parameters to pass to the RPC method.
+            line (int): Line number for snapshot lookup (0-indexed). Defaults to 0.
+            character (int): Character number for snapshot lookup (0-indexed). Defaults to 0.
+            timeout (float): Timeout in seconds. Defaults to 15.
+
+        Returns:
+            dict: Response from the RPC call.
+        """
+        session_id = self._rpc_connect(uri, timeout=timeout)
+
+        call_params = {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "sessionId": session_id,
+            "method": method,
+            "params": params,
+        }
+        return self._send_request_sync("$/lean/rpc/call", call_params, timeout=timeout)
+
+    def _rpc_release_session(self, uri: str) -> None:
+        """Release an RPC session for a file.
+
+        Called when a file is closed/reopened to prevent stale sessions.
+
+        Args:
+            uri (str): File URI.
+        """
+        self._rpc_sessions.pop(uri, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:

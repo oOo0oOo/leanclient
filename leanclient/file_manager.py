@@ -583,6 +583,8 @@ class LSPFileManager(BaseLeanLSPClient):
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
+            # Release RPC session to prevent stale sessions
+            self._rpc_release_session(uri)
 
         # Wait for published diagnostics if blocking (event-driven, not polling)
         if blocking:

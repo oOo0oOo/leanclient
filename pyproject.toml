@@ -74,3 +74,9 @@ timeout_method = "thread"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-timeout>=2.4.0",
+]
