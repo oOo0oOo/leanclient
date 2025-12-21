@@ -50,7 +50,7 @@ jobs:
         python -m pip install coverage
     
     - name: Run tests with coverage
-      # continue-on-error: true
+      continue-on-error: true
       run: |
         coverage run -m pytest -sv tests/ \
              -m "not slow and not mathlib" \

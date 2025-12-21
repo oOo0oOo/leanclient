@@ -7,7 +7,7 @@ import threading
 import urllib.parse
 from pathlib import Path
 from typing import Any, Callable
-
+import psutil
 import orjson
 
 from .utils import SemanticTokenProcessor, needs_mathlib_cache_get
