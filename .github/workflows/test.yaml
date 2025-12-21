@@ -50,6 +50,7 @@ jobs:
         python -m pip install coverage
     
     - name: Run tests with coverage
+      id: tests
       continue-on-error: true
       run: |
         coverage run -m pytest -sv tests/ \

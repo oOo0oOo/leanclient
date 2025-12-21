@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - dev # debug usage
+      # - dev # debug usage
   workflow_dispatch:
 
 jobs:
