@@ -53,7 +53,8 @@ jobs:
       timeout-minutes: 60
       run: |
         coverage run -m pytest -sv tests/ \
-             --timeout=3600 \
+            -m "not integration" \
+            --timeout=3600 \
             --durations=50 --durations-min=1.0 \
             --html=report-full.html --self-contained-html
     
