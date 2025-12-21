@@ -139,6 +139,63 @@ def test_filter_diagnostics_by_range_empty():
     assert filtered == []
 
 
+def test_filter_diagnostics_by_range_uses_fullrange():
+    """fullRange is used when range is truncated."""
+    diagnostics = [
+        {
+            # range is truncated to line 0, but fullRange shows actual location
+            "range": {"start": {"line": 0}, "end": {"line": 0}},
+            "fullRange": {"start": {"line": 15}, "end": {"line": 15}},
+            "message": "truncated_range",
+        },
+        {
+            # No fullRange - should fall back to range
+            "range": {"start": {"line": 12}, "end": {"line": 12}},
+            "message": "normal_range",
+        },
+    ]
+
+    state = FileState(uri="file:///test.lean", content="test", diagnostics=diagnostics)
+    filtered = state.filter_diagnostics_by_range(10, 20)
+
+    # Both should be included: first via fullRange, second via range fallback
+    assert len(filtered) == 2
+    messages = {d["message"] for d in filtered}
+    assert messages == {"truncated_range", "normal_range"}
+
+
+def test_range_complete_but_not_ready():
+    """Range complete but is_ready() False should prevent early return (Lean 4.22 timing fix).
+
+    In Lean 4.22+, processing: [] can arrive before actual diagnostics.
+    This tests that is_line_range_complete() alone is not sufficient -
+    we also need is_ready() to be True before considering the range complete.
+    """
+    import time
+
+    # State simulating Lean 4.22 timing: processing done, but no diagnostics yet
+    state = FileState(
+        uri="file:///test.lean",
+        content="test",
+        current_processing=[],  # Processing done
+        diagnostics_version=0,  # Has received a version
+        diagnostics=[],  # But no diagnostics yet
+        processing=False,  # Not processing
+        wait_for_diag_done=False,  # RPC not confirmed
+    )
+    # Set last_activity to now so grace period hasn't elapsed
+    state.last_activity = time.monotonic()
+
+    # is_line_range_complete() alone returns True
+    assert state.is_line_range_complete(10, 20)
+
+    # But is_ready() returns False (no diagnostics, RPC not done, within grace period)
+    assert not state.is_ready()
+
+    # Combined check (what get_diagnostics should use) returns False
+    assert not (state.is_line_range_complete(10, 20) and state.is_ready())
+
+
 # ============================================================================
 # Integration-style tests with mocked file manager
 # ============================================================================

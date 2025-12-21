@@ -1,17 +1,16 @@
+import asyncio
+import atexit
+import logging
 import os
 import subprocess
-import urllib.parse
 import threading
-import asyncio
-import logging
-import atexit
-import psutil
+import urllib.parse
 from pathlib import Path
 from typing import Any, Callable
 
 import orjson
 
-from .utils import SemanticTokenProcessor, has_mathlib_dependency
+from .utils import SemanticTokenProcessor, needs_mathlib_cache_get
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,9 @@ IGNORED_METHODS = {
     "client/registerCapability",
     "workspace/inlayHint/refresh",
 }
-ENABLE_LEANCLIENT_HISTORY = os.getenv("ENABLE_LEANCLIENT_HISTORY", "false").lower() == "true"
+ENABLE_LEANCLIENT_HISTORY = (
+    os.getenv("ENABLE_LEANCLIENT_HISTORY", "false").lower() == "true"
+)
 
 
 class BaseLeanLSPClient:
@@ -44,8 +45,8 @@ class BaseLeanLSPClient:
 
         if initial_build:
             self.build_project(get_cache=not prevent_cache_get)
-        elif not prevent_cache_get and has_mathlib_dependency(self.project_path):
-            # Get cached builds for mathlib projects to avoid slow on-demand builds
+        elif not prevent_cache_get and needs_mathlib_cache_get(self.project_path):
+            # Only run cache get if mathlib dep exists AND olean files missing
             subprocess.run(
                 ["lake", "exe", "cache", "get"],
                 cwd=self.project_path,
@@ -55,8 +56,9 @@ class BaseLeanLSPClient:
             )
 
         # Run the lean4 language server in a subprocess
+        # -Dserver.reportDelayMs=0 bc we don't need debouncing
         self.process = subprocess.Popen(
-            ["lake", "serve"],
+            ["lake", "serve", "--", "-Dserver.reportDelayMs=0"],
             cwd=self.project_path,
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
@@ -86,6 +88,9 @@ class BaseLeanLSPClient:
         )
         self._stdout_thread.start()
 
+        # RPC session management for widgets
+        self._rpc_sessions: dict[str, str] = {}  # uri -> sessionId
+
         # Initialize language server. Options can be found here:
         # https://github.com/leanprover/lean4/blob/a955708b6c5f25e7f9c9ae7b951f8f3d5aefe377/src/Lean/Data/Lsp/InitShutdown.lean
         server_info = self._send_request_sync(
@@ -94,7 +99,8 @@ class BaseLeanLSPClient:
                 "processId": os.getpid(),
                 "rootUri": self._local_to_uri(self.project_path),
                 "initializationOptions": {
-                    "editDelay": 1  # It seems like this has no effect.
+                    "editDelay": 1,  # It seems like this has no effect.
+                    "hasWidgets": True,  # Enable widget support for interactive diagnostics
                 },
             },
         )
@@ -216,10 +222,10 @@ class BaseLeanLSPClient:
     # LANGUAGE SERVER RPC INTERACTION
     def clear_history(self):
         """Clear all stored LSP communication history entries.
-        
+
         Note: History tracking is controlled by the ENABLE_LEANCLIENT_HISTORY environment
         variable at initialization, or can be enabled at runtime via `enable_history = True`.
-        
+
         Example:
             >>> client.enable_history = True
             >>> # ... some LSP communications occur ...
@@ -231,7 +237,7 @@ class BaseLeanLSPClient:
             0
         """
         self.history.clear()
-    
+
     def _run_event_loop(self):
         """Run the asyncio event loop in a separate thread."""
         asyncio.set_event_loop(self._loop)
@@ -267,7 +273,7 @@ class BaseLeanLSPClient:
             method = msg.get("method")
 
             if self.enable_history:
-                self.history.append({'type': 'server', 'content': msg})
+                self.history.append({"type": "server", "content": msg})
 
             # Ignore certain methods from the server
             if method in IGNORED_METHODS:
@@ -328,7 +334,7 @@ class BaseLeanLSPClient:
         self.stdin.flush()
 
         if self.enable_history:
-            self.history.append({'type': 'client', 'content': request})
+            self.history.append({"type": "client", "content": request})
 
         if not is_notification:
             return request_id
@@ -397,6 +403,90 @@ class BaseLeanLSPClient:
             method (str): Notification method name.
         """
         self._notification_handlers.pop(method, None)
+
+    # LEAN RPC (for widgets) - internal methods, not part of public API
+    def _rpc_connect(self, uri: str, timeout: float = 10) -> str:
+        """Connect to Lean RPC for a file and get a session ID.
+
+        The Lean server provides RPC capabilities for interactive features like widgets.
+        This method establishes an RPC session for a file, which is required before
+        making RPC calls.
+
+        Note:
+            This is an internal method. Session management is handled automatically
+            by the widget methods.
+
+        Args:
+            uri (str): File URI (use _local_to_uri to convert local paths).
+            timeout (float): Timeout in seconds. Defaults to 10.
+
+        Returns:
+            str: Session ID for use in subsequent RPC calls.
+
+        Raises:
+            RuntimeError: If session ID cannot be obtained.
+        """
+        if uri in self._rpc_sessions:
+            return self._rpc_sessions[uri]
+
+        result = self._send_request_sync(
+            "$/lean/rpc/connect", {"uri": uri}, timeout=timeout
+        )
+        session_id = result.get("sessionId")
+        if not session_id:
+            raise RuntimeError(f"Failed to get RPC session for {uri}")
+        self._rpc_sessions[uri] = session_id
+        return session_id
+
+    def _rpc_call(
+        self,
+        uri: str,
+        method: str,
+        params: dict,
+        line: int = 0,
+        character: int = 0,
+        timeout: float = 15,
+    ) -> dict:
+        """Make an RPC call to the Lean server.
+
+        RPC calls are used for interactive features like widgets. Common methods include:
+        - "Lean.Widget.getWidgets": Get panel widgets at a position
+        - "Lean.Widget.getInteractiveDiagnostics": Get diagnostics with embedded widgets
+
+        Note:
+            This is an internal method. Use the public widget methods instead.
+
+        Args:
+            uri (str): File URI.
+            method (str): RPC method name (e.g., "Lean.Widget.getWidgets").
+            params (dict): Parameters to pass to the RPC method.
+            line (int): Line number for snapshot lookup (0-indexed). Defaults to 0.
+            character (int): Character number for snapshot lookup (0-indexed). Defaults to 0.
+            timeout (float): Timeout in seconds. Defaults to 15.
+
+        Returns:
+            dict: Response from the RPC call.
+        """
+        session_id = self._rpc_connect(uri, timeout=timeout)
+
+        call_params = {
+            "textDocument": {"uri": uri},
+            "position": {"line": line, "character": character},
+            "sessionId": session_id,
+            "method": method,
+            "params": params,
+        }
+        return self._send_request_sync("$/lean/rpc/call", call_params, timeout=timeout)
+
+    def _rpc_release_session(self, uri: str) -> None:
+        """Release an RPC session for a file.
+
+        Called when a file is closed/reopened to prevent stale sessions.
+
+        Args:
+            uri (str): File URI.
+        """
+        self._rpc_sessions.pop(uri, None)
 
     # HELPERS
     def get_env(self, return_dict: bool = True) -> dict | str:

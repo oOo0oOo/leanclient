@@ -16,7 +16,7 @@ class SingleFileClient:
         file_path(str): The path to the file to interact with.
     """
 
-    def __init__(self, client: 'leanclient.client.LeanLSPClient', file_path: str):
+    def __init__(self, client: "leanclient.client.LeanLSPClient", file_path: str):
         # Check if file exists
         path = (client.project_path / Path(file_path)).resolve()
         if not path.exists():
@@ -187,3 +187,37 @@ class SingleFileClient:
     def get_info_trees(self, parse: bool = False) -> list:
         """See :meth:`leanclient.client.LeanLSPClient.get_info_trees`"""
         return self.client.get_info_trees(self.file_path, parse=parse)
+
+    def prepare_module_hierarchy(self) -> dict | None:
+        """See :meth:`leanclient.client.LeanLSPClient.prepare_module_hierarchy`"""
+        return self.client.prepare_module_hierarchy(self.file_path)
+
+    def get_module_imports(self, module: dict) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_module_imports`"""
+        return self.client.get_module_imports(module)
+
+    def get_module_imported_by(self, module: dict) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_module_imported_by`"""
+        return self.client.get_module_imported_by(module)
+
+    @experimental
+    def get_widgets(self, line: int, character: int) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_widgets`"""
+        return self.client.get_widgets(self.file_path, line, character)
+
+    @experimental
+    def get_interactive_diagnostics(
+        self,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        extract_widgets: bool = False,
+    ) -> list[dict]:
+        """See :meth:`leanclient.client.LeanLSPClient.get_interactive_diagnostics`"""
+        return self.client.get_interactive_diagnostics(
+            self.file_path, start_line, end_line, extract_widgets
+        )
+
+    @experimental
+    def get_widget_source(self, line: int, character: int, widget: dict) -> dict:
+        """See :meth:`leanclient.client.LeanLSPClient.get_widget_source`"""
+        return self.client.get_widget_source(self.file_path, line, character, widget)

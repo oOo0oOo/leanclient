@@ -1,6 +1,6 @@
 [project]
 name = "leanclient"
-version = "0.6.1"
+version = "0.8.0"
 description = "Interact with the Lean theorem prover language server"
 authors = [
     {name = "Oliver Dressler", email = "hey@oli.show"}
@@ -74,4 +74,10 @@ timeout_method = "thread"
 
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-timeout>=2.4.0",
 ]

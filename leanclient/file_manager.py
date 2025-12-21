@@ -1,12 +1,12 @@
-from dataclasses import dataclass, field
-import time
-import threading
-import urllib.parse
 import logging
+import threading
+import time
+import urllib.parse
+from dataclasses import dataclass, field
 from typing import Any
 
-from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 from .base_client import BaseLeanLSPClient
+from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,9 @@ class FileState:
         - start_line only: filter from start_line to EOF
         - end_line only: filter from beginning to end_line
         - both: filter the closed range
+
+        Note: Uses fullRange (with fallback to range) for filtering to capture
+        the semantic span of errors, as Lean may truncate range for display.
         """
         filtered = []
 
@@ -113,7 +116,9 @@ class FileState:
         range_end = end_line if end_line is not None else float("inf")
 
         for diag in self.diagnostics:
-            diag_range = diag.get("range", {})
+            # Use fullRange if available, fall back to range
+            # fullRange preserves semantic span when Lean truncates range for display
+            diag_range = diag.get("fullRange", diag.get("range", {}))
             diag_start = diag_range.get("start", {}).get("line", 0)
             diag_end = diag_range.get("end", {}).get("line", 0)
 
@@ -175,11 +180,9 @@ class LSPFileManager(BaseLeanLSPClient):
                         if diagnostics or not state.fatal_error:
                             state.last_activity = time.monotonic()
 
-                        # Mark complete when: not processing AND (have diagnostics OR no fatal error)
-                        # For 4.22.0: empty diagnostics followed by non-empty is common
-                        if not state.processing and (
-                            diagnostics or not state.fatal_error
-                        ):
+                        # Mark complete using is_ready() to handle Lean 4.22 grace period
+                        # For 4.22.0: empty diagnostics may arrive before real ones
+                        if not state.processing and state.is_ready():
                             state.complete = True
 
                         if state.close_pending and not diagnostics:
@@ -580,6 +583,8 @@ class LSPFileManager(BaseLeanLSPClient):
         for uri in uris:
             params = {"textDocument": {"uri": uri}}
             self._send_notification("textDocument/didClose", params)
+            # Release RPC session to prevent stale sessions
+            self._rpc_release_session(uri)
 
         # Wait for published diagnostics if blocking (event-driven, not polling)
         if blocking:
@@ -689,7 +694,11 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             state = self.opened_files[path]
             if use_range:
-                is_complete = state.is_line_range_complete(start_line, end_line)
+                # Check both range completion and readiness to handle Lean 4.22 timing
+                # where processing: [] can arrive before actual diagnostics
+                is_complete = state.is_line_range_complete(
+                    start_line, end_line
+                ) and state.is_ready()
             else:
                 is_complete = state.complete
             uri = state.uri
@@ -853,8 +862,8 @@ class LSPFileManager(BaseLeanLSPClient):
                     break
 
                 # Use condition variable wait with timeout instead of busy polling
-                # Wake up on notification or after 10ms, whichever comes first
-                self._close_condition.wait(timeout=0.01)
+                # Wake up on notification or after 5ms, whichever comes first
+                self._close_condition.wait(timeout=0.005)
 
     def _wait_for_line_range(
         self,
@@ -950,4 +959,4 @@ class LSPFileManager(BaseLeanLSPClient):
                     break
 
                 # Wait for line range completion
-                self._close_condition.wait(timeout=0.01)
+                self._close_condition.wait(timeout=0.005)

@@ -1,16 +1,18 @@
 from collections import defaultdict
+from typing import Any
 
 from leanclient.info_tree import parse_info_tree
 from leanclient.single_file_client import SingleFileClient
 
+from .base_client import BaseLeanLSPClient
+from .file_manager import LSPFileManager
 from .utils import (
     SYMBOL_KIND_MAP,
     DocumentContentChange,
     experimental,
+    extract_widgets_from_interactive_diag,
     get_diagnostics_in_range,
 )
-from .base_client import BaseLeanLSPClient
-from .file_manager import LSPFileManager
 
 
 class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
@@ -190,7 +192,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Goto Declaration Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_declaration>`_
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
 
         Example response:
 
@@ -235,7 +237,7 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         More information:
 
         - LSP Docs: `Goto Definition Request <https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_definition>`_
-        - Lean Source: `Watchdog.lean <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean#L911>`_
 
         Example response:
 
@@ -1178,12 +1180,229 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
             ]
         return info_trees
 
-    def close(self, timeout: float | None = 2):
-        """Close the language server client.
+    def prepare_module_hierarchy(self, path: str) -> dict | None:
+        """Prepare module hierarchy for a file.
+
+        The :guilabel:`$/lean/prepareModuleHierarchy` method returns module information
+        for a file, including its name and URI. This is the entry point for exploring
+        the module hierarchy - call this first before getting imports.
+
+        The file is automatically opened and processed to ensure import data is available.
+
+        More information:
+
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            {
+                'name': 'Mathlib.Data.List.Basic',
+                'uri': 'file:///path/.lake/packages/mathlib/...',
+                'data': None
+            }
 
         Args:
-            timeout (float | None, optional): Timeout in seconds. Defaults to 2.
+            path (str): Relative file path.
+
+        Returns:
+            dict | None: Module info or None.
         """
-        # Close all open files in the language server
-        self.close_all_files()
-        return super().close(timeout)
+        # Ensure file is opened and processed so imports are available
+        self.get_diagnostics(path)
+
+        with self._opened_files_lock:
+            uri = self.opened_files[path].uri
+
+        params = {"textDocument": {"uri": uri}}
+        return self._send_request_sync("$/lean/prepareModuleHierarchy", params)
+
+    def get_module_imports(self, module: dict) -> list[dict]:
+        """Get all imports of a module.
+
+        The :guilabel:`$/lean/moduleHierarchy/imports` method returns all modules
+        imported by the given module (its dependencies).
+
+        More information:
+
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'module': {'name': 'Mathlib', 'uri': 'file://...'},
+                    'kind': {
+                        'isPrivate': False,
+                        'isAll': False,
+                        'metaKind': 'nonMeta'
+                    }
+                }
+            ]
+
+        Note:
+            Returns empty list when import data unavailable.
+            Use :meth:`prepare_module_hierarchy` first to ensure file is processed.
+
+        Args:
+            module (dict): Module dict from prepare_module_hierarchy().
+
+        Returns:
+            list[dict]: List of imports.
+        """
+        params = {"module": module}
+        result = self._send_request_sync("$/lean/moduleHierarchy/imports", params)
+        return result if result is not None else []
+
+    def get_module_imported_by(self, module: dict) -> list[dict]:
+        """Get all modules that import this module (reverse dependencies).
+
+        The :guilabel:`$/lean/moduleHierarchy/importedBy` method returns all modules
+        that import the given module.
+
+        More information:
+
+        - Lean Source: `Watchdog.lean\u200b\u200b\u200b\u200b\u200b <https://github.com/leanprover/lean4/blob/master/src/Lean/Server/Watchdog.lean>`_
+
+        Example response format is the same as get_module_imports().
+
+        Note:
+            Returns empty list when import data unavailable.
+            Use :meth:`prepare_module_hierarchy` first to ensure file is processed.
+
+        Args:
+            module (dict): Module dict from prepare_module_hierarchy().
+
+        Returns:
+            list[dict]: List of imports in same format as get_module_imports().
+
+        """
+        params = {"module": module}
+        result = self._send_request_sync("$/lean/moduleHierarchy/importedBy", params)
+        return result if result is not None else []
+
+    @experimental
+    def get_widgets(self, path: str, line: int, character: int) -> list[dict]:
+        """Get panel widgets at a file position.
+
+        Panel widgets are interactive UI elements displayed in the Lean infoview,
+        such as proof state visualizations, #png images, or custom widgets.
+
+        This uses the Lean RPC method ``Lean.Widget.getWidgets``.
+
+        Example response:
+
+        .. code-block:: python
+
+            [
+                {
+                    'id': 'widget-123',
+                    'javascriptHash': 'abc123...',
+                    'range': {'start': {'line': 5, 'character': 0}, ...},
+                    'name?': 'ProofWidgets.HtmlDisplay',
+                    'props': {'html': {...}}  # Widget-specific data
+                }
+            ]
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number (0-indexed).
+            character (int): Character number (0-indexed).
+
+        Returns:
+            list[dict]: List of widget instances at the position.
+        """
+        self.open_file(path)
+        uri = self._local_to_uri(path)
+        result = self._rpc_call(
+            uri, "Lean.Widget.getWidgets", {"line": line, "character": character}, line=line, character=character
+        )
+        return result.get("widgets", [])
+
+    @experimental
+    def get_interactive_diagnostics(
+        self,
+        path: str,
+        start_line: int | None = None,
+        end_line: int | None = None,
+        extract_widgets: bool = False,
+    ) -> list[dict]:
+        """Get interactive diagnostics with embedded widget data.
+
+        Interactive diagnostics include widgets embedded in diagnostic messages,
+        such as images from ``#png`` or custom error visualizations.
+
+        This uses the Lean RPC method ``Lean.Widget.getInteractiveDiagnostics``.
+
+        Args:
+            path (str): Relative file path.
+            start_line (int | None): Start line (0-indexed). If None, gets all diagnostics.
+            end_line (int | None): End line (0-indexed, exclusive). If None, gets all diagnostics.
+            extract_widgets (bool): If True, extract and return widget instances from
+                the diagnostics instead of the full diagnostic objects. Defaults to False.
+
+        Returns:
+            list[dict]: List of interactive diagnostic objects, or list of widget
+                instance dictionaries if extract_widgets is True.
+        """
+        self.open_file(path)
+        uri = self._local_to_uri(path)
+
+        params: dict[str, Any] = {}
+        if start_line is not None and end_line is not None:
+            params["lineRange"] = {"start": start_line, "end": end_line}
+
+        result = self._rpc_call(
+            uri, "Lean.Widget.getInteractiveDiagnostics", params, line=0, character=0
+        )
+        diagnostics = result if isinstance(result, list) else []
+
+        if not extract_widgets:
+            return diagnostics
+
+        return [
+            widget
+            for diag in diagnostics
+            for widget in extract_widgets_from_interactive_diag(diag)
+        ]
+
+    @experimental
+    def get_widget_source(
+        self, path: str, line: int, character: int, widget: dict
+    ) -> dict:
+        """Get the source code/data for rendering a widget.
+
+        This retrieves the JavaScript module hash and props needed to render
+        a widget instance. The widget parameter should be a widget instance
+        returned from ``get_widgets`` or ``get_interactive_diagnostics``.
+
+        This uses the Lean RPC method ``Lean.Widget.getWidgetSource``.
+
+        Args:
+            path (str): Relative file path.
+            line (int): Line number (0-indexed).
+            character (int): Character number (0-indexed).
+            widget (dict): Widget instance with at least 'id' and 'javascriptHash' fields.
+
+        Returns:
+            dict: Widget source information including JavaScript module data.
+        """
+        self.open_file(path)
+        uri = self._local_to_uri(path)
+
+        # The widget needs its hash and optional props
+        params = {
+            "pos": {"line": line, "character": character},
+            "hash": widget.get("javascriptHash", ""),
+        }
+
+        return self._rpc_call(
+            uri,
+            "Lean.Widget.getWidgetSource",
+            params,
+            line=line,
+            character=character,
+        )

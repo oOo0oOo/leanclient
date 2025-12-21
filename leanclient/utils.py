@@ -1,9 +1,9 @@
 # Varia to be sorted later...
+import logging
 from dataclasses import dataclass
 from functools import wraps
-from typing import Tuple
 from pathlib import Path
-import logging
+from typing import Any, Tuple
 
 import orjson
 
@@ -208,6 +208,9 @@ def get_diagnostics_in_range(
 ) -> list:
     """Find overlapping diagnostics for a range of lines.
 
+    Uses fullRange (with fallback to range) for filtering to capture the
+    semantic span of errors, as Lean may truncate range for display purposes.
+
     Args:
         diagnostics (list): List of diagnostics.
         start_line (int): Start line.
@@ -216,34 +219,43 @@ def get_diagnostics_in_range(
     Returns:
         list: Overlapping diagnostics.
     """
-    return [
-        diag
-        for diag in diagnostics
-        if diag["range"]["start"]["line"] <= end_line
-        and diag["range"]["end"]["line"] >= start_line
-    ]
+    result = []
+    for diag in diagnostics:
+        # Use fullRange if available, fall back to range
+        diag_range = diag.get("fullRange", diag.get("range", {}))
+        diag_start = diag_range.get("start", {}).get("line", 0)
+        diag_end = diag_range.get("end", {}).get("line", 0)
+        if diag_start <= end_line and diag_end >= start_line:
+            result.append(diag)
+    return result
 
 
-def has_mathlib_dependency(project_path: str | Path) -> bool:
-    """Check if the project has mathlib as a dependency.
+def needs_mathlib_cache_get(project_path: Path) -> bool:
+    """Check if `lake exe cache get` should be run for this project.
+
+    Returns True only when mathlib is a dependency AND cache isn't extracted yet.
 
     Args:
         project_path: Path to the Lean project root directory.
 
     Returns:
-        bool: True if mathlib is found in lake-manifest.json.
+        bool: True if cache get should be run, False to skip it.
     """
-    manifest_path = Path(project_path) / "lake-manifest.json"
-    if not manifest_path.exists():
+    project_path = Path(project_path)
+    manifest = project_path / "lake-manifest.json"
+    if not manifest.exists():
         return False
 
     try:
-        with open(manifest_path, "r") as f:
-            manifest = orjson.loads(f.read())
-        packages = manifest.get("packages", [])
-        return any(pkg.get("name") == "mathlib" for pkg in packages)
+        pkgs = orjson.loads(manifest.read_bytes()).get("packages", [])
+        if not any(p.get("name") == "mathlib" for p in pkgs):
+            return False
     except Exception:
         return False
+
+    # Check if mathlib olean files already exist
+    olean_dir = project_path / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib"
+    return not any(olean_dir.glob("*.olean"))
 
 
 def experimental(func):
@@ -260,3 +272,73 @@ def experimental(func):
     doc_lines.insert(1, warning)
     wrapper.__doc__ = "\n".join(doc_lines)
     return wrapper
+
+
+def extract_widgets_from_interactive_diag(diag: dict) -> list[dict]:
+    """Recursively extract widget instances from interactive diagnostic message data.
+
+    The interactive diagnostic message structure is:
+    {
+      "message": {
+        "tag": [
+          {
+            "widget": {
+              "wi": { "id": "...", "props": {...}, ... },
+              "alt": {...}
+            }
+          },
+          ...
+        ]
+      }
+    }
+
+    Args:
+        diag: Interactive diagnostic dictionary.
+
+    Returns:
+        List of widget instance dictionaries.
+    """
+    widgets: list[dict] = []
+
+    def extract_from_tagged_text(tt: Any) -> None:
+        """Recursively search TaggedText structure for widget embeds."""
+        if isinstance(tt, dict):
+            # Check if this is a widget embed - structure is {"widget": {"wi": {...}, "alt": ...}}
+            if "widget" in tt:
+                widget_data = tt.get("widget", {})
+                if isinstance(widget_data, dict):
+                    # The actual widget instance is in "wi" field
+                    wi = widget_data.get("wi")
+                    if isinstance(wi, dict):
+                        widgets.append(wi)
+                    elif widget_data.get("id") or widget_data.get("props"):
+                        # Fallback: widget_data itself might be the widget instance
+                        widgets.append(widget_data)
+
+            # Check tag field which may contain list of embeds
+            tag = tt.get("tag")
+            if isinstance(tag, list):
+                for item in tag:
+                    extract_from_tagged_text(item)
+            elif isinstance(tag, dict):
+                extract_from_tagged_text(tag)
+
+            # Recurse into other fields
+            for key in ["text", "append", "children", "alt"]:
+                if key in tt:
+                    val = tt[key]
+                    if isinstance(val, list):
+                        for item in val:
+                            extract_from_tagged_text(item)
+                    elif isinstance(val, dict):
+                        extract_from_tagged_text(val)
+
+        elif isinstance(tt, list):
+            for item in tt:
+                extract_from_tagged_text(item)
+
+    message = diag.get("message")
+    if message:
+        extract_from_tagged_text(message)
+
+    return widgets

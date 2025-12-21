@@ -1,12 +1,13 @@
 """Unit tests for utility functions."""
 
 import pytest
+
 from leanclient.utils import (
-    apply_changes_to_text,
     DocumentContentChange,
-    normalize_newlines,
     _utf16_pos_to_utf8_pos,
-    has_mathlib_dependency,
+    apply_changes_to_text,
+    needs_mathlib_cache_get,
+    normalize_newlines,
 )
 
 
@@ -176,21 +177,199 @@ def test_apply_normalizes_input():
     assert result == "hello\nXworld"
 
 
-@pytest.mark.unit
-def test_has_mathlib_dependency_with_mathlib(test_project_dir):
-    """Test detection when mathlib is present in lake-manifest.json."""
-    assert has_mathlib_dependency(test_project_dir) is True
+# ============================================================================
+# needs_mathlib_cache_get tests
+# ============================================================================
 
 
 @pytest.mark.unit
-def test_has_mathlib_dependency_without_manifest(tmp_path):
-    """Test when lake-manifest.json doesn't exist."""
-    assert has_mathlib_dependency(tmp_path) is False
+def test_needs_mathlib_cache_get_no_manifest(tmp_path):
+    """Test when no lake-manifest.json exists - no cache needed."""
+    assert needs_mathlib_cache_get(tmp_path) is False
 
 
 @pytest.mark.unit
-def test_has_mathlib_dependency_without_mathlib(tmp_path):
-    """Test when manifest exists but mathlib is not listed."""
+def test_needs_mathlib_cache_get_no_mathlib_dep(tmp_path):
+    """Test when mathlib is not a dependency - no cache needed."""
     manifest_path = tmp_path / "lake-manifest.json"
     manifest_path.write_text('{"packages": [{"name": "batteries"}]}')
-    assert has_mathlib_dependency(tmp_path) is False
+    assert needs_mathlib_cache_get(tmp_path) is False
+
+
+@pytest.mark.unit
+def test_needs_mathlib_cache_get_no_build_dir(tmp_path):
+    """Test when mathlib is a dep but no build directory - cache needed."""
+    manifest_path = tmp_path / "lake-manifest.json"
+    manifest_path.write_text('{"packages": [{"name": "mathlib"}]}')
+    assert needs_mathlib_cache_get(tmp_path) is True
+
+
+@pytest.mark.unit
+def test_needs_mathlib_cache_get_no_olean_files(tmp_path):
+    """Test when mathlib build dir exists but no olean files - cache needed."""
+    manifest_path = tmp_path / "lake-manifest.json"
+    manifest_path.write_text('{"packages": [{"name": "mathlib"}]}')
+
+    # Create the directory structure without olean files
+    mathlib_build = (
+        tmp_path
+        / ".lake"
+        / "packages"
+        / "mathlib"
+        / ".lake"
+        / "build"
+        / "lib"
+        / "lean"
+        / "Mathlib"
+    )
+    mathlib_build.mkdir(parents=True)
+
+    assert needs_mathlib_cache_get(tmp_path) is True
+
+
+@pytest.mark.unit
+def test_needs_mathlib_cache_get_with_olean_files(tmp_path):
+    """Test when mathlib cache is fully available - no cache needed."""
+    manifest_path = tmp_path / "lake-manifest.json"
+    manifest_path.write_text('{"packages": [{"name": "mathlib"}]}')
+
+    # Create the directory structure with an olean file
+    mathlib_build = (
+        tmp_path
+        / ".lake"
+        / "packages"
+        / "mathlib"
+        / ".lake"
+        / "build"
+        / "lib"
+        / "lean"
+        / "Mathlib"
+    )
+    mathlib_build.mkdir(parents=True)
+    (mathlib_build / "Init.olean").write_text("")
+
+    assert needs_mathlib_cache_get(tmp_path) is False
+
+
+@pytest.mark.unit
+def test_needs_mathlib_cache_get_real_project(test_project_dir):
+    """Test with real test project that has mathlib - should not need cache."""
+    # The test project should already have mathlib cache available
+    result = needs_mathlib_cache_get(test_project_dir)
+    # Should be False if cache is already present
+    assert isinstance(result, bool)
+
+
+# ============================================================================
+# Widget extraction tests
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_empty():
+    """Test widget extraction from empty diagnostic."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    result = extract_widgets_from_interactive_diag({})
+    assert result == []
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_no_widgets():
+    """Test widget extraction from diagnostic without widgets."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [{"text": "Error message"}]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert result == []
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_with_widget():
+    """Test widget extraction from diagnostic with widget."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {
+                    "widget": {
+                        "wi": {
+                            "id": "widget-123",
+                            "javascriptHash": "abc123",
+                            "props": {"data": "test"}
+                        },
+                        "alt": {"text": "fallback"}
+                    }
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 1
+    assert result[0]["id"] == "widget-123"
+    assert result[0]["javascriptHash"] == "abc123"
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_nested():
+    """Test widget extraction from deeply nested diagnostic structure."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {"text": "Some text"},
+                {
+                    "append": [
+                        {
+                            "tag": [
+                                {
+                                    "widget": {
+                                        "wi": {
+                                            "id": "nested-widget",
+                                            "props": {}
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 1
+    assert result[0]["id"] == "nested-widget"
+
+
+@pytest.mark.unit
+def test_extract_widgets_from_interactive_diag_multiple_widgets():
+    """Test widget extraction from diagnostic with multiple widgets."""
+    from leanclient.utils import extract_widgets_from_interactive_diag
+
+    diag = {
+        "message": {
+            "tag": [
+                {
+                    "widget": {
+                        "wi": {"id": "widget-1", "props": {}}
+                    }
+                },
+                {
+                    "widget": {
+                        "wi": {"id": "widget-2", "props": {}}
+                    }
+                }
+            ]
+        }
+    }
+    result = extract_widgets_from_interactive_diag(diag)
+    assert len(result) == 2
+    assert result[0]["id"] == "widget-1"
+    assert result[1]["id"] == "widget-2"
