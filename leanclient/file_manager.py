@@ -3,12 +3,45 @@ import threading
 import time
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 from .base_client import BaseLeanLSPClient
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DiagnosticsResult:
+    """Structured result from get_diagnostics with build status.
+
+    This class behaves like a list for backward compatibility - you can iterate
+    over it, check its length, and index into it to access diagnostics directly.
+
+    Attributes:
+        success: True if the build succeeded (no errors in any diagnostics).
+                 False if there are compilation errors, fatal errors, or RPC failures.
+        diagnostics: List of diagnostic dictionaries from the LSP.
+    """
+
+    success: bool
+    diagnostics: list[dict]
+
+    def __iter__(self) -> Iterator[dict]:
+        """Allow iteration over diagnostics for backward compatibility."""
+        return iter(self.diagnostics)
+
+    def __len__(self) -> int:
+        """Allow len() for backward compatibility."""
+        return len(self.diagnostics)
+
+    def __getitem__(self, index: int) -> dict:
+        """Allow indexing for backward compatibility."""
+        return self.diagnostics[index]
+
+    def __bool__(self) -> bool:
+        """Allow truthiness check - True if there are any diagnostics."""
+        return bool(self.diagnostics)
 
 
 # Grace period for Lean 4.22 compatibility (empty diagnostics arrive before real ones)
@@ -620,40 +653,35 @@ class LSPFileManager(BaseLeanLSPClient):
         start_line: int | None = None,
         end_line: int | None = None,
         inactivity_timeout: float = 15.0,
-    ) -> list | None:
+    ) -> DiagnosticsResult:
         """Get diagnostics for a file, optionally filtered to a line range.
 
         Supports open-ended ranges (start_line only, end_line only, both, or neither).
         Opens file if needed and waits for diagnostics to be ready.
 
-        **Example diagnostics**:
+        Returns a DiagnosticsResult with:
+        - success: True if build succeeded (no errors in ANY diagnostics, not just filtered range)
+        - diagnostics: List of diagnostic dicts (filtered to range if specified)
+
+        The result behaves like a list for backward compatibility - you can iterate,
+        index, and check length directly on the result.
+
+        **Example usage**:
 
         .. code-block:: python
 
-            [
-            # For each file:
-            [
-                {
-                    'message': "declaration uses 'sorry'",
-                    'severity': 2,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}},
-                    'fullRange': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}}
-                },
-                {
-                    'message': "unexpected end of input; expected ':'",
-                    'severity': 1,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}},
-                    'fullRange': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}}
-                },
-                # ...
-            ], #...
-            ]
+            result = client.get_diagnostics("Foo.lean", start_line=10, end_line=20)
+
+            # New structured access:
+            if result.success:
+                print("Build succeeded!")
+            for diag in result.diagnostics:
+                print(diag['message'])
+
+            # Backward-compatible list access:
+            for diag in result:  # iterates over diagnostics
+                print(diag['message'])
+            print(len(result))  # number of diagnostics
 
         Args:
             path (str): Relative file path.
@@ -662,7 +690,7 @@ class LSPFileManager(BaseLeanLSPClient):
             inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 15 seconds.
 
         Returns:
-            list | None: Diagnostics of file (filtered by range if specified) or None if timed out
+            DiagnosticsResult: Structured result with success status and diagnostics list.
 
         Raises:
             ValueError: If start_line > end_line
@@ -705,24 +733,46 @@ class LSPFileManager(BaseLeanLSPClient):
 
         with self._opened_files_lock:
             state = self.opened_files[path]
-            if state.error:
-                return [state.error]
 
-            # Return diagnostics if we have them
+            # Check for RPC error
+            if state.error:
+                return DiagnosticsResult(
+                    success=False,
+                    diagnostics=[state.error],
+                )
+
+            # Determine success based on ALL diagnostics (not just filtered range)
+            # Success means no errors (severity == 1) anywhere in the file
+            has_errors = any(
+                d.get("severity") == 1 for d in state.diagnostics
+            )
+            success = not has_errors and not state.fatal_error
+
+            # Return diagnostics (filtered if range specified)
             if state.diagnostics:
                 if use_range:
-                    return state.filter_diagnostics_by_range(start_line, end_line)
+                    filtered = state.filter_diagnostics_by_range(start_line, end_line)
                 else:
-                    return state.diagnostics
+                    filtered = state.diagnostics
+                return DiagnosticsResult(
+                    success=success,
+                    diagnostics=filtered,
+                )
 
             # Only return generic fatal error if we truly have no diagnostics after waiting
             if state.fatal_error:
-                return [
-                    {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
-                ]
+                return DiagnosticsResult(
+                    success=False,
+                    diagnostics=[
+                        {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
+                    ],
+                )
 
             # No errors, no diagnostics - clean file
-            return []
+            return DiagnosticsResult(
+                success=True,
+                diagnostics=[],
+            )
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
