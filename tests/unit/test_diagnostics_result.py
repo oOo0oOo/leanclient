@@ -103,3 +103,33 @@ def test_diagnostics_result_list_comprehension():
     assert len(errors) == 2
     assert errors[0]["message"] == "error1"
     assert errors[1]["message"] == "error2"
+
+
+@pytest.mark.unit
+def test_diagnostics_result_eq_with_list():
+    """Test equality comparison with a list for backward compatibility."""
+    diagnostics = [{"message": "test"}]
+    result = DiagnosticsResult(success=True, diagnostics=diagnostics)
+
+    assert result == diagnostics
+    assert diagnostics == result  # Symmetric
+
+
+@pytest.mark.unit
+def test_diagnostics_result_eq_with_diagnostics_result():
+    """Test equality comparison between DiagnosticsResult objects."""
+    result1 = DiagnosticsResult(success=True, diagnostics=[{"a": 1}])
+    result2 = DiagnosticsResult(success=True, diagnostics=[{"a": 1}])
+    result3 = DiagnosticsResult(success=False, diagnostics=[{"a": 1}])
+    result4 = DiagnosticsResult(success=True, diagnostics=[{"b": 2}])
+
+    assert result1 == result2
+    assert result1 != result3  # Different success
+    assert result1 != result4  # Different diagnostics
+
+
+@pytest.mark.unit
+def test_diagnostics_result_eq_with_empty_list():
+    """Test equality with empty list."""
+    result = DiagnosticsResult(success=True, diagnostics=[])
+    assert result == []

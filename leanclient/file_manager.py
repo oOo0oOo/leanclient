@@ -43,6 +43,14 @@ class DiagnosticsResult:
         """Allow truthiness check - True if there are any diagnostics."""
         return bool(self.diagnostics)
 
+    def __eq__(self, other: object) -> bool:
+        """Allow equality comparison with lists for backward compatibility."""
+        if isinstance(other, DiagnosticsResult):
+            return self.success == other.success and self.diagnostics == other.diagnostics
+        if isinstance(other, list):
+            return self.diagnostics == other
+        return NotImplemented
+
 
 # Grace period for Lean 4.22 compatibility (empty diagnostics arrive before real ones)
 DIAGNOSTICS_GRACE_PERIOD = 0.5
