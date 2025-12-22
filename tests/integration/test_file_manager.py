@@ -8,7 +8,7 @@ import pytest
 
 from leanclient import DocumentContentChange
 from leanclient.base_client import BaseLeanLSPClient
-from leanclient.file_manager import LSPFileManager
+from leanclient.file_manager import DiagnosticsResult, LSPFileManager
 from leanclient.utils import apply_changes_to_text
 
 
@@ -437,7 +437,7 @@ def test_stale_imports_with_close_race(file_manager, test_env_dir):
 
         file_manager.open_file(base_file)
         diags = file_manager.get_diagnostics(base_file)
-        assert isinstance(diags, list), "Should continue working after close race"
+        assert isinstance(diags, (list, DiagnosticsResult)), "Should continue working after close race"
 
     finally:
         for f in [base_file, importing_file]:

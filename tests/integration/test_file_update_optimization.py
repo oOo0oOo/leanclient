@@ -4,6 +4,7 @@ import time
 import pytest
 
 from leanclient import LeanLSPClient
+from leanclient.file_manager import DiagnosticsResult
 
 
 @pytest.fixture
@@ -22,7 +23,7 @@ def test_update_file_content_basic(client, test_file_path, test_project_dir):
     client.update_file_content(test_file_path, new_content)
 
     diagnostics = client.get_diagnostics(test_file_path)
-    assert isinstance(diagnostics, list)
+    assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_update_file_content_not_open(client, test_file_path):
@@ -52,7 +53,7 @@ def test_update_file_content_multiple_times(client, test_file_path):
     for content in contents:
         client.update_file_content(test_file_path, content)
         diagnostics = client.get_diagnostics(test_file_path)
-        assert isinstance(diagnostics, list)
+        assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_update_file_content_empty(client, test_file_path):
@@ -60,14 +61,14 @@ def test_update_file_content_empty(client, test_file_path):
     client.open_file(test_file_path)
     client.update_file_content(test_file_path, "")
     diagnostics = client.get_diagnostics(test_file_path)
-    assert isinstance(diagnostics, list)
+    assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_open_file_first_time(client, test_file_path):
     """First time opening a file should work normally."""
     client.open_file(test_file_path)
     diagnostics = client.get_diagnostics(test_file_path)
-    assert isinstance(diagnostics, list)
+    assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_open_file_already_open_no_disk_change(client, test_file_path):
@@ -111,7 +112,7 @@ def test_open_file_force_reopen_true(client, test_file_path):
 
     client.open_file(test_file_path, force_reopen=True)
     diagnostics = client.get_diagnostics(test_file_path)
-    assert isinstance(diagnostics, list)
+    assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_open_file_reopen_actually_resets(client, test_file_path):
@@ -153,7 +154,7 @@ def test_open_file_after_close(client, test_file_path):
 
     client.open_file(test_file_path, force_reopen=False)
     diagnostics = client.get_diagnostics(test_file_path)
-    assert isinstance(diagnostics, list)
+    assert isinstance(diagnostics, (list, DiagnosticsResult))
 
 
 def test_open_file_after_update_file_content(client, test_file_path, test_project_dir):
