@@ -668,7 +668,8 @@ class LSPFileManager(BaseLeanLSPClient):
         Opens file if needed and waits for diagnostics to be ready.
 
         Returns a DiagnosticsResult with:
-        - success: True if build succeeded (no errors in ANY diagnostics, not just filtered range)
+        - success: True if build succeeded (no errors in ANY diagnostics, not just filtered range).
+                   False if there are errors, fatal errors, or if the wait timed out.
         - diagnostics: List of diagnostic dicts (filtered to range if specified)
 
         The result behaves like a list for backward compatibility - you can iterate,
@@ -731,13 +732,17 @@ class LSPFileManager(BaseLeanLSPClient):
                 is_complete = state.complete
             uri = state.uri
 
+        # Track whether wait completed or timed out
+        wait_completed = True
         if not is_complete:
             if use_range:
-                self._wait_for_line_range(
+                wait_completed = self._wait_for_line_range(
                     [uri], start_line, end_line, inactivity_timeout
                 )
             else:
-                self._wait_for_diagnostics([uri], inactivity_timeout=inactivity_timeout)
+                wait_completed = self._wait_for_diagnostics(
+                    [uri], inactivity_timeout=inactivity_timeout
+                )
 
         with self._opened_files_lock:
             state = self.opened_files[path]
@@ -750,11 +755,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 )
 
             # Determine success based on ALL diagnostics (not just filtered range)
-            # Success means no errors (severity == 1) anywhere in the file
-            has_errors = any(
-                d.get("severity") == 1 for d in state.diagnostics
-            )
-            success = not has_errors and not state.fatal_error
+            # Success means no errors (severity == 1) anywhere in the file,
+            # no fatal errors, and no timeout during wait
+            has_errors = any(d.get("severity") == 1 for d in state.diagnostics)
+            success = not has_errors and not state.fatal_error and wait_completed
 
             # Return diagnostics (filtered if range specified)
             if state.diagnostics:
@@ -776,9 +780,9 @@ class LSPFileManager(BaseLeanLSPClient):
                     ],
                 )
 
-            # No errors, no diagnostics - clean file
+            # No errors, no diagnostics - clean file (but check for timeout)
             return DiagnosticsResult(
-                success=True,
+                success=wait_completed,
                 diagnostics=[],
             )
 
@@ -800,7 +804,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
     def _wait_for_diagnostics(
         self, uris: list[str], inactivity_timeout: float = 15.0
-    ) -> None:
+    ) -> bool:
         """Wait until file is loaded or an rpc error occurs.
 
         This method uses an adaptive timeout that resets whenever diagnostics are received.
@@ -809,6 +813,9 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
             inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 15 seconds.
+
+        Returns:
+            bool: True if diagnostics completed successfully, False if timed out.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
@@ -840,7 +847,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         if not uris_needing_wait:
             # All files already have diagnostics or errors
-            return
+            return True
 
         # Send waitForDiagnostics requests for files that need it
         futures_by_uri = {}
@@ -900,7 +907,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
-                    break
+                    return True
 
                 # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
                 if max_inactivity > inactivity_timeout:
@@ -909,11 +916,14 @@ class LSPFileManager(BaseLeanLSPClient):
                         inactivity_timeout,
                         total_elapsed,
                     )
-                    break
+                    return False
 
                 # Use condition variable wait with timeout instead of busy polling
                 # Wake up on notification or after 5ms, whichever comes first
                 self._close_condition.wait(timeout=0.005)
+
+        # Should not reach here, but return False as safety
+        return False
 
     def _wait_for_line_range(
         self,
@@ -921,7 +931,7 @@ class LSPFileManager(BaseLeanLSPClient):
         start_line: int,
         end_line: int,
         inactivity_timeout: float = 3.0,
-    ) -> None:
+    ) -> bool:
         """Wait for specific line range to complete based on parallel processing ranges.
 
         This method polls the current_processing state to determine when the requested
@@ -934,6 +944,9 @@ class LSPFileManager(BaseLeanLSPClient):
             start_line (int): Start line of range (0-based).
             end_line (int): End line of range (0-based, inclusive).
             inactivity_timeout (float): Maximum time to wait since last activity.
+
+        Returns:
+            bool: True if completed successfully, False if timed out.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
@@ -961,7 +974,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         if not uris_needing_wait:
             # All ranges already complete
-            return
+            return True
 
         # Wait for line range completion
         start_time = time.monotonic()
@@ -995,7 +1008,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
-                    break
+                    return True
 
                 # Check inactivity timeout
                 if max_inactivity > inactivity_timeout:
@@ -1006,7 +1019,10 @@ class LSPFileManager(BaseLeanLSPClient):
                         start_line,
                         end_line,
                     )
-                    break
+                    return False
 
                 # Wait for line range completion
                 self._close_condition.wait(timeout=0.005)
+
+        # Should not reach here, but return False as safety
+        return False
