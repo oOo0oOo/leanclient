@@ -37,16 +37,15 @@ jobs:
       with:
         path: |
           ~/.elan
-          ~/.cache/mathlib4
+          ~/.cache/mathlib
         key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
         restore-keys: |
           ${{ runner.os }}-lean-
-    
+    - uses: astral-sh/setup-uv@v4
     - name: Install Python dependencies
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install .[test]
-        python -m pip install coverage
+        uv pip install ".[test]"
+        uv pip install coverage
     
     - name: Run full tests with coverage
       id: tests
