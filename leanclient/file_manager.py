@@ -3,12 +3,53 @@ import threading
 import time
 import urllib.parse
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 from .base_client import BaseLeanLSPClient
 from .utils import DocumentContentChange, apply_changes_to_text, normalize_newlines
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DiagnosticsResult:
+    """Structured result from get_diagnostics with build status.
+
+    This class behaves like a list for backward compatibility - you can iterate
+    over it, check its length, and index into it to access diagnostics directly.
+
+    Attributes:
+        success: True if the build succeeded (no errors in any diagnostics).
+                 False if there are compilation errors, fatal errors, or RPC failures.
+        diagnostics: List of diagnostic dictionaries from the LSP.
+    """
+
+    success: bool
+    diagnostics: list[dict]
+
+    def __iter__(self) -> Iterator[dict]:
+        """Allow iteration over diagnostics for backward compatibility."""
+        return iter(self.diagnostics)
+
+    def __len__(self) -> int:
+        """Allow len() for backward compatibility."""
+        return len(self.diagnostics)
+
+    def __getitem__(self, index: int) -> dict:
+        """Allow indexing for backward compatibility."""
+        return self.diagnostics[index]
+
+    def __bool__(self) -> bool:
+        """Allow truthiness check - True if there are any diagnostics."""
+        return bool(self.diagnostics)
+
+    def __eq__(self, other: object) -> bool:
+        """Allow equality comparison with lists for backward compatibility."""
+        if isinstance(other, DiagnosticsResult):
+            return self.success == other.success and self.diagnostics == other.diagnostics
+        if isinstance(other, list):
+            return self.diagnostics == other
+        return NotImplemented
 
 
 # Grace period for Lean 4.22 compatibility (empty diagnostics arrive before real ones)
@@ -620,40 +661,36 @@ class LSPFileManager(BaseLeanLSPClient):
         start_line: int | None = None,
         end_line: int | None = None,
         inactivity_timeout: float = 15.0,
-    ) -> list | None:
+    ) -> DiagnosticsResult:
         """Get diagnostics for a file, optionally filtered to a line range.
 
         Supports open-ended ranges (start_line only, end_line only, both, or neither).
         Opens file if needed and waits for diagnostics to be ready.
 
-        **Example diagnostics**:
+        Returns a DiagnosticsResult with:
+        - success: True if build succeeded (no errors in ANY diagnostics, not just filtered range).
+                   False if there are errors, fatal errors, or if the wait timed out.
+        - diagnostics: List of diagnostic dicts (filtered to range if specified)
+
+        The result behaves like a list for backward compatibility - you can iterate,
+        index, and check length directly on the result.
+
+        **Example usage**:
 
         .. code-block:: python
 
-            [
-            # For each file:
-            [
-                {
-                    'message': "declaration uses 'sorry'",
-                    'severity': 2,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}},
-                    'fullRange': {'end': {'character': 19, 'line': 13},
-                                'start': {'character': 8, 'line': 13}}
-                },
-                {
-                    'message': "unexpected end of input; expected ':'",
-                    'severity': 1,
-                    'source': 'Lean 4',
-                    'range': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}},
-                    'fullRange': {'end': {'character': 0, 'line': 17},
-                                'start': {'character': 0, 'line': 17}}
-                },
-                # ...
-            ], #...
-            ]
+            result = client.get_diagnostics("Foo.lean", start_line=10, end_line=20)
+
+            # New structured access:
+            if result.success:
+                print("Build succeeded!")
+            for diag in result.diagnostics:
+                print(diag['message'])
+
+            # Backward-compatible list access:
+            for diag in result:  # iterates over diagnostics
+                print(diag['message'])
+            print(len(result))  # number of diagnostics
 
         Args:
             path (str): Relative file path.
@@ -662,7 +699,7 @@ class LSPFileManager(BaseLeanLSPClient):
             inactivity_timeout (float): Maximum time to wait since last activity. Defaults to 15 seconds.
 
         Returns:
-            list | None: Diagnostics of file (filtered by range if specified) or None if timed out
+            DiagnosticsResult: Structured result with success status and diagnostics list.
 
         Raises:
             ValueError: If start_line > end_line
@@ -695,34 +732,59 @@ class LSPFileManager(BaseLeanLSPClient):
                 is_complete = state.complete
             uri = state.uri
 
+        # Track whether wait completed or timed out
+        wait_completed = True
         if not is_complete:
             if use_range:
-                self._wait_for_line_range(
+                wait_completed = self._wait_for_line_range(
                     [uri], start_line, end_line, inactivity_timeout
                 )
             else:
-                self._wait_for_diagnostics([uri], inactivity_timeout=inactivity_timeout)
+                wait_completed = self._wait_for_diagnostics(
+                    [uri], inactivity_timeout=inactivity_timeout
+                )
 
         with self._opened_files_lock:
             state = self.opened_files[path]
-            if state.error:
-                return [state.error]
 
-            # Return diagnostics if we have them
+            # Check for RPC error
+            if state.error:
+                return DiagnosticsResult(
+                    success=False,
+                    diagnostics=[state.error],
+                )
+
+            # Determine success based on ALL diagnostics (not just filtered range)
+            # Success means no errors (severity == 1) anywhere in the file,
+            # no fatal errors, and no timeout during wait
+            has_errors = any(d.get("severity") == 1 for d in state.diagnostics)
+            success = not has_errors and not state.fatal_error and wait_completed
+
+            # Return diagnostics (filtered if range specified)
             if state.diagnostics:
                 if use_range:
-                    return state.filter_diagnostics_by_range(start_line, end_line)
+                    filtered = state.filter_diagnostics_by_range(start_line, end_line)
                 else:
-                    return state.diagnostics
+                    filtered = state.diagnostics
+                return DiagnosticsResult(
+                    success=success,
+                    diagnostics=filtered,
+                )
 
             # Only return generic fatal error if we truly have no diagnostics after waiting
             if state.fatal_error:
-                return [
-                    {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
-                ]
+                return DiagnosticsResult(
+                    success=False,
+                    diagnostics=[
+                        {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
+                    ],
+                )
 
-            # No errors, no diagnostics - clean file
-            return []
+            # No errors, no diagnostics - clean file (but check for timeout)
+            return DiagnosticsResult(
+                success=wait_completed,
+                diagnostics=[],
+            )
 
     def get_file_content(self, path: str) -> str:
         """Get the content of a file as seen by the language server.
@@ -742,7 +804,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
     def _wait_for_diagnostics(
         self, uris: list[str], inactivity_timeout: float = 15.0
-    ) -> None:
+    ) -> bool:
         """Wait until file is loaded or an rpc error occurs.
 
         This method uses an adaptive timeout that resets whenever diagnostics are received.
@@ -751,6 +813,9 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
             inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 15 seconds.
+
+        Returns:
+            bool: True if diagnostics completed successfully, False if timed out.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
@@ -782,7 +847,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         if not uris_needing_wait:
             # All files already have diagnostics or errors
-            return
+            return True
 
         # Send waitForDiagnostics requests for files that need it
         futures_by_uri = {}
@@ -842,7 +907,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
-                    break
+                    return True
 
                 # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
                 if max_inactivity > inactivity_timeout:
@@ -851,11 +916,14 @@ class LSPFileManager(BaseLeanLSPClient):
                         inactivity_timeout,
                         total_elapsed,
                     )
-                    break
+                    return False
 
                 # Use condition variable wait with timeout instead of busy polling
                 # Wake up on notification or after 5ms, whichever comes first
                 self._close_condition.wait(timeout=0.005)
+
+        # Should not reach here, but return False as safety
+        return False
 
     def _wait_for_line_range(
         self,
@@ -863,7 +931,7 @@ class LSPFileManager(BaseLeanLSPClient):
         start_line: int,
         end_line: int,
         inactivity_timeout: float = 3.0,
-    ) -> None:
+    ) -> bool:
         """Wait for specific line range to complete based on parallel processing ranges.
 
         This method polls the current_processing state to determine when the requested
@@ -876,6 +944,9 @@ class LSPFileManager(BaseLeanLSPClient):
             start_line (int): Start line of range (0-based).
             end_line (int): End line of range (0-based, inclusive).
             inactivity_timeout (float): Maximum time to wait since last activity.
+
+        Returns:
+            bool: True if completed successfully, False if timed out.
         """
         paths = [self._uri_to_local(uri) for uri in uris]
         path_by_uri = dict(zip(uris, paths))
@@ -903,7 +974,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
         if not uris_needing_wait:
             # All ranges already complete
-            return
+            return True
 
         # Wait for line range completion
         start_time = time.monotonic()
@@ -937,7 +1008,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
-                    break
+                    return True
 
                 # Check inactivity timeout
                 if max_inactivity > inactivity_timeout:
@@ -948,7 +1019,10 @@ class LSPFileManager(BaseLeanLSPClient):
                         start_line,
                         end_line,
                     )
-                    break
+                    return False
 
                 # Wait for line range completion
                 self._close_condition.wait(timeout=0.005)
+
+        # Should not reach here, but return False as safety
+        return False

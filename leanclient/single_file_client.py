@@ -66,7 +66,7 @@ class SingleFileClient:
         start_line: int | None = None,
         end_line: int | None = None,
         inactivity_timeout: float = 3.0,
-    ) -> list | None:
+    ):
         """See :meth:`leanclient.client.LeanLSPClient.get_diagnostics`"""
         return self.client.get_diagnostics(
             self.file_path,
