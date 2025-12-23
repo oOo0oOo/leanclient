@@ -1,21 +1,25 @@
-name: Python Package
+name: Tests (Full)
 
 on:
+  push:
+    branches:
+      - main
+      # - dev # debug usage
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  build:
+  test-full:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10"]
         os: 
-          - "ubuntu-latest"
+          - "ubuntu-latest" # for ubuntu only
           # - "macos-latest"
-          # - "windows-latest"
             
     steps:
     - uses: actions/checkout@v4
@@ -35,7 +39,7 @@ jobs:
       with:
         path: |
           ~/.elan
-          ~/.cache/mathlib
+          ~/.cache/mathlib4
         key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
         restore-keys: |
           ${{ runner.os }}-lean-
@@ -46,30 +50,31 @@ jobs:
         python -m pip install .[test]
         python -m pip install coverage
     
-    - name: Run tests with coverage
+    - name: Run full tests with coverage
       id: tests
       continue-on-error: true
+      timeout-minutes: 60
       run: |
         coverage run -m pytest -sv tests/ \
-             -m "not slow and not mathlib" \
-             --timeout=0 \
-            --durations=25 --durations-min=1.0 \
-            --html=report.html --self-contained-html
+            -m "not integration" \
+            --timeout=3600 \
+            --durations=50 --durations-min=1.0 \
+            --html=report-full.html --self-contained-html
     
     - name: Upload test report
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: test-report-${{ matrix.os }}-py${{ matrix.python-version }}
-        path: report.html
+        name: test-report-full-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: report-full.html
         retention-days: 30
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        flags: unittests
-        name: codecov-umbrella
+        flags: full-tests
+        name: codecov-full-${{ matrix.os }}-py${{ matrix.python-version }}
         fail_ci_if_error: false
     
     - name: Check test results
