@@ -35,6 +35,9 @@ test = [
     "pytest-sugar>=1.0",
     "psutil>=5.9",
 ]
+experimental = [
+    "playwright>=1.40",
+]
 
 [build-system]
 requires = ["hatchling"]
