@@ -11,9 +11,6 @@
   <a href="https://github.com/oOo0oOo/leanclient/actions/workflows/test.yaml">
     <img src="https://img.shields.io/github/actions/workflow/status/oOo0oOo/leanclient/test.yaml?branch=main" alt="CI status" />
   </a>
-  <a href="https://codecov.io/gh/oOo0oOo/leanclient">
-    <img src="https://codecov.io/gh/oOo0oOo/leanclient/branch/main/graph/badge.svg" alt="coverage" />
-  </a>
   <a href="">
     <img src="https://img.shields.io/github/last-commit/oOo0oOo/leanclient" alt="last update" />
   </a>

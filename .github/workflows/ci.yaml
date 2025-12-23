@@ -52,17 +52,13 @@ jobs:
           ${{ runner.os }}-lean-
     
     - uses: astral-sh/setup-uv@v4
-    - name: Install Python dependencies
-      run: |
-        uv sync --extra test
-        uv pip install coverage
-    
-    - name: Run full tests with coverage
+    - name: Run full tests
       id: tests
       continue-on-error: true
       timeout-minutes: 60
       run: |
-        coverage run -m pytest -sv tests/ \
+        uv sync --extra test
+        uv run -m pytest -sv tests/ \
             -m "not integration" \
             --timeout=900 \
             --durations=50 --durations-min=1.0 \
@@ -75,14 +71,6 @@ jobs:
         name: test-report-full-${{ matrix.os }}-py${{ matrix.python-version }}
         path: report-full.html
         retention-days: 30
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        flags: full-tests
-        name: codecov-full-${{ matrix.os }}-py${{ matrix.python-version }}
-        fail_ci_if_error: false
     
     - name: Check test results
       if: steps.tests.outcome == 'failure'
