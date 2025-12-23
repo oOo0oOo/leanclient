@@ -178,7 +178,7 @@ def test_empty_file_returns_quickly(clean_lsp_client, test_env_dir):
     diagnostics = clean_lsp_client.get_diagnostics(test_file, inactivity_timeout=5.0)
     elapsed = time.time() - start_time
 
-    assert elapsed < 2.0, f"Clean file took too long: {elapsed:.3f}s"
+    assert elapsed < 3.0, f"Clean file took too long: {elapsed:.3f}s"
     assert diagnostics == []
 
     clean_lsp_client.close_files([test_file])

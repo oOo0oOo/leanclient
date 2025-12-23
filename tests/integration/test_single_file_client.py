@@ -20,6 +20,7 @@ def test_method_overlap():
     ok_missing = [
         "close",
         "close_files",
+        "close_all_files",
         "create_file_client",
         "open_files",
         "get_env",
