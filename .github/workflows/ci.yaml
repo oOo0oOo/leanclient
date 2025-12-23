@@ -1,10 +1,9 @@
-name: Tests (Full)
+name: Tests
 
 on:
   push:
     branches:
       - main
-      # - dev # debug usage
   pull_request:
     branches:
       - main
@@ -19,7 +18,6 @@ jobs:
         python-version: ["3.10"]
         os: 
           - "ubuntu-latest" # for ubuntu only
-          # - "macos-latest"
             
     steps:
     - uses: actions/checkout@v4
@@ -57,7 +55,7 @@ jobs:
       run: |
         coverage run -m pytest -sv tests/ \
             -m "not integration" \
-            --timeout=3600 \
+            --timeout=900 \
             --durations=50 --durations-min=1.0 \
             --html=report-full.html --self-contained-html
     
