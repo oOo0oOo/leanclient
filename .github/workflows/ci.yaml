@@ -10,15 +10,24 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+  
   test-full:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10"]
+        python-version: ["3.10", "3.13"]
         os: 
-          - "ubuntu-latest" # for ubuntu only
-            
+          - "ubuntu-latest"
+    
     steps:
     - uses: actions/checkout@v4
     
@@ -41,10 +50,11 @@ jobs:
         key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
         restore-keys: |
           ${{ runner.os }}-lean-
+    
     - uses: astral-sh/setup-uv@v4
     - name: Install Python dependencies
       run: |
-        uv pip install ".[test]"
+        uv sync --extra test
         uv pip install coverage
     
     - name: Run full tests with coverage
