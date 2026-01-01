@@ -932,12 +932,11 @@ class LSPFileManager(BaseLeanLSPClient):
         end_line: int,
         inactivity_timeout: float = 3.0,
     ) -> bool:
-        """Wait for specific line range to complete based on parallel processing ranges.
+        """Wait for specific line range to complete.
 
-        This method polls the current_processing state to determine when the requested
-        line range is no longer being processed. Unlike _wait_for_diagnostics, this
-        doesn't use LSP's waitForDiagnostics request since we only care about a subset
-        of the file.
+        Sends waitForDiagnostics RPC to ensure diagnostics have arrived before
+        checking line range completion. This avoids race conditions where
+        processing completes but diagnostics haven't been published yet.
 
         Args:
             uris (list[str]): List of URIs to wait for.
@@ -958,9 +957,10 @@ class LSPFileManager(BaseLeanLSPClient):
                     f"Files {missing} are not open. Call open_files first."
                 )
 
-        # Check if already complete
+        # Check if already complete and collect target versions
+        uris_needing_wait = []
+        target_versions: dict[str, int] = {}
         with self._opened_files_lock:
-            uris_needing_wait = []
             for uri in uris:
                 path = path_by_uri[uri]
                 state = self.opened_files[path]
@@ -969,12 +969,24 @@ class LSPFileManager(BaseLeanLSPClient):
                 if state.error or (state.fatal_error and not state.diagnostics):
                     continue
 
-                if not state.is_line_range_complete(start_line, end_line):
+                if not (
+                    state.is_line_range_complete(start_line, end_line)
+                    and state.is_ready()
+                ):
                     uris_needing_wait.append(uri)
+                    target_versions[uri] = state.version
 
         if not uris_needing_wait:
             # All ranges already complete
             return True
+
+        # Send waitForDiagnostics requests to ensure diagnostics arrive
+        futures_by_uri = {}
+        for uri in uris_needing_wait:
+            params = {"uri": uri, "version": target_versions[uri]}
+            futures_by_uri[uri] = self._send_request_async(
+                "textDocument/waitForDiagnostics", params
+            )
 
         # Wait for line range completion
         start_time = time.monotonic()
@@ -987,16 +999,35 @@ class LSPFileManager(BaseLeanLSPClient):
             max_inactivity = 0.0
 
             with self._close_condition:
+                # Process RPC futures
                 for uri in list(pending_uris):
+                    future = futures_by_uri.get(uri)
+                    if future and future.done():
+                        path = path_by_uri[uri]
+                        state = self.opened_files[path]
+                        try:
+                            future.result()
+                        except Exception as e:
+                            state.error = {"message": str(e)}
+                            state.processing = False
+                            state.last_activity = current_time
+                            completed_uris.add(uri)
+                            continue
+
+                        # RPC completed - diagnostics have arrived
+                        state.wait_for_diag_done = True
+
+                # Check completion status
+                for uri in list(pending_uris - completed_uris):
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
 
-                    # Check for error conditions that should terminate waiting
+                    # Check for error conditions
                     if state.error or (state.fatal_error and not state.diagnostics):
                         completed_uris.add(uri)
                         continue
 
-                    # Check if range is complete (processing-wise) and ready (has diagnostics)
+                    # Check if range is complete and ready
                     if state.is_line_range_complete(
                         start_line, end_line
                     ) and state.is_ready(current_time):
@@ -1021,8 +1052,6 @@ class LSPFileManager(BaseLeanLSPClient):
                     )
                     return False
 
-                # Wait for line range completion
                 self._close_condition.wait(timeout=0.005)
 
-        # Should not reach here, but return False as safety
         return False
