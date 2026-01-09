@@ -55,13 +55,14 @@ def test_get_module_imports_mathlib(lsp_client):
 
 @pytest.mark.integration
 def test_get_module_imports_empty(lsp_client, test_file_path):
-    """Test that modules without .ilean return empty (graceful degradation)."""
+    """Test getting imports from the test file."""
     module = lsp_client.prepare_module_hierarchy(test_file_path)
     imports = lsp_client.get_module_imports(module)
 
     assert isinstance(imports, list)
-    # No .ilean files for test project, so this will be empty
-    assert len(imports) == 0
+    # Test file imports ProofWidgets.Component.HtmlDisplay
+    assert len(imports) == 1
+    assert imports[0]["module"]["name"] == "ProofWidgets.Component.HtmlDisplay"
 
 
 @pytest.mark.integration
@@ -121,13 +122,13 @@ def test_module_import_kinds(lsp_client):
 
 @pytest.mark.integration
 def test_module_hierarchy_empty_results(lsp_client, test_file_path):
-    """Test that modules without .ilean return empty lists, not errors."""
+    """Test that imported_by returns empty for test file (not imported by anything)."""
     module = lsp_client.prepare_module_hierarchy(test_file_path)
 
-    # Basic.lean has no .ilean - should return empty, not crash
+    # Test file has imports but is not imported by anything else
     imports = lsp_client.get_module_imports(module)
-    assert imports == []
     assert isinstance(imports, list)
+    assert len(imports) == 1  # ProofWidgets import
 
     imported_by = lsp_client.get_module_imported_by(module)
     assert imported_by == []
