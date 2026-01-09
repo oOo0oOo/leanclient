@@ -144,7 +144,7 @@ class BaseLeanLSPClient:
         try:
             children = psutil.Process(self.process.pid).children(recursive=True)
             for child in children:
-                child.terminate()
+                child.kill()
         except psutil.NoSuchProcess:
             pass
         ## terminate main process: `ps aux | grep lake`
