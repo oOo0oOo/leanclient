@@ -593,3 +593,49 @@ def test_large_import_waits_for_rpc(test_env_dir):
         assert _has_errors(diags), f"Issue #34: Got {len(diags)} diagnostics"
     finally:
         client.close()
+
+@pytest.mark.integration
+def test_line_range_initial_check_requires_is_ready():
+    """#35: _wait_for_line_range must check is_ready(), not just is_line_range_complete()."""
+    from unittest.mock import Mock, patch
+    from leanclient.file_manager import LSPFileManager, FileState
+
+    # Create a mock file manager with required attributes
+    mock_fm = Mock(spec=LSPFileManager)
+    mock_fm._opened_files_lock = Mock()
+    mock_fm._opened_files_lock.__enter__ = Mock(return_value=None)
+    mock_fm._opened_files_lock.__exit__ = Mock(return_value=None)
+    mock_fm._close_condition = Mock()
+    mock_fm._close_condition.__enter__ = Mock(return_value=None)
+    mock_fm._close_condition.__exit__ = Mock(return_value=None)
+    mock_fm._close_condition.wait = Mock(return_value=None)
+
+    # Create state where is_line_range_complete=True but is_ready=False
+    state = FileState(
+        uri="file:///test.lean",
+        content="test",
+        current_processing=[],  # Empty = is_line_range_complete returns True
+        diagnostics_version=0,
+        diagnostics=[],
+        processing=False,
+        wait_for_diag_done=False,
+    )
+    state.last_activity = time.monotonic()
+
+    # Verify preconditions
+    assert state.is_line_range_complete(0, 10), "Precondition: range complete"
+    assert not state.is_ready(), "Precondition: not ready"
+
+    mock_fm.opened_files = {"test.lean": state}
+    mock_fm._uri_to_local = lambda uri: "test.lean"
+
+    # Call the actual _wait_for_line_range method
+    result = LSPFileManager._wait_for_line_range(
+        mock_fm, ["file:///test.lean"], 0, 10, inactivity_timeout=0.1
+    )
+
+    # With the fix: should return False (needs to wait, but times out)
+    # Without the fix: would return True immediately (bug!)
+    assert result is False, (
+        "_wait_for_line_range should NOT return True when is_ready()=False."
+    )
