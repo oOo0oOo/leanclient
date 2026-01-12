@@ -37,6 +37,9 @@ test = [
     "pytest-html>=4.1",
     "psutil>=5.9",
 ]
+experimental = [
+    "playwright>=1.40",
+]
 
 [build-system]
 requires = ["hatchling"]
