@@ -986,7 +986,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 if state.error or (state.fatal_error and not state.diagnostics):
                     continue
 
-                if not state.is_line_range_complete(start_line, end_line):
+                if not (
+                    state.is_line_range_complete(start_line, end_line)
+                    and state.is_ready()
+                ):
                     uris_needing_wait.append(uri)
 
         if not uris_needing_wait:
