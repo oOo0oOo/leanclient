@@ -1318,7 +1318,11 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         self.open_file(path)
         uri = self._local_to_uri(path)
         result = self._rpc_call(
-            uri, "Lean.Widget.getWidgets", {"line": line, "character": character}, line=line, character=character
+            uri,
+            "Lean.Widget.getWidgets",
+            {"line": line, "character": character},
+            line=line,
+            character=character,
         )
         return result.get("widgets", [])
 

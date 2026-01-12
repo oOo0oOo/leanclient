@@ -138,7 +138,7 @@ class BaseLeanLSPClient:
             atexit.unregister(self.close)
         except Exception:
             pass
-        
+
         # Terminate the language server process
         ## terminate children processes: `ps aux | grep lean`
         try:

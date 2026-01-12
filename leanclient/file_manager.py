@@ -46,7 +46,9 @@ class DiagnosticsResult:
     def __eq__(self, other: object) -> bool:
         """Allow equality comparison with lists for backward compatibility."""
         if isinstance(other, DiagnosticsResult):
-            return self.success == other.success and self.diagnostics == other.diagnostics
+            return (
+                self.success == other.success and self.diagnostics == other.diagnostics
+            )
         if isinstance(other, list):
             return self.diagnostics == other
         return NotImplemented
@@ -654,7 +656,7 @@ class LSPFileManager(BaseLeanLSPClient):
         with self._opened_files_lock:
             for path in paths:
                 del self.opened_files[path]
-    
+
     def close_all_files(self, blocking: bool = True):
         """Close all open files in the language server.
 
@@ -662,7 +664,7 @@ class LSPFileManager(BaseLeanLSPClient):
             blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
         """
         self.close_files(list(self.opened_files.keys()), blocking=blocking)
-    
+
     def get_diagnostics(
         self,
         path: str,
@@ -733,9 +735,10 @@ class LSPFileManager(BaseLeanLSPClient):
             if use_range:
                 # Check both range completion and readiness to handle Lean 4.22 timing
                 # where processing: [] can arrive before actual diagnostics
-                is_complete = state.is_line_range_complete(
-                    start_line, end_line
-                ) and state.is_ready()
+                is_complete = (
+                    state.is_line_range_complete(start_line, end_line)
+                    and state.is_ready()
+                )
             else:
                 is_complete = state.complete
             uri = state.uri
@@ -784,7 +787,9 @@ class LSPFileManager(BaseLeanLSPClient):
                 return DiagnosticsResult(
                     success=False,
                     diagnostics=[
-                        {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
+                        {
+                            "message": "leanclient: Received LeanFileProgressKind.fatalError."
+                        }
                     ],
                 )
 
