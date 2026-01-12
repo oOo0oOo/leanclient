@@ -906,6 +906,7 @@ class LSPFileManager(BaseLeanLSPClient):
                             completed_uris.add(uri)
 
                 # Check remaining URIs for state changes via notification handlers
+                any_rpc_pending = False
                 for uri in pending_uris - completed_uris:
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
@@ -916,14 +917,17 @@ class LSPFileManager(BaseLeanLSPClient):
                     else:
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
+                        any_rpc_pending = (
+                            any_rpc_pending or not futures_by_uri[uri].done()
+                        )
 
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
                     return True
 
-                # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
-                if max_inactivity > inactivity_timeout:
+                # Timeout only if inactive AND RPC completed (issue #34: large imports)
+                if max_inactivity > inactivity_timeout and not any_rpc_pending:
                     logger.warning(
                         "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
                         inactivity_timeout,
