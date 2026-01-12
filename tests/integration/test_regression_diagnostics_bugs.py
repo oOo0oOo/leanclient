@@ -594,10 +594,11 @@ def test_large_import_waits_for_rpc(test_env_dir):
     finally:
         client.close()
 
+
 @pytest.mark.integration
 def test_line_range_initial_check_requires_is_ready():
     """#35: _wait_for_line_range must check is_ready(), not just is_line_range_complete()."""
-    from unittest.mock import Mock, patch
+    from unittest.mock import Mock
     from leanclient.file_manager import LSPFileManager, FileState
 
     # Create a mock file manager with required attributes
