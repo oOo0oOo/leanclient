@@ -46,7 +46,9 @@ class DiagnosticsResult:
     def __eq__(self, other: object) -> bool:
         """Allow equality comparison with lists for backward compatibility."""
         if isinstance(other, DiagnosticsResult):
-            return self.success == other.success and self.diagnostics == other.diagnostics
+            return (
+                self.success == other.success and self.diagnostics == other.diagnostics
+            )
         if isinstance(other, list):
             return self.diagnostics == other
         return NotImplemented
@@ -655,6 +657,14 @@ class LSPFileManager(BaseLeanLSPClient):
             for path in paths:
                 del self.opened_files[path]
 
+    def close_all_files(self, blocking: bool = True):
+        """Close all open files in the language server.
+
+        Args:
+            blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
+        """
+        self.close_files(list(self.opened_files.keys()), blocking=blocking)
+
     def get_diagnostics(
         self,
         path: str,
@@ -725,9 +735,10 @@ class LSPFileManager(BaseLeanLSPClient):
             if use_range:
                 # Check both range completion and readiness to handle Lean 4.22 timing
                 # where processing: [] can arrive before actual diagnostics
-                is_complete = state.is_line_range_complete(
-                    start_line, end_line
-                ) and state.is_ready()
+                is_complete = (
+                    state.is_line_range_complete(start_line, end_line)
+                    and state.is_ready()
+                )
             else:
                 is_complete = state.complete
             uri = state.uri
@@ -776,7 +787,9 @@ class LSPFileManager(BaseLeanLSPClient):
                 return DiagnosticsResult(
                     success=False,
                     diagnostics=[
-                        {"message": "leanclient: Received LeanFileProgressKind.fatalError."}
+                        {
+                            "message": "leanclient: Received LeanFileProgressKind.fatalError."
+                        }
                     ],
                 )
 
@@ -893,6 +906,7 @@ class LSPFileManager(BaseLeanLSPClient):
                             completed_uris.add(uri)
 
                 # Check remaining URIs for state changes via notification handlers
+                any_rpc_pending = False
                 for uri in pending_uris - completed_uris:
                     path = path_by_uri[uri]
                     state = self.opened_files[path]
@@ -903,14 +917,17 @@ class LSPFileManager(BaseLeanLSPClient):
                     else:
                         inactivity = current_time - state.last_activity
                         max_inactivity = max(max_inactivity, inactivity)
+                        any_rpc_pending = (
+                            any_rpc_pending or not futures_by_uri[uri].done()
+                        )
 
                 pending_uris.difference_update(completed_uris)
 
                 if not pending_uris:
                     return True
 
-                # Check inactivity timeout - if no progress for inactivity_timeout seconds, give up
-                if max_inactivity > inactivity_timeout:
+                # Timeout only if inactive AND RPC completed (issue #34: large imports)
+                if max_inactivity > inactivity_timeout and not any_rpc_pending:
                     logger.warning(
                         "_wait_for_diagnostics timed out after %.1fs of inactivity (%.1fs total).",
                         inactivity_timeout,

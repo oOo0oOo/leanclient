@@ -279,11 +279,7 @@ def test_extract_widgets_from_interactive_diag_no_widgets():
     """Test widget extraction from diagnostic without widgets."""
     from leanclient.utils import extract_widgets_from_interactive_diag
 
-    diag = {
-        "message": {
-            "tag": [{"text": "Error message"}]
-        }
-    }
+    diag = {"message": {"tag": [{"text": "Error message"}]}}
     result = extract_widgets_from_interactive_diag(diag)
     assert result == []
 
@@ -301,9 +297,9 @@ def test_extract_widgets_from_interactive_diag_with_widget():
                         "wi": {
                             "id": "widget-123",
                             "javascriptHash": "abc123",
-                            "props": {"data": "test"}
+                            "props": {"data": "test"},
                         },
-                        "alt": {"text": "fallback"}
+                        "alt": {"text": "fallback"},
                     }
                 }
             ]
@@ -328,18 +324,11 @@ def test_extract_widgets_from_interactive_diag_nested():
                     "append": [
                         {
                             "tag": [
-                                {
-                                    "widget": {
-                                        "wi": {
-                                            "id": "nested-widget",
-                                            "props": {}
-                                        }
-                                    }
-                                }
+                                {"widget": {"wi": {"id": "nested-widget", "props": {}}}}
                             ]
                         }
                     ]
-                }
+                },
             ]
         }
     }
@@ -356,16 +345,8 @@ def test_extract_widgets_from_interactive_diag_multiple_widgets():
     diag = {
         "message": {
             "tag": [
-                {
-                    "widget": {
-                        "wi": {"id": "widget-1", "props": {}}
-                    }
-                },
-                {
-                    "widget": {
-                        "wi": {"id": "widget-2", "props": {}}
-                    }
-                }
+                {"widget": {"wi": {"id": "widget-1", "props": {}}}},
+                {"widget": {"wi": {"id": "widget-2", "props": {}}}},
             ]
         }
     }

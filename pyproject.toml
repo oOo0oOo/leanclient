@@ -1,6 +1,6 @@
 [project]
 name = "leanclient"
-version = "0.8.0"
+version = "0.9.2"
 description = "Interact with the Lean theorem prover language server"
 authors = [
     {name = "Oliver Dressler", email = "hey@oli.show"}
@@ -11,6 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "orjson>=3.11.1",
     "tqdm>=4.67.1",
+    "psutil>=5.9"
 ]
 
 [project.urls]
@@ -33,6 +34,7 @@ test = [
     "pytest-benchmark>=4.0",
     "pytest-timeout>=2.2",
     "pytest-sugar>=1.0",
+    "pytest-html>=4.1",
     "psutil>=5.9",
 ]
 

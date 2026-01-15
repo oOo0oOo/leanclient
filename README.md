@@ -8,10 +8,13 @@
   <a href="https://pypi.org/project/leanclient/">
     <img src="https://img.shields.io/pypi/v/leanclient.svg" alt="PyPI version" />
   </a>
+  <a href="https://github.com/oOo0oOo/leanclient/actions/workflows/ci.yaml">
+    <img src="https://img.shields.io/github/actions/workflow/status/oOo0oOo/leanclient/ci.yaml?branch=main" alt="CI status" />
+  </a>
   <a href="">
     <img src="https://img.shields.io/github/last-commit/oOo0oOo/leanclient" alt="last update" />
   </a>
-  <a href="https://github.com/oOo0oOo/leanclient/blob/master/LICENSE">
+  <a href="https://github.com/oOo0oOo/leanclient/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/oOo0oOo/leanclient.svg" alt="license" />
   </a>
 </p>

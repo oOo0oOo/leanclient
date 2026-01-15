@@ -1,0 +1,79 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+  
+  test-full:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.13"]
+        os: 
+          - "ubuntu-latest"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install elan (Lean toolchain manager)
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | bash -s -- -y --default-toolchain stable
+        echo "$HOME/.elan/bin" >> $GITHUB_PATH
+    
+    - name: Cache Lean toolchain
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.elan
+          ~/.cache/mathlib
+        key: ${{ runner.os }}-lean-${{ hashFiles('tests/.lean-version') }}
+        restore-keys: |
+          ${{ runner.os }}-lean-
+    
+    - uses: astral-sh/setup-uv@v4
+    - name: Run full tests
+      id: tests
+      continue-on-error: true
+      timeout-minutes: 60
+      run: |
+        uv sync --extra test
+        uv run -m pytest -sv tests/ \
+            -m "not integration" \
+            --timeout=900 \
+            --durations=50 --durations-min=1.0 \
+            --html=report-full.html --self-contained-html
+    
+    - name: Upload test report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-report-full-${{ matrix.os }}-py${{ matrix.python-version }}
+        path: report-full.html
+        retention-days: 30
+    
+    - name: Check test results
+      if: steps.tests.outcome == 'failure'
+      run: |
+        echo "Tests failed with exit code from previous step"
+        exit 1

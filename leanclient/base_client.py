@@ -7,7 +7,7 @@ import threading
 import urllib.parse
 from pathlib import Path
 from typing import Any, Callable
-
+import psutil
 import orjson
 
 from .utils import SemanticTokenProcessor, needs_mathlib_cache_get
@@ -140,6 +140,14 @@ class BaseLeanLSPClient:
             pass
 
         # Terminate the language server process
+        ## terminate children processes: `ps aux | grep lean`
+        try:
+            children = psutil.Process(self.process.pid).children(recursive=True)
+            for child in children:
+                child.kill()
+        except psutil.NoSuchProcess:
+            pass
+        ## terminate main process: `ps aux | grep lake`
         self.process.terminate()
 
         try:

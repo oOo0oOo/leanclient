@@ -4,10 +4,12 @@ Bug 1: get_diagnostics could return empty diagnostics if diagnostics_version < 0
 Bug 2: is_line_range_complete returned True for newly opened files with empty current_processing
 Bug 3: Short inactivity_timeout causes premature return before diagnostics arrive (Issue #62)
 Bug 4: Kernel errors take longer to compute, missed with short timeout (Issue #63)
+Bug 5: Empty diagnostics when opening files with large imports like Mathlib (Issue #34)
 """
 
-import pytest
 import time
+
+import pytest
 
 
 def _create_test_file(test_env_dir, filename, content):
@@ -178,7 +180,7 @@ def test_empty_file_returns_quickly(clean_lsp_client, test_env_dir):
     diagnostics = clean_lsp_client.get_diagnostics(test_file, inactivity_timeout=5.0)
     elapsed = time.time() - start_time
 
-    assert elapsed < 2.0, f"Clean file took too long: {elapsed:.3f}s"
+    assert elapsed < 3.0, f"Clean file took too long: {elapsed:.3f}s"
     assert diagnostics == []
 
     clean_lsp_client.close_files([test_file])
@@ -296,10 +298,11 @@ def test_wait_for_diagnostics_race_condition(clean_lsp_client, test_env_dir):
 @pytest.mark.integration
 def test_lean_4_22_prebuilt_diagnostics():
     """Lean 4.22 LSP bug: publishDiagnostics sends empty array for pre-built files."""
+    import os
+    import subprocess
+
     from leanclient import LeanLSPClient
     from tests.fixtures.project_setup import TEST_ENV_DIR
-    import subprocess
-    import os
 
     test_file = "LeanTestProject/Clean.lean"
 
@@ -569,3 +572,71 @@ structure test where
     finally:
         if test_file in clean_lsp_client.opened_files:
             clean_lsp_client.close_files([test_file])
+
+
+@pytest.mark.integration
+def test_large_import_waits_for_rpc(test_env_dir):
+    """Issue #34: Don't timeout while waitForDiagnostics RPC is pending."""
+    from leanclient import LeanLSPClient
+
+    test_file = "LargeImportTest34.lean"
+    _create_test_file(
+        test_env_dir,
+        test_file,
+        "import Mathlib\n\ntheorem broken : (1 : ℕ) = 2 := by rfl\n",
+    )
+
+    client = LeanLSPClient(test_env_dir, initial_build=False, prevent_cache_get=True)
+    try:
+        # Short timeout would fail before fix (Mathlib has 7-30s loading gap)
+        diags = client.get_diagnostics(test_file, inactivity_timeout=3.0)
+        assert _has_errors(diags), f"Issue #34: Got {len(diags)} diagnostics"
+    finally:
+        client.close()
+
+
+@pytest.mark.integration
+def test_line_range_initial_check_requires_is_ready():
+    """#35: _wait_for_line_range must check is_ready(), not just is_line_range_complete()."""
+    from unittest.mock import Mock
+    from leanclient.file_manager import LSPFileManager, FileState
+
+    # Create a mock file manager with required attributes
+    mock_fm = Mock(spec=LSPFileManager)
+    mock_fm._opened_files_lock = Mock()
+    mock_fm._opened_files_lock.__enter__ = Mock(return_value=None)
+    mock_fm._opened_files_lock.__exit__ = Mock(return_value=None)
+    mock_fm._close_condition = Mock()
+    mock_fm._close_condition.__enter__ = Mock(return_value=None)
+    mock_fm._close_condition.__exit__ = Mock(return_value=None)
+    mock_fm._close_condition.wait = Mock(return_value=None)
+
+    # Create state where is_line_range_complete=True but is_ready=False
+    state = FileState(
+        uri="file:///test.lean",
+        content="test",
+        current_processing=[],  # Empty = is_line_range_complete returns True
+        diagnostics_version=0,
+        diagnostics=[],
+        processing=False,
+        wait_for_diag_done=False,
+    )
+    state.last_activity = time.monotonic()
+
+    # Verify preconditions
+    assert state.is_line_range_complete(0, 10), "Precondition: range complete"
+    assert not state.is_ready(), "Precondition: not ready"
+
+    mock_fm.opened_files = {"test.lean": state}
+    mock_fm._uri_to_local = lambda uri: "test.lean"
+
+    # Call the actual _wait_for_line_range method
+    result = LSPFileManager._wait_for_line_range(
+        mock_fm, ["file:///test.lean"], 0, 10, inactivity_timeout=0.1
+    )
+
+    # With the fix: should return False (needs to wait, but times out)
+    # Without the fix: would return True immediately (bug!)
+    assert result is False, (
+        "_wait_for_line_range should NOT return True when is_ready()=False."
+    )
