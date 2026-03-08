@@ -95,3 +95,27 @@ print(f"PID={{client.process.pid}}")
     assert pid is not None, "Should have captured process PID"
     assert result.returncode == 0, "Program should exit cleanly"
     assert not psutil.pid_exists(pid), "Process should be cleaned up at exit"
+
+
+@pytest.mark.integration
+def test_dead_process_requests_fail_fast(clean_lsp_client, test_file_path):
+    """Requests fail fast when LSP process dies instead of hanging forever."""
+    import time
+
+    client = clean_lsp_client
+    client.open_file(test_file_path)
+    client.get_diagnostics(test_file_path)
+
+    # Kill the LSP process to simulate unexpected death
+    client.process.kill()
+    client.process.wait()
+    time.sleep(0.5)  # Let reader thread detect EOF and cancel futures
+
+    # update_file + get_diagnostics should fail fast (not hang)
+    t0 = time.time()
+    client.update_file_content(test_file_path, "theorem x : True := by sorry")
+    result = client.get_diagnostics(test_file_path)
+    elapsed = time.time() - t0
+
+    assert elapsed < 10, f"Should fail fast, took {elapsed:.1f}s"
+    assert not result.success

@@ -7,8 +7,9 @@ import threading
 import urllib.parse
 from pathlib import Path
 from typing import Any, Callable
-import psutil
+
 import orjson
+import psutil
 
 from .utils import SemanticTokenProcessor, needs_mathlib_cache_get
 
@@ -304,6 +305,14 @@ class BaseLeanLSPClient:
                     except Exception as e:
                         logger.warning(f"Notification handler for {method} failed: {e}")
 
+        # Cancel all pending futures — process is dead, these will never resolve
+        if self._loop and not self._loop.is_closed():
+            err = EOFError("Language server process exited unexpectedly.")
+            for future in self._futures.values():
+                if not future.done():
+                    self._loop.call_soon_threadsafe(future.set_exception, err)
+            self._futures.clear()
+
     def _send_request_rpc(
         self, method: str, params: dict, is_notification: bool
     ) -> int | None:
@@ -364,14 +373,14 @@ class BaseLeanLSPClient:
         return future
 
     def _send_request_sync(
-        self, method: str, params: dict, timeout: float | None = None
+        self, method: str, params: dict, timeout: float | None = 120.0
     ) -> dict:
         """Send a request and block until response arrives.
 
         Args:
             method (str): Method name.
             params (dict): Parameters for the method.
-            timeout (float | None): Timeout in seconds. None means wait indefinitely.
+            timeout (float | None): Timeout in seconds. Defaults to 120.
 
         Returns:
             dict: Response from the language server.

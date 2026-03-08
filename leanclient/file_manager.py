@@ -816,7 +816,10 @@ class LSPFileManager(BaseLeanLSPClient):
         raise FileNotFoundError(f"File {path} is not open. Call open_file first.")
 
     def _wait_for_diagnostics(
-        self, uris: list[str], inactivity_timeout: float = 15.0
+        self,
+        uris: list[str],
+        inactivity_timeout: float = 15.0,
+        max_timeout: float = 300.0,
     ) -> bool:
         """Wait until file is loaded or an rpc error occurs.
 
@@ -826,6 +829,7 @@ class LSPFileManager(BaseLeanLSPClient):
         Args:
             uris (list[str]): List of URIs to wait for diagnostics on.
             inactivity_timeout (float): Time to wait since last activity (diagnostics update). Defaults to 15 seconds.
+            max_timeout (float): Absolute maximum time to wait regardless of activity. Defaults to 300 seconds.
 
         Returns:
             bool: True if diagnostics completed successfully, False if timed out.
@@ -925,6 +929,23 @@ class LSPFileManager(BaseLeanLSPClient):
 
                 if not pending_uris:
                     return True
+
+                # Fail fast if the LSP process is dead
+                if self.process.poll() is not None:
+                    logger.warning(
+                        "_wait_for_diagnostics: LSP process exited (%.1fs total).",
+                        total_elapsed,
+                    )
+                    return False
+
+                # Absolute timeout to prevent infinite hangs
+                if total_elapsed > max_timeout:
+                    logger.warning(
+                        "_wait_for_diagnostics hit max timeout of %.1fs (%.1fs total).",
+                        max_timeout,
+                        total_elapsed,
+                    )
+                    return False
 
                 # Timeout only if inactive AND RPC completed (issue #34: large imports)
                 if max_inactivity > inactivity_timeout and not any_rpc_pending:
