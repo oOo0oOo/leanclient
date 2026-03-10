@@ -948,15 +948,10 @@ class LSPFileManager(BaseLeanLSPClient):
                 # Absolute timeout to prevent infinite hangs
                 if total_elapsed > max_timeout:
                     logger.warning(
-                        "_wait_for_diagnostics hit max timeout of %.1fs (%.1fs total). "
-                        "Cancelling pending RPCs.",
+                        "_wait_for_diagnostics hit max timeout of %.1fs (%.1fs total).",
                         max_timeout,
                         total_elapsed,
                     )
-                    for uri in pending_uris:
-                        future = futures_by_uri.get(uri)
-                        if future and not future.done():
-                            future.cancel()
                     return False
 
                 # Timeout only if inactive AND RPC completed (issue #34: large imports)
