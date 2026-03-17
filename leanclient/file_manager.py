@@ -26,6 +26,7 @@ class DiagnosticsResult:
 
     success: bool
     diagnostics: list[dict]
+    timed_out: bool = False
 
     def __iter__(self) -> Iterator[dict]:
         """Allow iteration over diagnostics for backward compatibility."""
@@ -671,6 +672,7 @@ class LSPFileManager(BaseLeanLSPClient):
         start_line: int | None = None,
         end_line: int | None = None,
         inactivity_timeout: float = 15.0,
+        max_timeout: float = 300.0,
     ) -> DiagnosticsResult:
         """Get diagnostics for a file, optionally filtered to a line range.
 
@@ -752,7 +754,9 @@ class LSPFileManager(BaseLeanLSPClient):
                 )
             else:
                 wait_completed = self._wait_for_diagnostics(
-                    [uri], inactivity_timeout=inactivity_timeout
+                    [uri],
+                    inactivity_timeout=inactivity_timeout,
+                    max_timeout=max_timeout,
                 )
 
         with self._opened_files_lock:
@@ -780,6 +784,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 return DiagnosticsResult(
                     success=success,
                     diagnostics=filtered,
+                    timed_out=not wait_completed,
                 )
 
             # Only return generic fatal error if we truly have no diagnostics after waiting
@@ -791,12 +796,14 @@ class LSPFileManager(BaseLeanLSPClient):
                             "message": "leanclient: Received LeanFileProgressKind.fatalError."
                         }
                     ],
+                    timed_out=not wait_completed,
                 )
 
             # No errors, no diagnostics - clean file (but check for timeout)
             return DiagnosticsResult(
                 success=wait_completed,
                 diagnostics=[],
+                timed_out=not wait_completed,
             )
 
     def get_file_content(self, path: str) -> str:
