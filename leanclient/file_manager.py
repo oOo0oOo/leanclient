@@ -1,7 +1,6 @@
 import logging
 import threading
 import time
-import urllib.parse
 from dataclasses import dataclass, field
 from typing import Any, Iterator
 
@@ -318,7 +317,7 @@ class LSPFileManager(BaseLeanLSPClient):
         """
         uris = self._locals_to_uris(paths)
         for path, uri in zip(paths, uris):
-            with open(self._uri_to_abs(uri), "r") as f:
+            with open(self._uri_to_abs(uri), "r", encoding="utf-8") as f:
                 txt = normalize_newlines(f.read())
 
             # Initialize file state
@@ -351,6 +350,8 @@ class LSPFileManager(BaseLeanLSPClient):
         Returns:
             dict: Response or error.
         """
+        path = self._normalize_local_path(path)
+
         with self._opened_files_lock:
             if path not in self.opened_files:
                 needs_open = True
@@ -452,7 +453,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 f"Warning! Can not open more than {self.max_opened_files} files at once. Increase LeanLSPClient.max_opened_files or open less files."
             )
 
-        paths = [urllib.parse.unquote(p) for p in paths]
+        paths = [self._normalize_local_path(p) for p in paths]
 
         # Separate files into categories
         with self._opened_files_lock:
@@ -469,7 +470,7 @@ class LSPFileManager(BaseLeanLSPClient):
                 # Sync from disk using update
                 for path in already_open:
                     abs_path = self._uri_to_abs(self._local_to_uri(path))
-                    with open(abs_path, "r") as f:
+                    with open(abs_path, "r", encoding="utf-8") as f:
                         new_content = normalize_newlines(f.read())
 
                     with self._opened_files_lock:
@@ -534,6 +535,8 @@ class LSPFileManager(BaseLeanLSPClient):
             path (str): Relative file path to update.
             changes (list[DocumentContentChange]): List of changes to apply.
         """
+        path = self._normalize_local_path(path)
+
         with self._opened_files_lock:
             if path not in self.opened_files:
                 raise FileNotFoundError(
@@ -583,6 +586,7 @@ class LSPFileManager(BaseLeanLSPClient):
             path (str): Relative file path to update.
             content (str): New complete file content.
         """
+        path = self._normalize_local_path(path)
         content = normalize_newlines(content)
 
         with self._opened_files_lock:
@@ -608,6 +612,8 @@ class LSPFileManager(BaseLeanLSPClient):
             paths (list[str]): List of relative file paths to close.
             blocking (bool): Not blocking can be risky if you close files frequently or reopen them.
         """
+        paths = [self._normalize_local_path(path) for path in paths]
+
         # Only close if file is open
         with self._opened_files_lock:
             missing = [p for p in paths if p not in self.opened_files]
@@ -719,6 +725,7 @@ class LSPFileManager(BaseLeanLSPClient):
         if start_line is not None and end_line is not None:
             if start_line > end_line:
                 raise ValueError("start_line must be <= end_line")
+        path = self._normalize_local_path(path)
 
         # Use range mode if either start_line or end_line is provided (supports open-ended ranges)
         use_range = start_line is not None or end_line is not None
@@ -815,6 +822,8 @@ class LSPFileManager(BaseLeanLSPClient):
         Returns:
             str: Content of the file.
         """
+        path = self._normalize_local_path(path)
+
         with self._opened_files_lock:
             state = self.opened_files.get(path)
             if state is not None:

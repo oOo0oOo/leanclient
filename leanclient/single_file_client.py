@@ -17,6 +17,8 @@ class SingleFileClient:
     """
 
     def __init__(self, client: "leanclient.client.LeanLSPClient", file_path: str):
+        file_path = client._normalize_local_path(file_path)
+
         # Check if file exists
         path = (client.project_path / Path(file_path)).resolve()
         if not path.exists():

@@ -177,6 +177,11 @@ class BaseLeanLSPClient:
                     pass
 
     # URI HANDLING
+    @staticmethod
+    def _normalize_local_path(local_path: str | os.PathLike[str]) -> str:
+        """Normalize Lean project-local paths to forward slashes."""
+        return urllib.parse.unquote(str(local_path)).replace("\\", "/")
+
     def _local_to_uri(self, local_path: str | os.PathLike[str]) -> str:
         """Convert a local file path to a URI.
 
@@ -192,7 +197,9 @@ class BaseLeanLSPClient:
         Returns:
             str: URI representation of the file.
         """
-        path = (self.project_path / Path(local_path)).resolve()
+        path = (
+            self.project_path / Path(self._normalize_local_path(local_path))
+        ).resolve()
         return urllib.parse.unquote(path.as_uri())
 
     def _locals_to_uris(self, local_paths: list[str]) -> list[str]:
@@ -217,8 +224,8 @@ class BaseLeanLSPClient:
         try:
             rel_path = abs_path.relative_to(self.project_path)
         except ValueError:
-            return str(abs_path)
-        return str(rel_path)
+            return abs_path.as_posix()
+        return rel_path.as_posix()
 
     # LANGUAGE SERVER RPC INTERACTION
     def clear_history(self):
