@@ -257,6 +257,8 @@ def needs_mathlib_cache_get(project_path: Path) -> bool:
     # Resolve mathlib directory: path-type uses "dir" field, git-type uses .lake/packages/mathlib
     if mathlib_pkg.get("type") == "path":
         mathlib_dir = Path(mathlib_pkg["dir"])
+        if not mathlib_dir.is_absolute():
+            mathlib_dir = project_path / mathlib_dir
     else:
         mathlib_dir = project_path / ".lake/packages/mathlib"
 

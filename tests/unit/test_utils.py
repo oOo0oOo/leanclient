@@ -252,6 +252,23 @@ def test_needs_mathlib_cache_get_with_olean_files(tmp_path):
 
 
 @pytest.mark.unit
+def test_needs_mathlib_cache_get_with_relative_path_dep(tmp_path):
+    """Test path-type mathlib dependency with a relative dir."""
+    manifest_path = tmp_path / "lake-manifest.json"
+    manifest_path.write_text(
+        '{"packages": [{"name": "mathlib", "type": "path", "dir": "vendor/mathlib"}]}'
+    )
+
+    mathlib_build = (
+        tmp_path / "vendor" / "mathlib" / ".lake" / "build" / "lib" / "lean" / "Mathlib"
+    )
+    mathlib_build.mkdir(parents=True)
+    (mathlib_build / "Init.olean").write_text("")
+
+    assert needs_mathlib_cache_get(tmp_path) is False
+
+
+@pytest.mark.unit
 def test_needs_mathlib_cache_get_real_project(test_project_dir):
     """Test with real test project that has mathlib - should not need cache."""
     # The test project should already have mathlib cache available
