@@ -445,6 +445,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Document symbols.
         """
+        path = self._normalize_local_path(path)
+
         with self._opened_files_lock:
             if path not in self.opened_files:
                 needs_open = True
@@ -572,6 +574,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             list: Folding ranges.
         """
+        path = self._normalize_local_path(path)
+
         with self._opened_files_lock:
             if path not in self.opened_files:
                 needs_open = True
@@ -1209,6 +1213,8 @@ class LeanLSPClient(LSPFileManager, BaseLeanLSPClient):
         Returns:
             dict | None: Module info or None.
         """
+        path = self._normalize_local_path(path)
+
         # Ensure file is opened and processed so imports are available
         self.get_diagnostics(path)
 
