@@ -248,13 +248,22 @@ def needs_mathlib_cache_get(project_path: Path) -> bool:
 
     try:
         pkgs = orjson.loads(manifest.read_bytes()).get("packages", [])
-        if not any(p.get("name") == "mathlib" for p in pkgs):
+        mathlib_pkg = next((p for p in pkgs if p.get("name") == "mathlib"), None)
+        if mathlib_pkg is None:
             return False
     except Exception:
         return False
 
+    # Resolve mathlib directory: path-type uses "dir" field, git-type uses .lake/packages/mathlib
+    if mathlib_pkg.get("type") == "path":
+        mathlib_dir = Path(mathlib_pkg["dir"])
+        if not mathlib_dir.is_absolute():
+            mathlib_dir = project_path / mathlib_dir
+    else:
+        mathlib_dir = project_path / ".lake/packages/mathlib"
+
     # Check if mathlib olean files already exist
-    olean_dir = project_path / ".lake/packages/mathlib/.lake/build/lib/lean/Mathlib"
+    olean_dir = mathlib_dir / ".lake/build/lib/lean/Mathlib"
     return not any(olean_dir.glob("*.olean"))
 
 
