@@ -143,10 +143,10 @@ def test_server_queues_requests_and_handles_concurrent_calls(test_project_dir):
         # Assertions
         assert len(responses) == 3, f"Only got {len(responses)}/3 responses"
         assert diag_time is not None, "No diagnostics received"
-        assert all(
-            "result" in read_rpc_message(process.stdout, 0.01) or True
-            for _ in range(10)
-        ), "Response errors"
+        for _ in range(10):
+            msg = read_rpc_message(process.stdout, 0.01)
+            if msg is not None:
+                assert "error" not in msg, "Response errors"
 
     finally:
         process.terminate()
