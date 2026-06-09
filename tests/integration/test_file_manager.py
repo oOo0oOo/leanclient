@@ -233,7 +233,8 @@ def test_update_try_tactics(file_manager):
     diag_init = file_manager.get_diagnostics(file_path)
     assert diag_init == [], f"Expected no diagnostics, got {diag_init}"
 
-    line, character = (26, 61)
+    # Position of the `linarith` proving the `?_` side goal in the first theorem.
+    line, character = (30, 61)
     tactics = ["simp", "aesop", "norm_num", "omega", "linarith"]
     l_tactic = len("linarith")
     messages = {}

@@ -15,7 +15,7 @@ EXP_DIAGNOSTIC_ERRORS = [
     "unexpected end of input; expected ':'",
 ]
 
-EXP_DIAGNOSTIC_WARNINGS = ["declaration uses 'sorry'", "declaration uses 'sorry'"]
+EXP_DIAGNOSTIC_WARNINGS = ["declaration uses `sorry`", "declaration uses `sorry`"]
 
 
 # ============================================================================
