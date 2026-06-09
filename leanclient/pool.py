@@ -8,6 +8,9 @@ import tqdm
 
 from leanclient import LeanLSPClient, SingleFileClient
 
+# Per-worker client, created in _init_worker (one LeanLSPClient per pool process).
+client: LeanLSPClient
+
 
 def _init_worker(project_path: str, kwargs: dict):
     global client
@@ -88,7 +91,7 @@ class LeanClientPool:
         self._init_args = kwargs
 
         self.num_workers = (
-            int(os.cpu_count() * 0.7) if num_workers is None else num_workers
+            int((os.cpu_count() or 1) * 0.7) if num_workers is None else num_workers
         )
 
         self.mp_context = get_context("spawn")

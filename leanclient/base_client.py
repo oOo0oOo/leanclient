@@ -65,6 +65,8 @@ class BaseLeanLSPClient:
             stdin=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
         )
+        assert self.process.stdin is not None
+        assert self.process.stdout is not None
         self.stdin = self.process.stdin
         self.stdout = self.process.stdout
 
@@ -381,7 +383,7 @@ class BaseLeanLSPClient:
 
     def _send_request_sync(
         self, method: str, params: dict, timeout: float | None = 120.0
-    ) -> dict:
+    ) -> Any:
         """Send a request and block until response arrives.
 
         Args:

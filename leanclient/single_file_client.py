@@ -55,7 +55,7 @@ class SingleFileClient:
         """
         return self.client.close_files([self.file_path], blocking)
 
-    def update_file(self, changes: list[DocumentContentChange]) -> list:
+    def update_file(self, changes: list[DocumentContentChange]) -> None:
         """See :meth:`leanclient.client.LeanLSPClient.update_file`"""
         return self.client.update_file(self.file_path, changes)
 
@@ -89,7 +89,7 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_completion_item_resolve`"""
         return self.client.get_completion_item_resolve(item)
 
-    def get_hover(self, line: int, character: int) -> dict:
+    def get_hover(self, line: int, character: int) -> dict | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_hover`"""
         return self.client.get_hover(self.file_path, line, character)
 
@@ -162,11 +162,11 @@ class SingleFileClient:
         """See :meth:`leanclient.client.LeanLSPClient.get_call_hierarchy_outgoing`"""
         return self.client.get_call_hierarchy_outgoing(item)
 
-    def get_goal(self, line: int, character: int) -> dict:
+    def get_goal(self, line: int, character: int) -> dict | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_goal`"""
         return self.client.get_goal(self.file_path, line, character)
 
-    def get_term_goal(self, line: int, character: int) -> dict:
+    def get_term_goal(self, line: int, character: int) -> dict | None:
         """See :meth:`leanclient.client.LeanLSPClient.get_term_goal`"""
         return self.client.get_term_goal(self.file_path, line, character)
 
