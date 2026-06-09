@@ -1,9 +1,10 @@
 # Varia to be sorted later...
 import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 import orjson
 
@@ -143,8 +144,8 @@ class DocumentContentChange:
     """Represents a change in a document."""
 
     text: str
-    start: Tuple[int, int] | None = None
-    end: Tuple[int, int] | None = None
+    start: Sequence[int] | None = None
+    end: Sequence[int] | None = None
 
     def __post_init__(self) -> None:
         normalized_text = normalize_newlines(self.text)
@@ -209,7 +210,7 @@ def apply_changes_to_text(text: str, changes: list[DocumentContentChange]) -> st
 
 
 def get_diagnostics_in_range(
-    diagnostics: list,
+    diagnostics: Iterable[dict],
     start_line: int,
     end_line: int,
 ) -> list:
@@ -284,7 +285,7 @@ def experimental(func):
 
     # Change __doc__ to include a sphinx warning
     warning = "\n        .. admonition:: Experimental\n\n            This method is experimental. Use with caution.\n            Warnings are logged via the 'leanclient' logger.\n"
-    doc_lines = wrapper.__doc__.split("\n")
+    doc_lines = (wrapper.__doc__ or "").split("\n")
     doc_lines.insert(1, warning)
     wrapper.__doc__ = "\n".join(doc_lines)
     return wrapper

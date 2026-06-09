@@ -346,7 +346,7 @@ class LSPFileManager(BaseLeanLSPClient):
 
     def _send_request(
         self, path: str, method: str, params: dict, timeout: float = 30.0
-    ) -> dict:
+    ) -> Any:
         """Send request about a document and return a response or and error.
 
         Args:
@@ -406,7 +406,7 @@ class LSPFileManager(BaseLeanLSPClient):
         params: dict,
         max_retries: int = 1,
         retry_delay: float = 0.0,
-    ) -> dict:
+    ) -> Any:
         """Send requests until no new results are found after a number of retries.
 
         Args:
@@ -1019,8 +1019,8 @@ class LSPFileManager(BaseLeanLSPClient):
     def _wait_for_line_range(
         self,
         uris: list[str],
-        start_line: int,
-        end_line: int,
+        start_line: int | None,
+        end_line: int | None,
         inactivity_timeout: float = 3.0,
     ) -> bool:
         """Wait for specific line range to complete based on parallel processing ranges.

@@ -48,7 +48,7 @@ def parse_info_tree(info_tree_str: str) -> dict:
         dict: A nested dictionary representing the parsed info tree.
     """
     lines = info_tree_str.strip().splitlines()
-    stack = [{"children": []}]
+    stack: list[dict] = [{"children": []}]
 
     for line in lines:
         if match := node_pattern.match(line):
