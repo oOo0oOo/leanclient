@@ -57,6 +57,14 @@ class DiagnosticsResult:
 # Grace period for Lean 4.22 compatibility (empty diagnostics arrive before real ones)
 DIAGNOSTICS_GRACE_PERIOD = 0.5
 
+# Max time to block on the close condition between re-checks while waiting for
+# diagnostics. Notifications wake the waiter early; this only bounds how quickly
+# time-based readiness (grace period / inactivity) is re-evaluated.
+WAIT_POLL_INTERVAL = 0.05
+
+# Unique sentinel for "no previous result yet" in retry loops.
+_NO_PREVIOUS_RESULT = object()
+
 
 @dataclass(slots=True)
 class FileState:
@@ -411,7 +419,7 @@ class LSPFileManager(BaseLeanLSPClient):
         Returns:
             dict: Final response.
         """
-        prev_results = "Nvr_gnn_gv_y_p"
+        prev_results = _NO_PREVIOUS_RESULT
         retry_count = 0
         while True:
             results = self._send_request(
@@ -429,6 +437,39 @@ class LSPFileManager(BaseLeanLSPClient):
                 prev_results = results
 
         return results
+
+    def _ensure_file_processed(self, path: str) -> tuple[str, int]:
+        """Open ``path`` if needed, wait until processed, return (uri, version).
+
+        Shared by document-wide requests (e.g. document symbols, folding ranges)
+        that need the file fully processed before querying.
+
+        Args:
+            path (str): Relative file path.
+
+        Returns:
+            tuple[str, int]: The file URI and its current version.
+        """
+        path = self._normalize_local_path(path)
+
+        with self._opened_files_lock:
+            needs_open = path not in self.opened_files
+
+        if needs_open:
+            self.open_file(path)
+
+        with self._opened_files_lock:
+            state = self.opened_files[path]
+            uri = state.uri
+            version = state.version
+            need_wait = not state.complete
+
+        if need_wait:
+            self._wait_for_diagnostics([uri], inactivity_timeout=5.0)
+            with self._opened_files_lock:
+                version = self.opened_files[path].version
+
+        return uri, version
 
     def open_files(
         self,
@@ -554,11 +595,6 @@ class LSPFileManager(BaseLeanLSPClient):
 
             uri = state.uri
             version = state.version
-
-        # TODO: Any of these useful?
-        # params = ("textDocument/didSave", {"textDocument": {"uri": uri}, "text": text})
-        # params = ("workspace/applyEdit", {"changes": [{"textDocument": {"uri": uri, "version": 1}, "edits": [c.get_dict() for c in changes]}]})
-        # params = ("workspace/didChangeWatchedFiles", {"changes": [{"uri": uri, "type": 2}]})
 
         params = (
             "textDocument/didChange",
@@ -972,9 +1008,10 @@ class LSPFileManager(BaseLeanLSPClient):
                     )
                     return False
 
-                # Use condition variable wait with timeout instead of busy polling
-                # Wake up on notification or after 5ms, whichever comes first
-                self._close_condition.wait(timeout=0.005)
+                # Wake up on notification or after the poll interval, whichever
+                # comes first (notifications drive progress; the timeout only
+                # bounds time-based readiness re-checks).
+                self._close_condition.wait(timeout=WAIT_POLL_INTERVAL)
 
         # Should not reach here, but return False as safety
         return False
@@ -1078,8 +1115,9 @@ class LSPFileManager(BaseLeanLSPClient):
                     )
                     return False
 
-                # Wait for line range completion
-                self._close_condition.wait(timeout=0.005)
+                # Wait for line range completion (notification-driven; the
+                # timeout only bounds time-based readiness re-checks).
+                self._close_condition.wait(timeout=WAIT_POLL_INTERVAL)
 
         # Should not reach here, but return False as safety
         return False

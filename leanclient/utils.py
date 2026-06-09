@@ -102,10 +102,12 @@ def _utf16_pos_to_utf8_pos(text: str, line: int, utf16_character: int) -> int:
 
     lines = text.split("\n")
     if line >= len(lines):
-        return len(text)
+        return len(text.encode("utf-8"))
 
-    # Get byte offset to start of line
-    line_start_byte = sum(len(lines[i]) + 1 for i in range(line))  # +1 for '\n'
+    # Get byte offset to start of line (count UTF-8 bytes of preceding lines)
+    line_start_byte = sum(
+        len(lines[i].encode("utf-8")) + 1 for i in range(line)
+    )  # +1 for '\n'
 
     # Convert UTF-16 character offset to UTF-8 byte offset within the line
     line_content = lines[line]
@@ -194,9 +196,14 @@ def apply_changes_to_text(text: str, changes: list[DocumentContentChange]) -> st
             continue
 
         assert change.start is not None and change.end is not None
+        # Indices are UTF-8 byte offsets, so splice on the encoded bytes to keep
+        # positions correct for lines containing non-ASCII characters.
+        data = text.encode("utf-8")
         start_idx = _index_from_line_character(text, change.start[0], change.start[1])
         end_idx = _index_from_line_character(text, change.end[0], change.end[1])
-        text = text[:start_idx] + change.text + text[end_idx:]
+        text = (data[:start_idx] + change.text.encode("utf-8") + data[end_idx:]).decode(
+            "utf-8"
+        )
 
     return text
 

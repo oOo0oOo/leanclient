@@ -71,6 +71,8 @@ class BaseLeanLSPClient:
         # Asyncio infrastructure for non-blocking requests
         self._loop = asyncio.new_event_loop()
         self._futures = {}  # {request_id: asyncio.Future}
+        self._futures_lock = threading.Lock()  # guards _futures and request_id
+        self._write_lock = threading.Lock()  # serializes writes to stdin
         self._notification_handlers: dict[str, Callable[[dict], Any]] = {}
 
         # Start event loop in a separate thread
@@ -288,8 +290,11 @@ class BaseLeanLSPClient:
                 continue
 
             # Handle response to a request
-            if msg_id is not None and msg_id in self._futures:
-                future = self._futures.pop(msg_id)
+            future = None
+            if msg_id is not None:
+                with self._futures_lock:
+                    future = self._futures.pop(msg_id, None)
+            if future is not None:
                 # Check if event loop is still running before dispatching
                 if self._loop and not self._loop.is_closed():
                     if "error" in msg:
@@ -315,45 +320,30 @@ class BaseLeanLSPClient:
         # Cancel all pending futures — process is dead, these will never resolve
         if self._loop and not self._loop.is_closed():
             err = EOFError("Language server process exited unexpectedly.")
-            for future in self._futures.values():
+            with self._futures_lock:
+                pending = list(self._futures.values())
+                self._futures.clear()
+            for future in pending:
                 if not future.done():
                     self._loop.call_soon_threadsafe(future.set_exception, err)
-            self._futures.clear()
 
-    def _send_request_rpc(
-        self, method: str, params: dict, is_notification: bool
-    ) -> int | None:
-        """Send a JSON RPC request to the language server.
+    def _write_message(self, message: dict) -> None:
+        """Serialize and write a JSON-RPC message to the server's stdin.
+
+        Writes are serialized with a lock so messages from different threads
+        cannot interleave on the pipe.
 
         Args:
-            method (str): Method name.
-            params (dict): Parameters for the method.
-            is_notification (bool): Whether the request is a notification.
-
-        Returns:
-            int | None: Id of the request if it is not a notification.
+            message (dict): Full JSON-RPC message (including ``id`` for requests).
         """
-        if not is_notification:
-            request_id = self.request_id
-            self.request_id += 1
-
-        request = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            **({"id": request_id} if not is_notification else {}),
-        }
-
-        body = orjson.dumps(request)
+        body = orjson.dumps(message)
         header = f"Content-Length: {len(body)}\r\n\r\n".encode("ascii")
-        self.stdin.write(header + body)
-        self.stdin.flush()
+        with self._write_lock:
+            self.stdin.write(header + body)
+            self.stdin.flush()
 
         if self.enable_history:
-            self.history.append({"type": "client", "content": request})
-
-        if not is_notification:
-            return request_id
+            self.history.append({"type": "client", "content": message})
 
     def _send_notification(self, method: str, params: dict):
         """Send a notification to the language server.
@@ -362,10 +352,14 @@ class BaseLeanLSPClient:
             method (str): Method name.
             params (dict): Parameters for the method.
         """
-        self._send_request_rpc(method, params, is_notification=True)
+        self._write_message({"jsonrpc": "2.0", "method": method, "params": params})
 
     def _send_request_async(self, method: str, params: dict) -> asyncio.Future:
         """Send a request and return an asyncio.Future immediately (non-blocking).
+
+        The future is registered before the request is written, so a fast
+        response read by the stdout thread cannot arrive before the future
+        exists to receive it.
 
         Args:
             method (str): Method name.
@@ -374,9 +368,15 @@ class BaseLeanLSPClient:
         Returns:
             asyncio.Future: Future that will be resolved when the response arrives.
         """
-        req_id = self._send_request_rpc(method, params, is_notification=False)
         future = self._loop.create_future()
-        self._futures[req_id] = future
+        with self._futures_lock:
+            request_id = self.request_id
+            self.request_id += 1
+            self._futures[request_id] = future
+
+        self._write_message(
+            {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+        )
         return future
 
     def _send_request_sync(

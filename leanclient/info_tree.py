@@ -109,8 +109,6 @@ def _parse_goals(node: dict) -> dict:
                 elif line.startswith("after"):
                     after_idx = i
             if before_idx is not None and after_idx is not None:
-                before = extra[before_idx:after_idx]
-                before[0] = before[0].replace("before", "")
                 node["goals_before"] = "\n".join(
                     extra[before_idx + 1 : after_idx]
                 ).strip()
