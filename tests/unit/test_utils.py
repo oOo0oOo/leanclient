@@ -177,6 +177,28 @@ def test_apply_normalizes_input():
     assert result == "hello\nXworld"
 
 
+@pytest.mark.unit
+def test_apply_ranged_change_after_unicode_on_line():
+    """Edits after a non-ASCII char on the same line must land correctly.
+
+    Positions are UTF-16 offsets; '⊢' is 3 UTF-8 bytes but 1 UTF-16 unit.
+    """
+    original = "theorem foo : ⊢ x = y\nsecond line"
+    changes = [DocumentContentChange("Z", [0, 16], [0, 16])]
+    result = apply_changes_to_text(original, changes)
+    assert result == "theorem foo : ⊢ Zx = y\nsecond line"
+
+
+@pytest.mark.unit
+def test_apply_ranged_change_after_unicode_on_prior_line():
+    """Edits on a line preceded by non-ASCII lines must land correctly."""
+    original = "∀ x\n⊢ y = y\nlast"
+    # Replace "y = y" (chars 2..7 on line 1) with "z"
+    changes = [DocumentContentChange("z", [1, 2], [1, 7])]
+    result = apply_changes_to_text(original, changes)
+    assert result == "∀ x\n⊢ z\nlast"
+
+
 # ============================================================================
 # needs_mathlib_cache_get tests
 # ============================================================================
