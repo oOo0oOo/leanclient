@@ -28,6 +28,8 @@ def test_get_env_as_dict(base_client):
         "LAKE_CACHE_DIR",
         "LAKE_CACHE_KEY",
         "LAKE_CACHE_REVISION_ENDPOINT",
+        "LAKE_CACHE_SERVICE",
+        "LAKE_CONFIG",
         "LAKE_HOME",
         "LAKE_NO_CACHE",
         "LAKE_PKG_URL_MAP",

@@ -395,7 +395,11 @@ def test_mathlib_file(lsp_client):
             ]
         )
 
-    references = lsp_client.get_references(path, finset_line, finset_char)
+    # Whole-project reference indexing is slower to settle on newer toolchains;
+    # retry more patiently so the full result set is gathered.
+    references = lsp_client.get_references(
+        path, finset_line, finset_char, max_retries=8, retry_delay=0.2
+    )
     flat = set([flatten(ref) for ref in references])
     # Reference count can vary between mathlib versions
     flat_count = len(flat)

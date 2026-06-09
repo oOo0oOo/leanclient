@@ -83,6 +83,13 @@ def _create_project(path, name, version, use_mathlib=False, force=False):
     with open(os.path.join(path, "lakefile.toml"), "w") as f:
         f.write(toml)
 
+    # Pin the project toolchain to the requested version (= the mathlib rev).
+    # A stale lean-toolchain from a previous build can mismatch mathlib's
+    # toolchain, which makes `lake exe cache get` refuse to download oleans;
+    # the server then reads incompatible oleans and reports fatal errors.
+    with open(os.path.join(path, "lean-toolchain"), "w") as f:
+        f.write(f"leanprover/lean4:{version}\n")
+
     subprocess.run("lake update --keep-toolchain", shell=True, cwd=path)
     subprocess.run("lake exe cache get", shell=True, cwd=path)
     subprocess.run("lake build", shell=True, cwd=path)
