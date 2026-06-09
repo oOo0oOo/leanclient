@@ -114,17 +114,23 @@ def test_server_queues_requests_and_handles_concurrent_calls(test_project_dir):
                 },
             )
 
-        # Collect responses
+        # Collect responses. Budget on wall-clock time rather than a fixed
+        # message count: the server streams many fileProgress/diagnostic
+        # notifications while elaborating, and a count-based loop can be
+        # exhausted by those before the slowest hover resolves (flaky under
+        # CI load, especially on slower runners).
         responses = {}
         diag_time = None
+        req_ids = [r[0] for r in requests]
+        deadline = time.time() + 120
 
-        for _ in range(300):  # 30s max
-            msg = read_rpc_message(process.stdout, timeout=0.1)
+        while time.time() < deadline:
+            msg = read_rpc_message(process.stdout, timeout=0.5)
             if not msg:
                 continue
 
             msg_id = msg.get("id")
-            if msg_id in [r[0] for r in requests] and msg_id not in responses:
+            if msg_id in req_ids and msg_id not in responses:
                 responses[msg_id] = time.time() - time_start
 
             if msg.get("method") == "textDocument/publishDiagnostics" and not diag_time:
