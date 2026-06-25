@@ -27,6 +27,10 @@ ENABLE_LEANCLIENT_HISTORY = (
 )
 
 
+class LSPProtocolError(RuntimeError):
+    """Raised when the language server writes an invalid LSP frame."""
+
+
 class BaseLeanLSPClient:
     """BaseLeanLSPClient runs a language server in a subprocess.
 
@@ -76,6 +80,7 @@ class BaseLeanLSPClient:
         self._futures_lock = threading.Lock()  # guards _futures and request_id
         self._write_lock = threading.Lock()  # serializes writes to stdin
         self._notification_handlers: dict[str, Callable[[dict], Any]] = {}
+        self._reader_error: Exception | None = None
 
         # Start event loop in a separate thread
         self._loop_thread = threading.Thread(
@@ -255,6 +260,88 @@ class BaseLeanLSPClient:
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()
 
+    @staticmethod
+    def _set_future_exception_if_pending(
+        future: asyncio.Future, error: Exception
+    ) -> None:
+        """Fail a future unless another response already completed it."""
+        if not future.done():
+            future.set_exception(error)
+
+    def _fail_pending_futures(self, error: Exception) -> None:
+        """Remember a terminal reader failure and fail every pending request."""
+        with self._futures_lock:
+            if self._reader_error is None:
+                self._reader_error = error
+            pending = list(self._futures.values())
+            self._futures.clear()
+
+        if self._loop and not self._loop.is_closed():
+            for future in pending:
+                self._loop.call_soon_threadsafe(
+                    self._set_future_exception_if_pending, future, error
+                )
+
+    def _read_stdout_message(self) -> dict[str, Any]:
+        """Read and validate one Content-Length framed LSP message."""
+        headers: dict[str, str] = {}
+        raw_headers: list[str] = []
+
+        while True:
+            header_line = self.stdout.readline()
+            if not header_line:
+                raise EOFError("Language server process exited unexpectedly.")
+
+            header = header_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not header:
+                break
+
+            raw_headers.append(header)
+            name, separator, value = header.partition(":")
+            normalized_name = name.strip().lower()
+            if not separator or not normalized_name:
+                raise LSPProtocolError(f"Malformed LSP header line: {header[:200]!r}")
+            if normalized_name in headers:
+                raise LSPProtocolError(
+                    f"Duplicate LSP header {name.strip()!r}: {header[:200]!r}"
+                )
+            headers[normalized_name] = value.strip()
+
+        raw_content_length = headers.get("content-length")
+        if raw_content_length is None:
+            rendered_headers = ", ".join(repr(header[:200]) for header in raw_headers)
+            raise LSPProtocolError(
+                f"Missing Content-Length LSP header; received [{rendered_headers}]"
+            )
+
+        try:
+            content_length = int(raw_content_length)
+        except ValueError as exc:
+            raise LSPProtocolError(
+                f"Invalid Content-Length LSP header: {raw_content_length!r}"
+            ) from exc
+        if content_length < 0:
+            raise LSPProtocolError(
+                f"Invalid Content-Length LSP header: {raw_content_length!r}"
+            )
+
+        body = self.stdout.read(content_length)
+        if len(body) != content_length:
+            raise LSPProtocolError(
+                "Language server closed before the complete LSP message body "
+                f"arrived: expected {content_length} bytes, got {len(body)}"
+            )
+
+        try:
+            message = orjson.loads(body)
+        except orjson.JSONDecodeError as exc:
+            raise LSPProtocolError("Language server wrote invalid LSP JSON.") from exc
+        if not isinstance(message, dict):
+            raise LSPProtocolError(
+                f"Language server wrote a non-object LSP message: {type(message).__name__}"
+            )
+        return message
+
     def _read_stdout_loop(self, stop_event: threading.Event):
         """Read the stdout of the language server in a separate thread.
 
@@ -263,22 +350,26 @@ class BaseLeanLSPClient:
         """
         while not stop_event.is_set():
             if self.stdout.closed:
+                self._fail_pending_futures(
+                    EOFError("Language server process exited unexpectedly.")
+                )
                 break
 
             try:
-                header = self.stdout.readline()
-            except (EOFError, ValueError):
+                msg = self._read_stdout_message()
+            except EOFError as exc:
+                if not stop_event.is_set():
+                    self._fail_pending_futures(exc)
                 break
-
-            if not header:
+            except Exception as exc:
+                error = (
+                    exc
+                    if isinstance(exc, LSPProtocolError)
+                    else LSPProtocolError(f"Failed to read LSP message: {exc}")
+                )
+                logger.exception("Language server emitted an invalid LSP frame")
+                self._fail_pending_futures(error)
                 break
-
-            # Parse message
-            # Use errors='replace' to handle invalid UTF-8 bytes on Windows
-            header = header.decode("utf-8", errors="replace")
-            content_length = int(header.split(":")[1])
-            next(self.stdout)
-            msg = orjson.loads(self.stdout.read(content_length))
 
             # Dispatch to futures and notification handlers
             msg_id = msg.get("id")
@@ -318,16 +409,6 @@ class BaseLeanLSPClient:
                         handler(msg)
                     except Exception as e:
                         logger.warning(f"Notification handler for {method} failed: {e}")
-
-        # Cancel all pending futures — process is dead, these will never resolve
-        if self._loop and not self._loop.is_closed():
-            err = EOFError("Language server process exited unexpectedly.")
-            with self._futures_lock:
-                pending = list(self._futures.values())
-                self._futures.clear()
-            for future in pending:
-                if not future.done():
-                    self._loop.call_soon_threadsafe(future.set_exception, err)
 
     def _write_message(self, message: dict) -> None:
         """Serialize and write a JSON-RPC message to the server's stdin.
@@ -371,10 +452,20 @@ class BaseLeanLSPClient:
             asyncio.Future: Future that will be resolved when the response arrives.
         """
         future = self._loop.create_future()
+        reader_error = None
         with self._futures_lock:
-            request_id = self.request_id
-            self.request_id += 1
-            self._futures[request_id] = future
+            if self._reader_error is not None:
+                reader_error = self._reader_error
+            else:
+                request_id = self.request_id
+                self.request_id += 1
+                self._futures[request_id] = future
+
+        if reader_error is not None:
+            self._loop.call_soon_threadsafe(
+                self._set_future_exception_if_pending, future, reader_error
+            )
+            return future
 
         self._write_message(
             {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
