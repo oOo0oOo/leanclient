@@ -33,7 +33,9 @@ def _transport(scenario: str, notifications=None) -> LspTransport:
     return LspTransport(
         [sys.executable, FAKE, scenario],
         cwd=str(Path(__file__).parent),
-        on_notification=notifications if notifications is not None else (lambda m, p: None),
+        on_notification=notifications
+        if notifications is not None
+        else (lambda m, p: None),
         default_timeout=10.0,
     )
 
@@ -305,13 +307,9 @@ def test_docstate_ignores_stale_version_diagnostics(tmp_path: Path):
 
     doc = DocState(path="Foo.lean", uri="file:///Foo.lean", text="v2")
     doc.version = 2
-    doc.on_publish_diagnostics(
-        {"version": 1, "diagnostics": [{"message": "stale"}]}
-    )
+    doc.on_publish_diagnostics({"version": 1, "diagnostics": [{"message": "stale"}]})
     assert doc.diagnostics == []  # stale publish ignored
-    doc.on_publish_diagnostics(
-        {"version": 2, "diagnostics": [{"message": "fresh"}]}
-    )
+    doc.on_publish_diagnostics({"version": 2, "diagnostics": [{"message": "fresh"}]})
     assert doc.diagnostics == [{"message": "fresh"}]
     assert doc.diagnostics_version == 2
 

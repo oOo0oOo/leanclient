@@ -32,14 +32,13 @@ import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 from urllib.parse import unquote, urlparse
 from urllib.request import pathname2url
 
 from .convert import (
     codepoint_to_utf16,
     range_from_utf16,
-    utf16_to_codepoint,
 )
 from .document import DocState, DocStatus
 from .errors import (
@@ -57,6 +56,12 @@ MIN_LEAN_VERSION = (4, 24)
 # Lean-specific error codes (Lean.Data.Lsp.Utf16 / Watchdog)
 _WORKER_ERROR_CODES = {-32901, -32902}  # workerExited, workerCrashed
 _CONTENT_MODIFIED = -32801
+
+
+def _as_dict_list(value: object) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
 
 
 @dataclass
@@ -398,7 +403,9 @@ class AsyncLeanLSPClient:
         doc = self._docs.get(path)
         text = doc.text if doc is not None else None
         await self.close_file(path)
-        return await self.open(path, text=text if doc and doc.virtual else None, wait=wait)
+        return await self.open(
+            path, text=text if doc and doc.virtual else None, wait=wait
+        )
 
     async def _evict_if_needed(self) -> None:
         def budget_used() -> int:
@@ -540,7 +547,9 @@ class AsyncLeanLSPClient:
         goals = res.get("goals", [])
         if not goals:
             return GoalResult(status="complete", rendered=res.get("rendered"))
-        return GoalResult(status="goals", goals=list(goals), rendered=res.get("rendered"))
+        return GoalResult(
+            status="goals", goals=list(goals), rendered=res.get("rendered")
+        )
 
     async def term_goal(
         self, path: str, line: int, col: int, fresh: bool = True
@@ -579,9 +588,14 @@ class AsyncLeanLSPClient:
         return res.get("items", res if isinstance(res, list) else [])
 
     async def completion_resolve(self, item: dict, timeout: float = 15.0) -> dict:
-        return await self._transport.request(
+        res = await self._transport.request(
             "completionItem/resolve", item, timeout=timeout
         )
+        if not isinstance(res, dict):
+            raise LeanClientError(
+                "completionItem/resolve returned a non-object response"
+            )
+        return res
 
     async def references(
         self,
@@ -636,7 +650,7 @@ class AsyncLeanLSPClient:
             )
         finally:
             doc.refcount -= 1
-        return res or []
+        return _as_dict_list(res)
 
     async def code_actions(
         self,
@@ -671,12 +685,15 @@ class AsyncLeanLSPClient:
             )
         finally:
             doc.refcount -= 1
-        return res or []
+        return _as_dict_list(res)
 
     async def code_action_resolve(self, action: dict, timeout: float = 30.0) -> dict:
-        return await self._transport.request(
+        res = await self._transport.request(
             "codeAction/resolve", action, timeout=timeout
         )
+        if not isinstance(res, dict):
+            raise LeanClientError("codeAction/resolve returned a non-object response")
+        return res
 
     async def workspace_symbol(
         self,
@@ -697,7 +714,7 @@ class AsyncLeanLSPClient:
         res = await self._transport.request(
             "workspace/symbol", {"query": query}, timeout=timeout
         )
-        symbols = res or []
+        symbols = _as_dict_list(res)
         if max_results is not None:
             symbols = symbols[:max_results]
         out = []
@@ -748,7 +765,12 @@ class AsyncLeanLSPClient:
         res = await self._transport.request(
             "$/lean/rpc/connect", {"uri": doc.uri}, timeout=timeout
         )
-        session = res["sessionId"]
+        if not isinstance(res, dict):
+            raise LeanClientError("$/lean/rpc/connect returned no sessionId")
+        data = cast(dict[str, object], res)
+        session = data.get("sessionId")
+        if not isinstance(session, str):
+            raise LeanClientError("$/lean/rpc/connect returned no sessionId")
         self._rpc_sessions[doc.uri] = (session, now)
         return session
 
@@ -797,7 +819,11 @@ class AsyncLeanLSPClient:
         line_str = lines[line] if 0 <= line < len(lines) else ""
         pos = {"line": line, "character": codepoint_to_utf16(line_str, col)}
         return await self.rpc_call(
-            path, line, col, "Lean.Widget.getWidgetSource", {"pos": pos, "hash": widget_hash}
+            path,
+            line,
+            col,
+            "Lean.Widget.getWidgetSource",
+            {"pos": pos, "hash": widget_hash},
         )
 
     # -- location conversion --------------------------------------------------

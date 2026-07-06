@@ -16,8 +16,10 @@ from leanclient.aio import (  # noqa: E402
     LeanTransportError,
 )
 
-PROJECT = sys.argv[1] if len(sys.argv) > 1 else str(
-    Path.home() / "Code/lean-lsp-mcp/tests/test_project"
+PROJECT = (
+    sys.argv[1]
+    if len(sys.argv) > 1
+    else str(Path.home() / "Code/lean-lsp-mcp/tests/test_project")
 )
 
 
@@ -33,7 +35,7 @@ async def main():
     client = AsyncLeanLSPClient(PROJECT)
     await client.start()
     await client.open("GoalSample.lean")
-    print(f"[{time.time()-t0:6.2f}s] warm")
+    print(f"[{time.time() - t0:6.2f}s] warm")
 
     # Kill lake serve while a request is in flight (cold file: barrier
     # genuinely blocks on ~8s of elaboration).
@@ -58,7 +60,7 @@ async def main():
         await client.goal("GoalSample.lean", 3, 2)
         check("post-death call fails typed", False)
     except LeanTransportError:
-        check("post-death call fails typed", True, f"{time.time()-t:.3f}s (no hang)")
+        check("post-death call fails typed", True, f"{time.time() - t:.3f}s (no hang)")
     check("alive is False", not client.alive)
 
     # Fresh client works (restart story is the consumer's policy decision).
@@ -69,7 +71,7 @@ async def main():
     check("fresh client recovers", g.status in ("goals", "complete"), g.status)
     await client2.close()
     await client.close()
-    print(f"[{time.time()-t0:6.2f}s] CRASH CHECKS PASSED")
+    print(f"[{time.time() - t0:6.2f}s] CRASH CHECKS PASSED")
 
 
 asyncio.run(main())

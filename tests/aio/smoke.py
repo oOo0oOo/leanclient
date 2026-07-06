@@ -18,8 +18,10 @@ from leanclient.aio import (  # noqa: E402
     ScratchPool,
 )
 
-PROJECT = sys.argv[1] if len(sys.argv) > 1 else str(
-    Path.home() / "Code/lean-lsp-mcp/tests/test_project"
+PROJECT = (
+    sys.argv[1]
+    if len(sys.argv) > 1
+    else str(Path.home() / "Code/lean-lsp-mcp/tests/test_project")
 )
 
 UNI = (
@@ -40,13 +42,13 @@ async def main():
     t0 = time.time()
     client = AsyncLeanLSPClient(PROJECT, max_workers=4)
     await client.start()
-    print(f"[{time.time()-t0:6.2f}s] started (version check passed)")
+    print(f"[{time.time() - t0:6.2f}s] started (version check passed)")
 
     # 1. Parallel cold opens
     t = time.time()
     await client.open_many(["GoalSample.lean", "DiagnosticTest.lean"])
     dt_par = time.time() - t
-    print(f"[{time.time()-t0:6.2f}s] open_many(2 files) = {dt_par:.2f}s")
+    print(f"[{time.time() - t0:6.2f}s] open_many(2 files) = {dt_par:.2f}s")
     check("parallel opens < 1.6x single-file cost", dt_par < 14, f"{dt_par:.2f}s")
 
     # 2. Diagnostics with codepoint columns
@@ -82,21 +84,26 @@ async def main():
     # 6. goal freshness (the null-goal trap): edit then immediately query fresh
     await client.update("SmokeUni.lean", UNI.replace("x + 0 = x", "0 + x = x"))
     g3 = await client.goal("SmokeUni.lean", 3, 2)
-    check("fresh goal after edit is real (not instant-null)",
-          g3.status in ("goals", "complete"), g3.status)
+    check(
+        "fresh goal after edit is real (not instant-null)",
+        g3.status in ("goals", "complete"),
+        g3.status,
+    )
 
     # 7. Scratch pool: 4 tactic trials in parallel
     pool = ScratchPool(client, header="import Mathlib\n", size=2)
     t = time.time()
     await pool.warm()
-    print(f"[{time.time()-t0:6.2f}s] pool.warm(2 slots) = {time.time()-t:.2f}s")
+    print(f"[{time.time() - t0:6.2f}s] pool.warm(2 slots) = {time.time() - t:.2f}s")
     t = time.time()
     results = await pool.run_many(
-        [f"theorem s{i} : 2 + 2 = 4 := by {tac}\n"
-         for i, tac in enumerate(["norm_num", "rfl", "simp", "sorry"])]
+        [
+            f"theorem s{i} : 2 + 2 = 4 := by {tac}\n"
+            for i, tac in enumerate(["norm_num", "rfl", "simp", "sorry"])
+        ]
     )
     dt = time.time() - t
-    print(f"[{time.time()-t0:6.2f}s] 4 trials = {dt:.2f}s")
+    print(f"[{time.time() - t0:6.2f}s] 4 trials = {dt:.2f}s")
     check("trials fast on warm pool", dt < 5, f"{dt:.2f}s")
     ok = [not r.diagnostics.has_errors for r in results]
     check("norm_num/rfl/simp succeed", ok[0] and ok[1] and ok[2], str(ok))
@@ -110,8 +117,11 @@ async def main():
     # 9. eviction under budget: max_workers=4, opening more evicts LRU
     await client.open("EditorTools.lean")
     await client.open("MiscTools.lean")
-    check("doc count within budget+pins",
-          len(client.open_paths()) <= 4 + 2, str(client.open_paths()))
+    check(
+        "doc count within budget+pins",
+        len(client.open_paths()) <= 4 + 2,
+        str(client.open_paths()),
+    )
 
     # 10. errors are typed
     try:
@@ -122,7 +132,7 @@ async def main():
 
     await client.close()
     check("closed cleanly", not client.alive)
-    print(f"[{time.time()-t0:6.2f}s] ALL CHECKS PASSED")
+    print(f"[{time.time() - t0:6.2f}s] ALL CHECKS PASSED")
 
 
 asyncio.run(main())

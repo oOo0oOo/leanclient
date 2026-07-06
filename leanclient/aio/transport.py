@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 from collections import deque
-from typing import Awaitable, Callable, Optional
+from typing import Callable, Optional
 
 import orjson
 
@@ -154,7 +154,9 @@ class LspTransport:
                     return
                 self._stderr_tail.append(chunk)
                 self._stderr_len += len(chunk)
-                while self._stderr_len > _STDERR_TAIL_BYTES and len(self._stderr_tail) > 1:
+                while (
+                    self._stderr_len > _STDERR_TAIL_BYTES and len(self._stderr_tail) > 1
+                ):
                     self._stderr_len -= len(self._stderr_tail.popleft())
         except asyncio.CancelledError:
             pass
@@ -239,7 +241,10 @@ class LspTransport:
             payload = {
                 "jsonrpc": "2.0",
                 "id": msg_id,
-                "error": {"code": METHOD_NOT_FOUND, "message": f"Unsupported: {method}"},
+                "error": {
+                    "code": METHOD_NOT_FOUND,
+                    "message": f"Unsupported: {method}",
+                },
             }
         try:
             await self._write(payload)
@@ -292,9 +297,7 @@ class LspTransport:
             return await asyncio.wait_for(fut, timeout=timeout)
         except asyncio.TimeoutError:
             await self._abandon(req_id)
-            raise LeanRequestTimeout(
-                f"{method} timed out after {timeout}s"
-            ) from None
+            raise LeanRequestTimeout(f"{method} timed out after {timeout}s") from None
         except asyncio.CancelledError:
             await self._abandon(req_id)
             raise

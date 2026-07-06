@@ -142,7 +142,10 @@ class ScratchPool:
         """Run several trials; parallelism = pool size."""
         return list(
             await asyncio.gather(
-                *(self.run(b, want_goal_at=want_goal_at, timeout=timeout) for b in bodies)
+                *(
+                    self.run(b, want_goal_at=want_goal_at, timeout=timeout)
+                    for b in bodies
+                )
             )
         )
 
