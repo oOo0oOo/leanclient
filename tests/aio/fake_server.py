@@ -111,6 +111,43 @@ def main() -> None:
             respond(msg_id, result={"capabilities": {}})
             continue
 
+        # Answered in every scenario: the client fires this in the background
+        # right after initialize; it must not perturb scenario request counts.
+        if method == "$/lean/waitForILeans":
+            respond(msg_id, result={})
+            continue
+
+        if method == "workspace/symbol":
+            query = msg["params"]["query"]
+            respond(
+                msg_id,
+                result=[
+                    {
+                        "name": f"{query}_exact",
+                        "kind": 14,
+                        "location": {
+                            "uri": "file:///fake/Dep.lean",
+                            "range": {
+                                "start": {"line": 4, "character": 8},
+                                "end": {"line": 4, "character": 20},
+                            },
+                        },
+                    },
+                    {
+                        "name": f"Namespace.{query}_fuzzy",
+                        "kind": 14,
+                        "location": {
+                            "uri": "file:///fake/Other.lean",
+                            "range": {
+                                "start": {"line": 9, "character": 0},
+                                "end": {"line": 9, "character": 6},
+                            },
+                        },
+                    },
+                ],
+            )
+            continue
+
         request_count += 1
 
         if SCENARIO == "happy":

@@ -222,6 +222,54 @@ def test_client_open_update_barrier_against_fake(tmp_path: Path):
     asyncio.run(run())
 
 
+def test_client_workspace_symbol_and_ileans(tmp_path: Path):
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        await client.start()
+        assert await client.wait_for_ileans(timeout=5)
+        assert client.ileans_ready
+
+        symbols, ready = await client.workspace_symbol("foo", max_results=1)
+        assert ready
+        assert len(symbols) == 1
+        assert symbols[0]["name"] == "foo_exact"
+        # Location converted: path + codepoint range present.
+        assert symbols[0]["location"]["path"].endswith("Dep.lean")
+        assert symbols[0]["location"]["range"]["start"]["line"] == 4
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_client_didopen_sends_dependency_build_mode(tmp_path: Path):
+    """All opens (incl. scratch docs) must send dependencyBuildMode so trials
+    can never trigger a `lake` build."""
+
+    async def run():
+        seen = []
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        await client.start()
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            await original(method, params)
+
+        client._transport.notify = spy
+        await client.open("Foo.lean", text="def x := 1\n")
+        opens = [p for m, p in seen if m == "textDocument/didOpen"]
+        assert opens and opens[0]["dependencyBuildMode"] == "never"
+        await client.close()
+
+    asyncio.run(run())
+
+
 def test_docstate_ignores_stale_version_diagnostics(tmp_path: Path):
     """The D1 race from the audit: diagnostics for version N-1 arriving after
     the didChange to N must not overwrite the store."""

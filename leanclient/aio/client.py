@@ -145,6 +145,9 @@ class AsyncLeanLSPClient:
     # -- lifecycle -----------------------------------------------------------
 
     async def start(self) -> None:
+        await self._start_impl()
+
+    async def _start_impl(self) -> None:
         if self._check_version:
             version = _parse_toolchain(self.project_path)
             if version is not None and version < MIN_LEAN_VERSION:
@@ -173,9 +176,42 @@ class AsyncLeanLSPClient:
         )
         await self._transport.notify("initialized", {})
         self._started = True
+        # Load the .ilean index barrier in the background: references,
+        # workspace/symbol and call-hierarchy results are silently partial
+        # until the watchdog finishes loading (measured ~15s on Mathlib).
+        self._ileans_ready = asyncio.Event()
+        self._ileans_task = asyncio.create_task(self._await_ileans())
+
+    async def _await_ileans(self) -> None:
+        try:
+            await self._transport.request(
+                "$/lean/waitForILeans", {}, timeout=self.request_timeout
+            )
+        except LeanClientError:
+            pass  # index unavailable; searches degrade to partial results
+        finally:
+            self._ileans_ready.set()
+
+    @property
+    def ileans_ready(self) -> bool:
+        """True once the workspace symbol/reference index is fully loaded."""
+        return self._ileans_ready.is_set()
+
+    async def wait_for_ileans(self, timeout: Optional[float] = None) -> bool:
+        """Wait for the index; returns readiness (False on timeout)."""
+        try:
+            await asyncio.wait_for(
+                self._ileans_ready.wait(), timeout=timeout or self.request_timeout
+            )
+        except asyncio.TimeoutError:
+            return False
+        return self.ileans_ready
 
     async def close(self) -> None:
         self._started = False
+        task = getattr(self, "_ileans_task", None)
+        if task is not None and not task.done():
+            task.cancel()
         await self._transport.close()
         self._docs.clear()
         self._docs_by_uri.clear()
@@ -230,12 +266,20 @@ class AsyncLeanLSPClient:
     # -- open/close/update -----------------------------------------------
 
     async def open(
-        self, path: str, text: Optional[str] = None, wait: bool = True
+        self,
+        path: str,
+        text: Optional[str] = None,
+        wait: bool = True,
+        dependency_build_mode: str = "never",
     ) -> DocState:
         """Open a file (or a virtual document when ``text`` is given).
 
         Virtual documents get a path under the project root that need not
         exist on disk; the server elaborates the provided text.
+
+        ``dependency_build_mode`` controls whether the server may run
+        ``lake`` to build missing/out-of-date dependencies for this file:
+        "never" (default), "once", or "always".
         """
         existing = self._docs.get(path)
         if existing is not None and existing.status is not DocStatus.CLOSED:
@@ -267,7 +311,8 @@ class AsyncLeanLSPClient:
                         "languageId": "lean4",
                         "version": doc.version,
                         "text": doc.text,
-                    }
+                    },
+                    "dependencyBuildMode": dependency_build_mode,
                 },
             )
             doc.status = DocStatus.LIVE
@@ -589,6 +634,37 @@ class AsyncLeanLSPClient:
             "codeAction/resolve", action, timeout=timeout
         )
 
+    async def workspace_symbol(
+        self,
+        query: str,
+        max_results: Optional[int] = None,
+        wait_for_index: float = 0.0,
+        timeout: float = 30.0,
+    ) -> tuple[list[dict], bool]:
+        """Fuzzy, score-ranked symbol search over the project AND all
+        compiled dependencies (watchdog-served from the .ilean index).
+
+        Returns ``(symbols, index_ready)``. Results are partial until the
+        index finishes loading; pass ``wait_for_index`` seconds to wait for
+        completeness first. Locations are converted to codepoint columns.
+        """
+        if wait_for_index > 0 and not self.ileans_ready:
+            await self.wait_for_ileans(timeout=wait_for_index)
+        res = await self._transport.request(
+            "workspace/symbol", {"query": query}, timeout=timeout
+        )
+        symbols = res or []
+        if max_results is not None:
+            symbols = symbols[:max_results]
+        out = []
+        for sym in symbols:
+            converted = dict(sym)
+            loc = sym.get("location")
+            if loc:
+                converted["location"] = self._convert_location(loc)
+            out.append(converted)
+        return out, self.ileans_ready
+
     # -- Lean RPC (widgets, interactive goals) --------------------------------
 
     async def rpc_call(
@@ -631,6 +707,27 @@ class AsyncLeanLSPClient:
         session = res["sessionId"]
         self._rpc_sessions[doc.uri] = (session, now)
         return session
+
+    async def interactive_goals(
+        self, path: str, line: int, col: int, fresh: bool = True
+    ) -> Optional[dict]:
+        """Structured goals via ``Lean.Widget.getInteractiveGoals``: hypothesis
+        bundles (names, types, instance/type flags, inserted/removed deltas),
+        goal mvar ids and case names. Types come as TaggedText trees.
+        """
+        if fresh:
+            await self.barrier(path)
+        doc = self._doc(path)
+        lines = doc.lines()
+        line_str = lines[line] if 0 <= line < len(lines) else ""
+        pos = {"line": line, "character": codepoint_to_utf16(line_str, col)}
+        return await self.rpc_call(
+            path,
+            line,
+            col,
+            "Lean.Widget.getInteractiveGoals",
+            {"textDocument": {"uri": doc.uri}, "position": pos},
+        )
 
     async def get_widgets(
         self, path: str, line: int, col: int, fresh: bool = True
