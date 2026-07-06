@@ -337,7 +337,12 @@ class AsyncLeanLSPClient:
         return await self.open(path, text=text if doc and doc.virtual else None, wait=wait)
 
     async def _evict_if_needed(self) -> None:
-        while len(self._docs) >= self.max_workers:
+        def budget_used() -> int:
+            # Pinned docs (e.g. scratch-pool slots) don't consume the budget;
+            # otherwise a 2-slot pool halves the effective open-file capacity.
+            return sum(1 for d in self._docs.values() if not d.pinned)
+
+        while budget_used() >= self.max_workers:
             candidates = [
                 d
                 for d in self._docs.values()
