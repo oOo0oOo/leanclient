@@ -123,6 +123,7 @@ class AsyncLeanLSPClient:
         max_workers: Optional[int] = None,
         request_timeout: float = 300.0,
         check_version: bool = True,
+        server_command: Optional[list[str]] = None,
     ):
         self.project_path = str(Path(project_path).resolve())
         self.max_workers = max_workers or _default_max_workers()
@@ -130,7 +131,7 @@ class AsyncLeanLSPClient:
         self._check_version = check_version
 
         self._transport = LspTransport(
-            ["lake", "serve", "--"],
+            server_command or ["lake", "serve", "--"],
             cwd=self.project_path,
             on_notification=self._on_notification,
             default_timeout=request_timeout,
