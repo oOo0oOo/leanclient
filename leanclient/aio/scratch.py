@@ -100,6 +100,39 @@ class ScratchPool:
         finally:
             self._free.put_nowait(path)
 
+    async def run_text(
+        self,
+        text: str,
+        want_goal_at: Optional[tuple[int, int]] = None,
+        timeout: Optional[float] = None,
+    ) -> TrialResult:
+        """Check a complete document (its own imports included).
+
+        If ``text`` shares its import header with the slot's previous
+        content, the server reuses the header snapshot — so repeated trials
+        of same-project documents only pay body elaboration.
+        ``want_goal_at`` is (line, col) 0-indexed within ``text``.
+        Diagnostics in ``body_diagnostics`` are in document coordinates.
+        """
+        await self.warm()
+        path = await self._free.get()
+        try:
+            await self._client.update(path, text, wait=False)
+            report = await self._client.diagnostics(path, fresh=True, timeout=timeout)
+            goal = None
+            if want_goal_at is not None:
+                goal = await self._client.goal(
+                    path, want_goal_at[0], want_goal_at[1], fresh=False
+                )
+            return TrialResult(
+                body=text,
+                diagnostics=report,
+                goal=goal,
+                body_diagnostics=list(report.items),
+            )
+        finally:
+            self._free.put_nowait(path)
+
     async def run_many(
         self,
         bodies: list[str],
@@ -110,6 +143,23 @@ class ScratchPool:
         return list(
             await asyncio.gather(
                 *(self.run(b, want_goal_at=want_goal_at, timeout=timeout) for b in bodies)
+            )
+        )
+
+    async def run_texts(
+        self,
+        texts: list[str],
+        want_goal_at: Optional[list[Optional[tuple[int, int]]]] = None,
+        timeout: Optional[float] = None,
+    ) -> list[TrialResult]:
+        """Check several complete documents; parallelism = pool size."""
+        goals = want_goal_at or [None] * len(texts)
+        return list(
+            await asyncio.gather(
+                *(
+                    self.run_text(t, want_goal_at=g, timeout=timeout)
+                    for t, g in zip(texts, goals)
+                )
             )
         )
 
