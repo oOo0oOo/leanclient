@@ -161,6 +161,12 @@ class AsyncLeanLSPClient:
                 "processId": os.getpid(),
                 "rootUri": self._path_to_uri(self.project_path),
                 "capabilities": {},
+                "initializationOptions": {
+                    "editDelay": 1,
+                    # Widget support: without this, interactive diagnostics
+                    # render embedded widgets as plain text.
+                    "hasWidgets": True,
+                },
             },
             timeout=30.0,
         )
