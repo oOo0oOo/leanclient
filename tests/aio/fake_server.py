@@ -94,7 +94,8 @@ def main() -> None:
             if method == "textDocument/didOpen":
                 td = msg["params"]["textDocument"]
                 doc_versions[td["uri"]] = td["version"]
-                publish_clean_diagnostics(td["uri"], td["version"])
+                if SCENARIO != "slow_elab":
+                    publish_clean_diagnostics(td["uri"], td["version"])
             elif method == "textDocument/didChange":
                 td = msg["params"]["textDocument"]
                 doc_versions[td["uri"]] = td["version"]
@@ -155,6 +156,34 @@ def main() -> None:
                 respond(msg_id, result={})
             else:
                 respond(msg_id, result={"echo": method, "n": request_count})
+
+        elif SCENARIO == "slow_elab":
+            # Elaboration never finishes: emit a fileProgress processing range
+            # and leave waitForDiagnostics pending forever. Clients must be
+            # able to return an honest partial result instead of an error.
+            if method == "textDocument/waitForDiagnostics":
+                uri = msg["params"]["uri"]
+                send(
+                    {
+                        "jsonrpc": "2.0",
+                        "method": "$/lean/fileProgress",
+                        "params": {
+                            "textDocument": {"uri": uri, "version": 1},
+                            "processing": [
+                                {
+                                    "range": {
+                                        "start": {"line": 2, "character": 0},
+                                        "end": {"line": 40, "character": 0},
+                                    },
+                                    "kind": 1,
+                                }
+                            ],
+                        },
+                    }
+                )
+                # never respond
+            else:
+                respond(msg_id, result={"echo": method})
 
         elif SCENARIO == "malformed_header":
             # Garbage instead of a header block: the reader must die typed

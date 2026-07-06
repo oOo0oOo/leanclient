@@ -45,6 +45,7 @@ from .document import DocState, DocStatus
 from .errors import (
     LeanClientError,
     LeanFileNotOpen,
+    LeanRequestTimeout,
     LeanRpcError,
     LeanUnsupportedVersion,
     LeanWorkerCrashed,
@@ -80,11 +81,17 @@ class DiagnosticsReport:
 
     ``items`` are raw LSP diagnostics with all ``range``/``fullRange`` columns
     converted to codepoints. ``fatal_error`` mirrors fileProgress kind=2.
+
+    ``partial`` is True when the elaboration barrier timed out: ``items`` may
+    be incomplete and ``processing_ranges`` lists the (codepoint-converted)
+    ranges the server was still elaborating. Poll again for a full report.
     """
 
     items: list[dict]
     version: Optional[int]
     fatal_error: bool = False
+    partial: bool = False
+    processing_ranges: list = field(default_factory=list)
 
     @property
     def errors(self) -> list[dict]:
@@ -176,11 +183,17 @@ class AsyncLeanLSPClient:
         )
         await self._transport.notify("initialized", {})
         self._started = True
-        # Load the .ilean index barrier in the background: references,
-        # workspace/symbol and call-hierarchy results are silently partial
-        # until the watchdog finishes loading (measured ~15s on Mathlib).
+        # NOTE: $/lean/waitForILeans is handled ON the watchdog's main loop
+        # and blocks ALL message processing (didOpen included) until the
+        # .ilean scan finishes — measured +20s on first requests when fired
+        # eagerly. It is therefore only sent lazily, on the first
+        # wait_for_ileans()/workspace_symbol(wait_for_index=...) call.
         self._ileans_ready = asyncio.Event()
-        self._ileans_task = asyncio.create_task(self._await_ileans())
+        self._ileans_task: Optional[asyncio.Task] = None
+
+    def _ensure_ileans_task(self) -> None:
+        if self._ileans_task is None:
+            self._ileans_task = asyncio.create_task(self._await_ileans())
 
     async def _await_ileans(self) -> None:
         try:
@@ -198,7 +211,12 @@ class AsyncLeanLSPClient:
         return self._ileans_ready.is_set()
 
     async def wait_for_ileans(self, timeout: Optional[float] = None) -> bool:
-        """Wait for the index; returns readiness (False on timeout)."""
+        """Wait for the index; returns readiness (False on timeout).
+
+        First call triggers the (watchdog-blocking) index barrier — avoid
+        interleaving with cold file opens where possible.
+        """
+        self._ensure_ileans_task()
         try:
             await asyncio.wait_for(
                 self._ileans_ready.wait(), timeout=timeout or self.request_timeout
@@ -467,11 +485,27 @@ class AsyncLeanLSPClient:
             doc.touch()
 
     async def diagnostics(
-        self, path: str, fresh: bool = True, timeout: Optional[float] = None
+        self,
+        path: str,
+        fresh: bool = True,
+        timeout: Optional[float] = None,
+        partial_ok: bool = False,
     ) -> DiagnosticsReport:
+        """Diagnostics for ``path``; fresh (barrier-gated) by default.
+
+        With ``partial_ok=True`` a barrier timeout returns a report with
+        ``partial=True`` and the still-processing ranges instead of raising —
+        the caller can poll again rather than treating slowness as failure.
+        """
         doc = self._doc(path)
+        partial = False
         if fresh:
-            await self.barrier(path, timeout=timeout)
+            try:
+                await self.barrier(path, timeout=timeout)
+            except LeanRequestTimeout:
+                if not partial_ok:
+                    raise
+                partial = True
         lines = doc.lines()
         items = []
         for diag in doc.diagnostics:
@@ -480,8 +514,18 @@ class AsyncLeanLSPClient:
                 if key in d and d[key]:
                     d[key] = range_from_utf16(lines, d[key])
             items.append(d)
+        processing = []
+        if partial:
+            for entry in doc.processing:
+                rng = entry.get("range")
+                if rng:
+                    processing.append(range_from_utf16(lines, rng))
         return DiagnosticsReport(
-            items=items, version=doc.diagnostics_version, fatal_error=doc.fatal_error
+            items=items,
+            version=doc.diagnostics_version,
+            fatal_error=doc.fatal_error,
+            partial=partial,
+            processing_ranges=processing,
         )
 
     async def goal(

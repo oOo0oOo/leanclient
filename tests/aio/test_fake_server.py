@@ -270,6 +270,34 @@ def test_client_didopen_sends_dependency_build_mode(tmp_path: Path):
     asyncio.run(run())
 
 
+def test_partial_diagnostics_on_slow_elaboration(tmp_path: Path):
+    """A barrier timeout with partial_ok returns an honest partial report
+    carrying the still-processing ranges instead of raising."""
+
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "slow_elab"],
+        )
+        await client.start()
+        await client.open("Slow.lean", text="def x := 1\n" * 50, wait=False)
+
+        report = await client.diagnostics(
+            "Slow.lean", fresh=True, timeout=1.0, partial_ok=True
+        )
+        assert report.partial is True
+        assert report.processing_ranges
+        assert report.processing_ranges[0]["start"]["line"] == 2
+        assert report.processing_ranges[0]["end"]["line"] == 40
+
+        # Without partial_ok the timeout is still a typed error.
+        with pytest.raises(LeanRequestTimeout):
+            await client.diagnostics("Slow.lean", fresh=True, timeout=0.5)
+        await client.close()
+
+    asyncio.run(run())
+
+
 def test_docstate_ignores_stale_version_diagnostics(tmp_path: Path):
     """The D1 race from the audit: diagnostics for version N-1 arriving after
     the didChange to N must not overwrite the store."""
