@@ -33,8 +33,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional, cast
-from urllib.parse import unquote, urlparse
-from urllib.request import pathname2url
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 from .convert import (
     codepoint_to_utf16,
@@ -121,7 +121,9 @@ def _default_max_workers() -> int:
 
 def _parse_toolchain(project_path: str) -> Optional[tuple[int, int]]:
     try:
-        raw = (Path(project_path) / "lean-toolchain").read_text().strip()
+        raw = (
+            (Path(project_path) / "lean-toolchain").read_text(encoding="utf-8").strip()
+        )
     except OSError:
         return None
     m = re.search(r"v(\d+)\.(\d+)", raw)
@@ -246,11 +248,17 @@ class AsyncLeanLSPClient:
     # -- uri/path helpers ----------------------------------------------------
 
     def _path_to_uri(self, path: str) -> str:
+        # as_uri() keeps the drive letter in the path on Windows; the
+        # pathname2url form ("file://" + "///C:/...") produces a broken URI.
         abs_path = Path(self.project_path) / path
-        return "file://" + pathname2url(str(abs_path))
+        return abs_path.as_uri()
+
+    def _uri_to_abs(self, uri: str) -> str:
+        # url2pathname unquotes and, on Windows, turns "/C:/dir" into "C:\dir".
+        return url2pathname(urlparse(uri).path)
 
     def _uri_to_relpath(self, uri: str) -> str:
-        local = unquote(urlparse(uri).path)
+        local = self._uri_to_abs(uri)
         try:
             return str(Path(local).relative_to(self.project_path))
         except ValueError:
@@ -317,7 +325,7 @@ class AsyncLeanLSPClient:
             await self._evict_if_needed()
             virtual = text is not None
             if text is None:
-                text = (Path(self.project_path) / path).read_text()
+                text = (Path(self.project_path) / path).read_text(encoding="utf-8")
             doc = DocState(
                 path=path,
                 uri=self._path_to_uri(path),
@@ -377,7 +385,7 @@ class AsyncLeanLSPClient:
     async def reload_from_disk(self, path: str, wait: bool = False) -> DocState:
         """Sync the document with the file's current on-disk content."""
         doc = self._docs.get(path)
-        disk = (Path(self.project_path) / path).read_text()
+        disk = (Path(self.project_path) / path).read_text(encoding="utf-8")
         if doc is None or doc.status is DocStatus.CLOSED:
             return await self.open(path, wait=wait)
         if disk != doc.text:
@@ -857,13 +865,15 @@ class AsyncLeanLSPClient:
         return out
 
     def _disk_lines(self, uri: str) -> list[str]:
-        local = unquote(urlparse(uri).path)
+        local = self._uri_to_abs(uri)
         try:
             mtime = os.path.getmtime(local)
             cached = self._file_lines_cache.get(local)
             if cached is not None and cached[0] == mtime:
                 return cached[1]
-            lines = Path(local).read_text(errors="replace").splitlines()
+            lines = (
+                Path(local).read_text(encoding="utf-8", errors="replace").splitlines()
+            )
             if len(self._file_lines_cache) > 64:
                 self._file_lines_cache.clear()
             self._file_lines_cache[local] = (mtime, lines)
