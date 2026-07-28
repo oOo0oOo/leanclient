@@ -35,6 +35,15 @@ def make_reader_client(stdout: bytes) -> BaseLeanLSPClient:
     return client
 
 
+def make_lsp_frame(body: bytes, *headers: bytes) -> bytes:
+    """Frame a raw body with Content-Length and optional LSP headers."""
+    return (
+        b"\r\n".join((*headers, f"Content-Length: {len(body)}".encode()))
+        + b"\r\n\r\n"
+        + body
+    )
+
+
 @pytest.mark.unit
 @pytest.mark.slow
 def test_initial_build(test_project_dir):
@@ -90,12 +99,49 @@ def test_read_stdout_message_accepts_additional_lsp_headers():
     message = {"jsonrpc": "2.0", "id": 1, "result": {}}
     body = orjson.dumps(message)
     client = make_reader_client(
-        b"Content-Type: application/vscode-jsonrpc; charset=utf-8\r\n"
-        + f"Content-Length: {len(body)}\r\n\r\n".encode()
-        + body
+        make_lsp_frame(body, b"Content-Type: application/vscode-jsonrpc; charset=utf-8")
     )
 
     assert client._read_stdout_message() == message
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("stdout", "error"),
+    [
+        (b"Malformed\r\n\r\n", "Malformed LSP header line"),
+        (b"X-Incompatible: nope\r\n\r\n{}", "Missing Content-Length"),
+        (
+            b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}",
+            "Duplicate LSP header",
+        ),
+        (b"Content-Length: nope\r\n\r\n", "Invalid Content-Length"),
+        (b"Content-Length: -1\r\n\r\n", "Invalid Content-Length"),
+        (b"Content-Length: +2\r\n\r\n{}", "Invalid Content-Length"),
+    ],
+)
+def test_read_stdout_message_rejects_invalid_headers(stdout, error):
+    """Invalid framing headers fail with a specific protocol error."""
+    client = make_reader_client(stdout)
+
+    with pytest.raises(LSPProtocolError, match=error):
+        client._read_stdout_message()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("body", "error"),
+    [
+        (b"{", "invalid LSP JSON"),
+        (b"[]", "non-object LSP message: list"),
+    ],
+)
+def test_read_stdout_message_rejects_invalid_json_messages(body, error):
+    """LSP payloads must be valid JSON objects."""
+    client = make_reader_client(make_lsp_frame(body))
+
+    with pytest.raises(LSPProtocolError, match=error):
+        client._read_stdout_message()
 
 
 @pytest.mark.unit
@@ -110,6 +156,24 @@ def test_malformed_lsp_header_fails_pending_and_future_requests():
     error = pending.exception()
     assert isinstance(error, LSPProtocolError)
     assert "Missing Content-Length" in str(error)
+    assert client._reader_error is error
+    assert client._futures == {}
+
+    next_request = client._send_request_async("textDocument/hover", {})
+    assert next_request.exception() is error
+
+
+@pytest.mark.unit
+def test_reader_eof_fails_pending_and_future_requests():
+    """EOF fails current requests and is remembered for subsequent ones."""
+    client = make_reader_client(b"")
+    pending = Future()
+    client._futures[7] = pending
+
+    client._read_stdout_loop(threading.Event())
+
+    error = pending.exception()
+    assert isinstance(error, EOFError)
     assert client._reader_error is error
     assert client._futures == {}
 

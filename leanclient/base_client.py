@@ -314,16 +314,11 @@ class BaseLeanLSPClient:
                 f"Missing Content-Length LSP header; received [{rendered_headers}]"
             )
 
-        try:
-            content_length = int(raw_content_length)
-        except ValueError as exc:
-            raise LSPProtocolError(
-                f"Invalid Content-Length LSP header: {raw_content_length!r}"
-            ) from exc
-        if content_length < 0:
+        if not raw_content_length.isascii() or not raw_content_length.isdigit():
             raise LSPProtocolError(
                 f"Invalid Content-Length LSP header: {raw_content_length!r}"
             )
+        content_length = int(raw_content_length)
 
         body = self.stdout.read(content_length)
         if len(body) != content_length:
