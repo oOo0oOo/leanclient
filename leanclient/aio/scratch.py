@@ -3,8 +3,8 @@
 The expensive part of checking a Lean snippet is the import header (~8s for
 ``import Mathlib``, ~5 GB per worker). A ScratchPool pays that once per slot:
 each slot is a virtual document (never on disk) opened with the shared header;
-a trial is then a full-text didChange + barrier — measured ~0.2s — and slots
-run trials **in parallel**.
+a trial is then a full-text didChange + barrier, and slots run trials **in
+parallel**.
 
 This replaces every edit-the-user's-file-and-restore pattern: the user's
 document is never touched.

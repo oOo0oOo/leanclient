@@ -138,14 +138,18 @@ class AsyncLeanLSPClient:
         request_timeout: float = 300.0,
         check_version: bool = True,
         server_command: Optional[list[str]] = None,
+        report_delay_ms: Optional[int] = 0,
     ):
         self.project_path = str(Path(project_path).resolve())
         self.max_workers = max_workers or _default_max_workers()
         self.request_timeout = request_timeout
         self._check_version = check_version
 
+        command = server_command or ["lake", "serve", "--"]
+        if server_command is None and report_delay_ms is not None:
+            command = [*command, f"-Dserver.reportDelayMs={report_delay_ms}"]
         self._transport = LspTransport(
-            server_command or ["lake", "serve", "--"],
+            command,
             cwd=self.project_path,
             on_notification=self._on_notification,
             default_timeout=request_timeout,
@@ -178,7 +182,13 @@ class AsyncLeanLSPClient:
             {
                 "processId": os.getpid(),
                 "rootUri": self._path_to_uri(self.project_path),
-                "capabilities": {},
+                "capabilities": {
+                    "lean": {
+                        # Lean 4.32+: append incremental diagnostic updates
+                        # instead of receiving the full quadratic prefix.
+                        "incrementalDiagnosticSupport": True,
+                    }
+                },
                 "initializationOptions": {
                     "editDelay": 1,
                     # Widget support: without this, interactive diagnostics
@@ -365,7 +375,7 @@ class AsyncLeanLSPClient:
         right primitive even for single-line edits.
         """
         doc = self._doc(path)
-        doc.text = text
+        doc.replace_text(text)
         doc.version += 1
         doc.diagnostics_version = None
         doc.fatal_error = False
@@ -445,12 +455,19 @@ class AsyncLeanLSPClient:
         if doc.status is DocStatus.CRASHED:
             # Watchdog contract: only didChange revives a crashed worker.
             await self.update(path, doc.text, wait=False)
+        requested_version = doc.version
+        if doc.barrier_version is not None and doc.barrier_version >= requested_version:
+            doc.touch()
+            return
         doc.refcount += 1
         try:
             await self._transport.request(
                 "textDocument/waitForDiagnostics",
-                {"uri": doc.uri, "version": doc.version},
+                {"uri": doc.uri, "version": requested_version},
                 timeout=timeout or self.request_timeout,
+            )
+            doc.barrier_version = max(
+                doc.barrier_version or requested_version, requested_version
             )
         except LeanRpcError as e:
             if e.code in _WORKER_ERROR_CODES or "worker" in e.rpc_message.lower():

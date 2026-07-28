@@ -224,6 +224,131 @@ def test_client_open_update_barrier_against_fake(tmp_path: Path):
     asyncio.run(run())
 
 
+def test_client_default_command_disables_report_delay(tmp_path: Path):
+    project = str(_project(tmp_path))
+    client = AsyncLeanLSPClient(project)
+    assert client._transport._command == [
+        "lake",
+        "serve",
+        "--",
+        "-Dserver.reportDelayMs=0",
+    ]
+
+    debounced = AsyncLeanLSPClient(project, report_delay_ms=200)
+    assert debounced._transport._command[-1] == "-Dserver.reportDelayMs=200"
+
+    unmodified = AsyncLeanLSPClient(project, report_delay_ms=None)
+    assert unmodified._transport._command == ["lake", "serve", "--"]
+
+    custom = [sys.executable, FAKE, "happy"]
+    custom_client = AsyncLeanLSPClient(
+        project,
+        server_command=custom,
+        report_delay_ms=123,
+    )
+    assert custom_client._transport._command == custom
+
+
+def test_client_advertises_incremental_diagnostics(tmp_path: Path):
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        seen = {}
+        original = client._transport.request
+
+        async def spy(method, params, *args, **kwargs):
+            if method == "initialize":
+                seen.update(params)
+            return await original(method, params, *args, **kwargs)
+
+        setattr(client._transport, "request", spy)
+        await client.start()
+        assert seen["capabilities"]["lean"]["incrementalDiagnosticSupport"] is True
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_client_reuses_barrier_for_unchanged_version(tmp_path: Path):
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        barriers = 0
+        original = client._transport.request
+
+        async def spy(method, params, *args, **kwargs):
+            nonlocal barriers
+            if method == "textDocument/waitForDiagnostics":
+                barriers += 1
+            return await original(method, params, *args, **kwargs)
+
+        setattr(client._transport, "request", spy)
+        await client.start()
+        doc = await client.open("Foo.lean", text="def x := 1\n")
+        assert barriers == 1
+        assert doc.barrier_version == 1
+
+        await client.diagnostics("Foo.lean")
+        await client.diagnostics("Foo.lean")
+        assert barriers == 1
+
+        await client.update("Foo.lean", "def x := 2\n")
+        assert doc.barrier_version is None
+        await client.diagnostics("Foo.lean")
+        assert barriers == 2
+        assert doc.barrier_version == 2
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_client_barrier_completion_does_not_downgrade_version(tmp_path: Path):
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        await client.start()
+        doc = await client.open("Foo.lean", text="def x := 1\n", wait=False)
+
+        gates = {1: asyncio.Event(), 2: asyncio.Event()}
+        barrier_calls = []
+        original = client._transport.request
+
+        async def delayed(method, params, *args, **kwargs):
+            if method != "textDocument/waitForDiagnostics":
+                return await original(method, params, *args, **kwargs)
+            version = params["version"]
+            barrier_calls.append(version)
+            await gates[version].wait()
+            return {}
+
+        setattr(client._transport, "request", delayed)
+        first = asyncio.create_task(client.barrier("Foo.lean"))
+        await asyncio.sleep(0)
+        await client.update("Foo.lean", "def x := 2\n")
+        second = asyncio.create_task(client.barrier("Foo.lean"))
+        await asyncio.sleep(0)
+
+        gates[2].set()
+        await second
+        assert doc.barrier_version == 2
+
+        gates[1].set()
+        await first
+        assert doc.barrier_version == 2
+
+        await client.barrier("Foo.lean")
+        assert barrier_calls == [1, 2]
+        await client.close()
+
+    asyncio.run(run())
+
+
 def test_client_workspace_symbol_and_ileans(tmp_path: Path):
     async def run():
         client = AsyncLeanLSPClient(
@@ -312,6 +437,41 @@ def test_docstate_ignores_stale_version_diagnostics(tmp_path: Path):
     doc.on_publish_diagnostics({"version": 2, "diagnostics": [{"message": "fresh"}]})
     assert doc.diagnostics == [{"message": "fresh"}]
     assert doc.diagnostics_version == 2
+
+
+def test_docstate_appends_incremental_diagnostics_and_resets():
+    from leanclient.aio.document import DocState
+
+    doc = DocState(path="Foo.lean", uri="file:///Foo.lean", text="v1")
+    first = {"message": "first"}
+    second = {"message": "second"}
+    replacement = {"message": "replacement"}
+
+    doc.on_publish_diagnostics({"version": 1, "diagnostics": [first]})
+    doc.on_publish_diagnostics(
+        {"version": 1, "isIncremental": True, "diagnostics": [second]}
+    )
+    assert doc.diagnostics == [first, second]
+
+    doc.on_publish_diagnostics(
+        {"version": 1, "isIncremental": False, "diagnostics": [replacement]}
+    )
+    assert doc.diagnostics == [replacement]
+
+
+def test_docstate_caches_lines_until_text_changes():
+    from leanclient.aio.document import DocState
+
+    doc = DocState(path="Foo.lean", uri="file:///Foo.lean", text="one\ntwo\n")
+    first = doc.lines()
+    assert first == ["one", "two"]
+    assert doc.lines() is first
+
+    doc.barrier_version = 1
+    doc.replace_text("three\n")
+    assert doc.lines() == ["three"]
+    assert doc.lines() is not first
+    assert doc.barrier_version is None
 
 
 def test_unsupported_toolchain_rejected(tmp_path: Path):

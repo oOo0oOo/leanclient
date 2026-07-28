@@ -38,6 +38,9 @@ class DocState:
     diagnostics: list = field(default_factory=list)
     diagnostics_version: Optional[int] = None
 
+    # Latest document version for which waitForDiagnostics completed.
+    barrier_version: Optional[int] = None
+
     # fileProgress: list of currently-processing ranges; fatal flag.
     processing: list = field(default_factory=list)
     fatal_error: bool = False
@@ -46,9 +49,18 @@ class DocState:
     stale_imports: bool = False
 
     crash_message: str = ""
+    _lines: list[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._lines = self.text.splitlines()
 
     def lines(self) -> list[str]:
-        return self.text.splitlines()
+        return self._lines
+
+    def replace_text(self, text: str) -> None:
+        self.text = text
+        self._lines = text.splitlines()
+        self.barrier_version = None
 
     def touch(self) -> None:
         self.last_used = time.monotonic()
@@ -61,7 +73,11 @@ class DocState:
         # untagged ones (shouldn't happen with Lean >= 4.24, but harmless).
         if version is not None and version < self.version:
             return
-        self.diagnostics = params.get("diagnostics", [])
+        diagnostics = params.get("diagnostics", [])
+        if params.get("isIncremental") is True:
+            self.diagnostics.extend(diagnostics)
+        else:
+            self.diagnostics = diagnostics
         self.diagnostics_version = version
 
     def on_file_progress(self, params: dict) -> None:
@@ -79,7 +95,7 @@ class DocState:
         self.crash_message = message
 
     def reset_after_reopen(self, text: str) -> None:
-        self.text = text
+        self.replace_text(text)
         self.version += 1  # keep versions monotonic across revivals
         self.status = DocStatus.OPENING
         self.diagnostics = []
