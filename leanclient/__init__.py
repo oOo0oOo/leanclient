@@ -1,5 +1,6 @@
 import logging
 
+from .base_client import LSPProtocolError
 from .utils import DocumentContentChange, SemanticTokenProcessor
 from .single_file_client import SingleFileClient
 from .client import LeanLSPClient
@@ -13,6 +14,7 @@ __all__ = [
     "SingleFileClient",
     "LeanLSPClient",
     "LeanClientPool",
+    "LSPProtocolError",
 ]
 
 # Configure default logging (users can override)
