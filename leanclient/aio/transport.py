@@ -120,17 +120,18 @@ class LspTransport:
     def _kill_group(self) -> None:
         """SIGKILL the server's whole process group (lake + watchdog + workers)."""
         import os
+        import platform
         import signal
 
         if self._proc is None:
             return
         try:
-            os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, OSError):
-            try:
+            if platform.system() != "Windows":
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
+            else:
                 self._proc.kill()
-            except ProcessLookupError:
-                pass
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
 
     def _die(self, exc: LeanTransportError) -> None:
         """Mark the transport dead and fail every pending future."""
