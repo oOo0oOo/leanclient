@@ -125,6 +125,7 @@ def test_aio_uri_to_abs_restores_windows_drive(
 
     for uri in (
         "file:///C:/Users/11388/HighDimProb/Main.lean",
+        "file:///C%3A/Users/11388/HighDimProb/Main.lean",
         "file://///C:/Users/11388/HighDimProb/Main.lean",
     ):
         assert client._uri_to_abs(uri) == r"C:\Users\11388\HighDimProb\Main.lean"
