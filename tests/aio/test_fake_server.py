@@ -11,6 +11,9 @@ Plain ``asyncio.run`` wrappers (no pytest-asyncio dependency in this repo).
 from __future__ import annotations
 
 import asyncio
+import os
+import platform
+import signal
 import sys
 from pathlib import Path
 
@@ -45,6 +48,66 @@ async def _started(scenario: str, notifications=None) -> LspTransport:
     await t.start()
     await t.request("initialize", {})
     return t
+
+
+class _FakeProcess:
+    pid = 4321
+
+    def __init__(self):
+        self.killed = False
+
+    def kill(self):
+        self.killed = True
+
+
+def _transport_with_process() -> tuple[LspTransport, _FakeProcess]:
+    transport = _transport("happy")
+    process = _FakeProcess()
+    transport._proc = process
+    return transport, process
+
+
+def test_kill_group_uses_process_kill_on_windows(monkeypatch):
+    transport, process = _transport_with_process()
+    monkeypatch.setattr(platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        os,
+        "killpg",
+        lambda *_args: pytest.fail("Windows must not call os.killpg"),
+        raising=False,
+    )
+
+    transport._kill_group()
+
+    assert process.killed
+
+
+def test_kill_group_uses_process_group_on_posix(monkeypatch):
+    transport, process = _transport_with_process()
+    killed = []
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(os, "getpgid", lambda pid: pid, raising=False)
+    monkeypatch.setattr(os, "killpg", lambda *args: killed.append(args), raising=False)
+
+    transport._kill_group()
+
+    assert killed == [(_FakeProcess.pid, signal.SIGKILL)]
+    assert not process.killed
+
+
+def test_kill_group_falls_back_when_posix_group_kill_fails(monkeypatch):
+    transport, process = _transport_with_process()
+    monkeypatch.setattr(platform, "system", lambda: "Linux")
+    monkeypatch.setattr(os, "getpgid", lambda pid: pid, raising=False)
+
+    def fail_group_kill(*_args):
+        raise PermissionError
+
+    monkeypatch.setattr(os, "killpg", fail_group_kill, raising=False)
+
+    transport._kill_group()
+
+    assert process.killed
 
 
 def test_happy_roundtrip():

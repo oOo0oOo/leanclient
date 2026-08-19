@@ -125,13 +125,20 @@ class LspTransport:
 
         if self._proc is None:
             return
-        try:
-            if platform.system() != "Windows":
-                os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
-            else:
+        if platform.system() == "Windows":
+            try:
                 self._proc.kill()
+            except ProcessLookupError:
+                pass
+            return
+
+        try:
+            os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
-            pass
+            try:
+                self._proc.kill()
+            except ProcessLookupError:
+                pass
 
     def _die(self, exc: LeanTransportError) -> None:
         """Mark the transport dead and fail every pending future."""
