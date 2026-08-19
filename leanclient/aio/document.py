@@ -47,6 +47,7 @@ class DocState:
 
     # $/lean/staleDependency was received; a reopen would pick up new imports.
     stale_imports: bool = False
+    dependency_rebuild_attempted: bool = False
 
     crash_message: str = ""
     _lines: list[str] = field(init=False, repr=False)
@@ -61,6 +62,7 @@ class DocState:
         self.text = text
         self._lines = text.splitlines()
         self.barrier_version = None
+        self.dependency_rebuild_attempted = False
 
     def touch(self) -> None:
         self.last_used = time.monotonic()
@@ -89,6 +91,7 @@ class DocState:
 
     def on_stale_dependency(self) -> None:
         self.stale_imports = True
+        self.dependency_rebuild_attempted = False
 
     def mark_crashed(self, message: str) -> None:
         self.status = DocStatus.CRASHED
@@ -103,4 +106,5 @@ class DocState:
         self.processing = []
         self.fatal_error = False
         self.stale_imports = False
+        self.dependency_rebuild_attempted = False
         self.crash_message = ""

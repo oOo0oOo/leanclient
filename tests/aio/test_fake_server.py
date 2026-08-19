@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from watchfiles import Change
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -32,7 +33,7 @@ from leanclient.aio.transport import LspTransport  # noqa: E402
 FAKE = str(Path(__file__).parent / "fake_server.py")
 
 
-def _transport(scenario: str, notifications=None) -> LspTransport:
+def _transport(scenario: str, notifications=None, server_requests=None) -> LspTransport:
     return LspTransport(
         [sys.executable, FAKE, scenario],
         cwd=str(Path(__file__).parent),
@@ -40,11 +41,14 @@ def _transport(scenario: str, notifications=None) -> LspTransport:
         if notifications is not None
         else (lambda m, p: None),
         default_timeout=10.0,
+        on_server_request=server_requests,
     )
 
 
-async def _started(scenario: str, notifications=None) -> LspTransport:
-    t = _transport(scenario, notifications)
+async def _started(
+    scenario: str, notifications=None, server_requests=None
+) -> LspTransport:
+    t = _transport(scenario, notifications, server_requests)
     await t.start()
     await t.request("initialize", {})
     return t
@@ -166,9 +170,19 @@ def test_server_request_with_colliding_id_does_not_poison_future():
     future with the raw request object here)."""
 
     async def run():
-        t = await _started("id_collision")
+        server_requests = []
+        t = await _started(
+            "id_collision",
+            server_requests=lambda method, params: server_requests.append(
+                (method, params)
+            ),
+        )
         result = await asyncio.wait_for(t.request("query", {}), timeout=5)
+        await asyncio.sleep(0)
         assert result == {"real": True}
+        assert server_requests == [
+            ("workspace/semanticTokens/refresh", {"reason": "test"})
+        ]
         await t.close()
 
     asyncio.run(run())
@@ -329,6 +343,9 @@ def test_client_advertises_incremental_diagnostics(tmp_path: Path):
         setattr(client._transport, "request", spy)
         await client.start()
         assert seen["capabilities"]["lean"]["incrementalDiagnosticSupport"] is True
+        assert seen["capabilities"]["workspace"]["didChangeWatchedFiles"] == {
+            "dynamicRegistration": True
+        }
         await client.close()
 
     asyncio.run(run())
@@ -455,6 +472,195 @@ def test_client_didopen_sends_dependency_build_mode(tmp_path: Path):
         await client.open("Foo.lean", text="def x := 1\n")
         opens = [p for m, p in seen if m == "textDocument/didOpen"]
         assert opens and opens[0]["dependencyBuildMode"] == "never"
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_reload_from_disk_sends_did_save(tmp_path: Path):
+    async def run():
+        project = _project(tmp_path)
+        source = project / "Foo.lean"
+        source.write_text("def x := 1\n")
+        client = AsyncLeanLSPClient(
+            str(project), server_command=[sys.executable, FAKE, "happy"]
+        )
+        await client.start()
+        await client.open("Foo.lean")
+        seen = []
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            await original(method, params)
+
+        client._transport.notify = spy
+        source.write_text("def x := 2\n")
+        await client.reload_from_disk("Foo.lean", wait=True)
+        assert [
+            method
+            for method, _ in seen
+            if method in {"textDocument/didChange", "textDocument/didSave"}
+        ][:2] == [
+            "textDocument/didChange",
+            "textDocument/didSave",
+        ]
+        await client.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("signal", ["notification", "diagnostic"])
+def test_disk_document_rebuilds_stale_imports_once(tmp_path: Path, signal: str):
+    async def run():
+        project = _project(tmp_path)
+        (project / "Foo.lean").write_text("def x := 1\n")
+        client = AsyncLeanLSPClient(
+            str(project), server_command=[sys.executable, FAKE, "happy"]
+        )
+        seen = []
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            await original(method, params)
+
+        client._transport.notify = spy
+        await client.start()
+        doc = await client.open("Foo.lean")
+        if signal == "notification":
+            doc.on_stale_dependency()
+        else:
+            doc.diagnostics = [{"message": "Imports are out of date"}]
+
+        report = await client.diagnostics("Foo.lean")
+        assert report.items == []
+        opens = [params for method, params in seen if method == "textDocument/didOpen"]
+        assert [params["dependencyBuildMode"] for params in opens] == [
+            "never",
+            "once",
+        ]
+
+        await client.diagnostics("Foo.lean")
+        assert (
+            len([method for method, _ in seen if method == "textDocument/didOpen"]) == 2
+        )
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_concurrent_stale_queries_share_one_rebuild(tmp_path: Path):
+    async def run():
+        project = _project(tmp_path)
+        (project / "Foo.lean").write_text("def x := 1\n")
+        client = AsyncLeanLSPClient(
+            str(project), server_command=[sys.executable, FAKE, "happy"]
+        )
+        seen = []
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            await original(method, params)
+
+        client._transport.notify = spy
+        await client.start()
+        doc = await client.open("Foo.lean")
+        doc.on_stale_dependency()
+        await asyncio.gather(
+            client.diagnostics("Foo.lean"), client.diagnostics("Foo.lean")
+        )
+        modes = [
+            params["dependencyBuildMode"]
+            for method, params in seen
+            if method == "textDocument/didOpen"
+        ]
+        assert modes == ["never", "once"]
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_virtual_document_never_rebuilds_stale_imports(tmp_path: Path):
+    async def run():
+        client = AsyncLeanLSPClient(
+            str(_project(tmp_path)),
+            server_command=[sys.executable, FAKE, "happy"],
+        )
+        seen = []
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            await original(method, params)
+
+        client._transport.notify = spy
+        await client.start()
+        doc = await client.open("Scratch.lean", text="def x := 1\n")
+        doc.on_stale_dependency()
+        await client.diagnostics("Scratch.lean")
+        modes = [
+            params["dependencyBuildMode"]
+            for method, params in seen
+            if method == "textDocument/didOpen"
+        ]
+        assert modes == ["never"]
+        await client.close()
+
+    asyncio.run(run())
+
+
+def test_registered_file_watcher_forwards_lean_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    async def run():
+        project = _project(tmp_path)
+        changed = project / "Dep.lean"
+        changed.write_text("def x := 1\n")
+        (project / "Importer.lean").write_text("import Dep\n")
+
+        async def fake_awatch(path, *, watch_filter, **kwargs):
+            assert Path(path) == project
+            assert watch_filter(Change.modified, str(changed))
+            assert not watch_filter(Change.modified, str(project / "README.md"))
+            yield {(Change.modified, str(changed))}
+
+        monkeypatch.setattr("leanclient.aio.client.awatch", fake_awatch)
+        client = AsyncLeanLSPClient(
+            str(project), server_command=[sys.executable, FAKE, "happy"]
+        )
+        await client.start()
+        changed_doc = await client.open("Dep.lean")
+        importer_doc = await client.open("Importer.lean")
+        assert changed_doc.barrier_version == 1
+        assert importer_doc.barrier_version == 1
+        notified = asyncio.Event()
+        seen = []
+        original = client._transport.notify
+
+        async def spy(method, params):
+            seen.append((method, params))
+            if method == "workspace/didChangeWatchedFiles":
+                notified.set()
+            await original(method, params)
+
+        client._transport.notify = spy
+        client._on_server_request(
+            "client/registerCapability",
+            {"registrations": [{"method": "workspace/didChangeWatchedFiles"}]},
+        )
+        await asyncio.wait_for(notified.wait(), timeout=2)
+        changes = next(
+            params["changes"]
+            for method, params in seen
+            if method == "workspace/didChangeWatchedFiles"
+        )
+        assert changes == [{"uri": changed.as_uri(), "type": 2}]
+        assert changed_doc.barrier_version is None
+        assert importer_doc.barrier_version is None
+        assert not changed_doc.stale_imports
+        assert importer_doc.stale_imports
         await client.close()
 
     asyncio.run(run())

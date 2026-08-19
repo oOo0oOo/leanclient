@@ -215,6 +215,7 @@ def main() -> None:
                     "jsonrpc": "2.0",
                     "id": msg_id,
                     "method": "workspace/semanticTokens/refresh",
+                    "params": {"reason": "test"},
                 }
             )
             respond(msg_id, result={"real": True})

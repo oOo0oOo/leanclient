@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import re
 import time
@@ -35,6 +36,8 @@ from pathlib import Path
 from typing import Literal, Optional, cast
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
+
+from watchfiles import awatch
 
 from .convert import (
     codepoint_to_utf16,
@@ -56,6 +59,9 @@ MIN_LEAN_VERSION = (4, 24)
 # Lean-specific error codes (Lean.Data.Lsp.Utf16 / Watchdog)
 _WORKER_ERROR_CODES = {-32901, -32902}  # workerExited, workerCrashed
 _CONTENT_MODIFIED = -32801
+_STALE_IMPORT_TEXT = "Imports are out of date"
+
+logger = logging.getLogger(__name__)
 
 
 def _as_dict_list(value: object) -> list[dict]:
@@ -152,12 +158,16 @@ class AsyncLeanLSPClient:
             command,
             cwd=self.project_path,
             on_notification=self._on_notification,
+            on_server_request=self._on_server_request,
             default_timeout=request_timeout,
         )
         self._docs: dict[str, DocState] = {}
         self._docs_by_uri: dict[str, DocState] = {}
         self._open_lock = asyncio.Lock()
+        self._dependency_rebuild_locks: dict[str, asyncio.Lock] = {}
         self._rpc_sessions: dict[str, tuple[str, float]] = {}
+        self._watch_task: Optional[asyncio.Task] = None
+        self._watch_ready = asyncio.Event()
         self._started = False
 
     # -- lifecycle -----------------------------------------------------------
@@ -183,11 +193,14 @@ class AsyncLeanLSPClient:
                 "processId": os.getpid(),
                 "rootUri": self._path_to_uri(self.project_path),
                 "capabilities": {
+                    "workspace": {
+                        "didChangeWatchedFiles": {"dynamicRegistration": True}
+                    },
                     "lean": {
                         # Lean 4.32+: append incremental diagnostic updates
                         # instead of receiving the full quadratic prefix.
                         "incrementalDiagnosticSupport": True,
-                    }
+                    },
                 },
                 "initializationOptions": {
                     "editDelay": 1,
@@ -199,6 +212,8 @@ class AsyncLeanLSPClient:
             timeout=30.0,
         )
         await self._transport.notify("initialized", {})
+        self._start_file_watcher()
+        await self._watch_ready.wait()
         self._started = True
         # NOTE: $/lean/waitForILeans is handled ON the watchdog's main loop
         # and blocks ALL message processing (didOpen included) until the
@@ -244,6 +259,11 @@ class AsyncLeanLSPClient:
 
     async def close(self) -> None:
         self._started = False
+        watch_task = self._watch_task
+        if watch_task is not None and not watch_task.done():
+            watch_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watch_task
         task = getattr(self, "_ileans_task", None)
         if task is not None and not task.done():
             task.cancel()
@@ -303,6 +323,83 @@ class AsyncLeanLSPClient:
             doc.on_file_progress(params)
         elif method == "$/lean/staleDependency":
             doc.on_stale_dependency()
+
+    def _on_server_request(self, method: str, params: dict) -> None:
+        if method == "client/registerCapability":
+            registrations = params.get("registrations", [])
+            if any(
+                registration.get("method") == "workspace/didChangeWatchedFiles"
+                for registration in registrations
+            ):
+                self._start_file_watcher()
+        elif method == "client/unregisterCapability":
+            unregisterations = params.get(
+                "unregisterations", params.get("unregistrations", [])
+            )
+            if any(
+                registration.get("method") == "workspace/didChangeWatchedFiles"
+                for registration in unregisterations
+            ):
+                self._stop_file_watcher()
+
+    def _start_file_watcher(self) -> None:
+        if self._watch_task is None or self._watch_task.done():
+            self._watch_ready.clear()
+            self._watch_task = asyncio.create_task(self._watch_project_files())
+
+    def _stop_file_watcher(self) -> None:
+        if self._watch_task is not None and not self._watch_task.done():
+            self._watch_task.cancel()
+
+    async def _watch_project_files(self) -> None:
+        def lean_file(_change, path: str) -> bool:
+            return Path(path).suffix in {".lean", ".ilean"}
+
+        watcher = awatch(
+            self.project_path,
+            watch_filter=lean_file,
+            debounce=200,
+            step=50,
+        )
+        next_changes = asyncio.create_task(anext(watcher))
+        try:
+            # awatch constructs its native watcher before its first await.
+            await asyncio.sleep(0)
+            self._watch_ready.set()
+            while True:
+                changes = await next_changes
+                self._invalidate_disk_barriers()
+                changed_lean_uris = {
+                    Path(path).resolve().as_uri()
+                    for _change, path in changes
+                    if Path(path).suffix == ".lean"
+                }
+                self._mark_other_disk_documents_stale(changed_lean_uris)
+                await self._transport.notify(
+                    "workspace/didChangeWatchedFiles",
+                    {
+                        "changes": [
+                            {"uri": Path(path).resolve().as_uri(), "type": change.value}
+                            for change, path in sorted(
+                                changes, key=lambda item: item[1]
+                            )
+                        ]
+                    },
+                )
+                next_changes = asyncio.create_task(anext(watcher))
+        except StopAsyncIteration:
+            return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Lean project file watcher stopped")
+        finally:
+            self._watch_ready.set()
+            if not next_changes.done():
+                next_changes.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await next_changes
+            await watcher.aclose()
 
     # -- open/close/update -----------------------------------------------
 
@@ -399,10 +496,28 @@ class AsyncLeanLSPClient:
         if doc is None or doc.status is DocStatus.CLOSED:
             return await self.open(path, wait=wait)
         if disk != doc.text:
-            return await self.update(path, disk, wait=wait)
+            doc = await self.update(path, disk, wait=False)
+            self._invalidate_disk_barriers()
+            self._mark_other_disk_documents_stale({doc.uri})
+            await self._transport.notify(
+                "textDocument/didSave", {"textDocument": {"uri": doc.uri}}
+            )
+            if wait:
+                await self.barrier(path)
+            return doc
         if wait:
             await self.barrier(path)
         return doc
+
+    def _invalidate_disk_barriers(self) -> None:
+        for doc in self._docs.values():
+            if not doc.virtual:
+                doc.barrier_version = None
+
+    def _mark_other_disk_documents_stale(self, changed_uris: set[str]) -> None:
+        for doc in self._docs.values():
+            if not doc.virtual and changed_uris - {doc.uri}:
+                doc.on_stale_dependency()
 
     async def close_file(self, path: str) -> None:
         doc = self._docs.pop(path, None)
@@ -416,14 +531,45 @@ class AsyncLeanLSPClient:
                 "textDocument/didClose", {"textDocument": {"uri": doc.uri}}
             )
 
-    async def restart_file(self, path: str, wait: bool = True) -> DocState:
+    async def restart_file(
+        self,
+        path: str,
+        wait: bool = True,
+        dependency_build_mode: str = "never",
+    ) -> DocState:
         """didClose + didOpen — picks up rebuilt imports (staleDependency)."""
         doc = self._docs.get(path)
-        text = doc.text if doc is not None else None
-        await self.close_file(path)
-        return await self.open(
-            path, text=text if doc and doc.virtual else None, wait=wait
+        if doc is None or doc.status is DocStatus.CLOSED:
+            return await self.open(
+                path, wait=wait, dependency_build_mode=dependency_build_mode
+            )
+
+        text = (
+            doc.text
+            if doc.virtual
+            else (Path(self.project_path) / path).read_text(encoding="utf-8")
         )
+        await self._transport.notify(
+            "textDocument/didClose", {"textDocument": {"uri": doc.uri}}
+        )
+        self._rpc_sessions.pop(doc.uri, None)
+        doc.reset_after_reopen(text)
+        await self._transport.notify(
+            "textDocument/didOpen",
+            {
+                "textDocument": {
+                    "uri": doc.uri,
+                    "languageId": "lean4",
+                    "version": doc.version,
+                    "text": doc.text,
+                },
+                "dependencyBuildMode": dependency_build_mode,
+            },
+        )
+        doc.status = DocStatus.LIVE
+        if wait:
+            await self.barrier(path)
+        return doc
 
     async def _evict_if_needed(self) -> None:
         def budget_used() -> int:
@@ -451,6 +597,12 @@ class AsyncLeanLSPClient:
         owns write ordering). After ``barrier()`` returns, position queries
         and diagnostics reflect the current text.
         """
+        if await self._rebuild_stale_dependencies(path, timeout):
+            return
+        await self._barrier_once(path, timeout)
+        await self._rebuild_stale_dependencies(path, timeout)
+
+    async def _barrier_once(self, path: str, timeout: Optional[float] = None) -> None:
         doc = self._doc(path)
         if doc.status is DocStatus.CRASHED:
             # Watchdog contract: only didChange revives a crashed worker.
@@ -479,6 +631,35 @@ class AsyncLeanLSPClient:
         finally:
             doc.refcount -= 1
             doc.touch()
+
+    async def _rebuild_stale_dependencies(
+        self, path: str, timeout: Optional[float]
+    ) -> bool:
+        doc = self._doc(path)
+        if not self._needs_dependency_rebuild(doc):
+            return False
+
+        lock = self._dependency_rebuild_locks.setdefault(path, asyncio.Lock())
+        async with lock:
+            doc = self._doc(path)
+            if not self._needs_dependency_rebuild(doc):
+                return False
+            doc.dependency_rebuild_attempted = True
+            rebuilt = await self.restart_file(
+                path, wait=False, dependency_build_mode="once"
+            )
+            rebuilt.dependency_rebuild_attempted = True
+            await self._barrier_once(path, timeout)
+            return True
+
+    @staticmethod
+    def _needs_dependency_rebuild(doc: DocState) -> bool:
+        if doc.virtual or doc.dependency_rebuild_attempted:
+            return False
+        return doc.stale_imports or any(
+            _STALE_IMPORT_TEXT in str(diagnostic.get("message", ""))
+            for diagnostic in doc.diagnostics
+        )
 
     # -- queries -------------------------------------------------------------
 

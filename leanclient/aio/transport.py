@@ -50,10 +50,12 @@ class LspTransport:
         cwd: str,
         on_notification: Callable[[str, dict], None],
         default_timeout: float = 300.0,
+        on_server_request: Optional[Callable[[str, dict], None]] = None,
     ):
         self._command = command
         self._cwd = cwd
         self._on_notification = on_notification
+        self._on_server_request = on_server_request
         self._default_timeout = default_timeout
 
         self._proc: Optional[asyncio.subprocess.Process] = None
@@ -218,7 +220,9 @@ class LspTransport:
         msg_id = msg.get("id")
         if method is not None and msg_id is not None:
             # Server->client REQUEST (never a response, even on id collision).
-            asyncio.ensure_future(self._answer_server_request(msg_id, method))
+            asyncio.ensure_future(
+                self._answer_server_request(msg_id, method, msg.get("params") or {})
+            )
             return
         if msg_id is not None:
             fut = self._futures.pop(msg_id, None)
@@ -242,8 +246,13 @@ class LspTransport:
             except Exception:
                 pass  # a broken notification handler must not kill the reader
 
-    async def _answer_server_request(self, msg_id, method: str) -> None:
+    async def _answer_server_request(self, msg_id, method: str, params: dict) -> None:
         if method in _ACK_REQUESTS:
+            if self._on_server_request is not None:
+                try:
+                    self._on_server_request(method, params)
+                except Exception:
+                    pass  # server requests must never kill the transport
             payload = {"jsonrpc": "2.0", "id": msg_id, "result": None}
         else:
             payload = {
