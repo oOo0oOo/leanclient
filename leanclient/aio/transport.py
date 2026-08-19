@@ -120,10 +120,18 @@ class LspTransport:
     def _kill_group(self) -> None:
         """SIGKILL the server's whole process group (lake + watchdog + workers)."""
         import os
+        import platform
         import signal
 
         if self._proc is None:
             return
+        if platform.system() == "Windows":
+            try:
+                self._proc.kill()
+            except ProcessLookupError:
+                pass
+            return
+
         try:
             os.killpg(os.getpgid(self._proc.pid), signal.SIGKILL)
         except (ProcessLookupError, PermissionError, OSError):
