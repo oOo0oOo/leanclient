@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Optional, cast
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
 from .convert import (
@@ -264,8 +264,8 @@ class AsyncLeanLSPClient:
         return abs_path.as_uri()
 
     def _uri_to_abs(self, uri: str) -> str:
-        # url2pathname unquotes and, on Windows, turns "/C:/dir" into "C:\dir".
-        return url2pathname(urlparse(uri).path)
+        # Decode first so Windows recognizes a percent-encoded drive colon.
+        return url2pathname(unquote(urlparse(uri).path))
 
     def _uri_to_relpath(self, uri: str) -> str:
         local = self._uri_to_abs(uri)
