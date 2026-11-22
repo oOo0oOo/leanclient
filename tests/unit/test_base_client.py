@@ -45,6 +45,26 @@ def make_lsp_frame(body: bytes, *headers: bytes) -> bytes:
 
 
 @pytest.mark.unit
+def test_missing_lake_raises_clear_error(tmp_path, monkeypatch):
+    """Without `lake` on PATH the client says so before launching anything."""
+    launched = []
+    monkeypatch.setattr("leanclient.base_client.shutil.which", lambda name: None)
+    monkeypatch.setattr(
+        "leanclient.base_client.subprocess.Popen",
+        lambda *args, **kwargs: launched.append(args),
+    )
+    monkeypatch.setattr(
+        "leanclient.base_client.subprocess.run",
+        lambda *args, **kwargs: launched.append(args),
+    )
+
+    with pytest.raises(FileNotFoundError, match="Could not find `lake` on PATH"):
+        BaseLeanLSPClient(str(tmp_path))
+
+    assert launched == []
+
+
+@pytest.mark.unit
 @pytest.mark.slow
 def test_initial_build(test_project_dir):
     """Test BaseLeanLSPClient initialization with initial build."""
