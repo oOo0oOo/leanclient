@@ -2,6 +2,7 @@ import asyncio
 import atexit
 import logging
 import os
+import shutil
 import subprocess
 import threading
 import urllib.parse
@@ -47,6 +48,13 @@ class BaseLeanLSPClient:
         self.request_id = 0  # Counter for generating unique request IDs
         self.enable_history = ENABLE_LEANCLIENT_HISTORY
         self.history = []  # List of requests/responses sent/received from the server
+
+        if shutil.which("lake") is None:
+            raise FileNotFoundError(
+                "Could not find `lake` on PATH. Install elan "
+                "(https://github.com/leanprover/elan) or add its bin directory, "
+                "usually ~/.elan/bin, to PATH."
+            )
 
         if initial_build:
             self.build_project(get_cache=not prevent_cache_get)
